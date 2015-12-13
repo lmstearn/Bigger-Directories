@@ -41,6 +41,8 @@ BOOL am64Bit, exe64Bit;
 PVOID OldValue = NULL; //Redirection
 typedef BOOL (WINAPI *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 
+
+
 //NTcreatefile stuff
 //typedef int (*NTDLLptr) (int); //Function pointer example, but following is required
 typedef NTSTATUS (__stdcall *NTDLLptr)(
@@ -61,18 +63,26 @@ typedef NTSTATUS (__stdcall *NTDLLptr)(
 //    IN OUT PUNICODE_STRING  DestinationString,
 //    IN wchar_t  *SourceString );
 
-typedef VOID ( NTAPI *my_RtlInitUnicodeString ) (
-    PUNICODE_STRING DestinationString,
-    PCWSTR SourceString
-    );
+//typedef VOID ( NTAPI *my_RtlInitUnicodeString ) (
+//    PUNICODE_STRING DestinationString,
+//    PCWSTR SourceString
+//    );
+//unicode string for NTcreatefile fileObject
 
+
+//for NTcreatefile fileObject
+typedef VOID (__stdcall *my_RtlInitUnicodeString) (
+    IN OUT PUNICODE_STRING  DestinationString,
+    IN PCWSTR  SourceString );
+//static my_RtlInitUnicodeString rtlInitUnicodeString; //Makes no difference
 
 NTDLLptr foundNTDLL = NULL; //returns variable here
-//RtlInitUnicodeStringPtr pRtlInitUnicodeString; //for NTcreatefile fileObject
 UNICODE_STRING fn;
 OBJECT_ATTRIBUTES fileObject;
 IO_STATUS_BLOCK ioStatus;
 NTSTATUS status;
+const char createFnString[13] = "NtCreateFile";
+const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 
 
 //A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
@@ -92,7 +102,8 @@ char ***new2DArr(size_t rows, size_t cols); //2D array function we will probably
 int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder]);
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
-int Kleenup (HWND hwnd, bool weareatBoot);
+bool Kleenup (HWND hwnd, bool weareatBoot);
+NTDLLptr DynamicLoader (HWND hwnd,  bool progInit);
 int ExistRegValue ();
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
@@ -101,7 +112,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//hrtext[0] = (wchar_t)LocalAlloc(LPTR, 256*sizeof(wchar_t)); This dynamic allocation NOT required- see below
 		//if (hrtext[0] == NULL) ErrorExit("LocalAlloc");
 		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough nut not req'd
-		
+
 		if (errorcode ==0){
 		swprintf_s(hrtext, _countof(hrtext), L"%s.", messageText);
 		}
@@ -172,25 +183,11 @@ void PopulateList(HWND hwnd, int errorcode)
 	HRESULT hr = StringCbPrintf(pszDest, cbDest, pszFormat, pszTxt); //swprintf_s
 	
 	
-	
-
-	HMODULE hdlNtCreateFile = LoadLibraryW(L"NtDll.dll");
-	foundNTDLL = (NTDLLptr) GetProcAddress (hdlNtCreateFile, "NtCreateFile");
-	if (foundNTDLL)
-		{
-			memset(&ioStatus, 0, sizeof(ioStatus));
-			memset(&fileObject, 0, sizeof(fileObject));
-			fileObject.Length = sizeof(fileObject);
-			fileObject.Attributes = OBJ_CASE_INSENSITIVE;
-		}
-	else
-		{
-		FreeLibrary (hdlNtCreateFile);
-		DisplayError (hwnd, L"Meh, the long path function has been removed. Using short path functions...", errorcode, 0);
-		}
 	//if (foundNTDLL) we can use the better function
 
+	if (!DynamicLoader (hwnd, true)) DisplayError (hwnd, L"The long path function has been removed. Using short path functions...", errorcode, 0);
 
+	
 	#if defined(ENV64BIT) //#if is a directive: see header file
 	{
     if (sizeof(void*) != 8)
@@ -456,7 +453,6 @@ CLEANUP:
 	//http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
 	if (currPath) free(currPath); //We may need these later though
 	if (currPathW) free(currPathW); //Free from the heap We may need these later though
-	if (foundNTDLL) FreeLibrary ((HMODULE)hdlNtCreateFile);
 	//There's an internal index that is reset to 0 each time you call FindFirstFile() and it's incremented each time you call FindNextFile() so unless you do it in a loop, you'll only get the first filename ( a dot ) each time. 	
 	FindClose(ds);
 
@@ -757,26 +753,28 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
 					//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
 
-					wcscat_s(currPathW, maxPathFolder, L"\\");
+
 					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
 					//wcscat_s(cumPath, pathLength, currPathW);
   
 					if (foundNTDLL)
-						{
+					{
 						wcscat_s(tempDest, maxPathFolder, driveIDBaseW);
 						wcscat_s(tempDest, maxPathFolder, currPathW);
-						//must be fully qualified path	
+
+						if (DynamicLoader (hwnd,  false))
+						{
+
 						NTSTATUS ntStatus;
-						//RtlUnicodeStringInit
-						HMODULE hdlNtCreateFile = LoadLibraryW(L"Ntdll.dll");
-						my_RtlInitUnicodeString RtlInitUnicodeString = (my_RtlInitUnicodeString) GetProcAddress(hdlNtCreateFile, "RtlInitUnicodeString");
-						RtlInitUnicodeString(&fn, tempDest);
-						fileObject.ObjectName = &fn; //Ntdll.dll
-						//RtlUnicodeStringInit ( );
-						//RtlUnicodeStringInit ( 
 						//Do not specify FILE_READ_DATA, FILE_WRITE_DATA, FILE_APPEND_DATA, or FILE_EXECUTE 
-						ntStatus = foundNTDLL (&hdlNTOut, GENERIC_WRITE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, 0, NULL, 0);
-						//wcscpy_s((fileObject.ObjectName), maxPathFolder, currPathW);
+						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
+
+						
+
+						if (NT_ERROR(ntStatus))
+						{
+						}
+
 						if (!NT_SUCCESS(ntStatus))
 						{
 							switch(ioStatus.Information)
@@ -796,11 +794,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							DisplayError (hwnd, L"IoStatus.Information is DIR_DOES_NOT_EXIST", errorcode, 0);
 							}
 							break;
+							default:
+							{
+								ErrorExit("NtCreateFile: Failed!");
+							}
 							}
 						}
 						}
+						else
+						{
+							//DynamicLoader failed
+						}
+					} //foundNtdll
 					else
 						{
+							wcscat_s(currPathW, maxPathFolder, L"\\");
 							if (exe64Bit)
 							{
 							errorcode = CreateDirectoryW(currPathW, NULL);
@@ -834,6 +842,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//Clear all the added items
 				EndCreate:
 				free(currPathW);
+				free(tempDest);
 				if (foundNTDLL) FreeLibrary ((HMODULE)hdlNtCreateFile);
 				//free(cumPath);
 				if (errorcode != 0) //succeeded
@@ -901,7 +910,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			}
 			
-			if (Kleenup (hwnd, weareatBoot) == 1)
+			if (Kleenup (hwnd, weareatBoot))
 			{
 				EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), buttEnable);
 				buttEnable = TRUE;
@@ -1182,7 +1191,7 @@ else
 	return 0;
 }
 }
-int Kleenup (HWND hwnd, bool weareatBoot)
+bool Kleenup (HWND hwnd, bool weareatBoot)
 {
 			system ("CD\\ & PUSHD %SystemRoot%\\Temp & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & SET \"Userinitreg=\" & (IF EXIST Userinitreg.txt (SET \"Userinitreg=TRUE\")) & (IF Userinitreg == \"TRUE\" ( DEL \"Userinitreg.txt\" )) & (IF EXIST Userinitregerror.txt (DEL \"Userinitregerror.txt\")) & FOR /F \"usebackq tokens=1,2* delims=,\" %G IN (\"Userinitreg.txt\") DO SET \"REGVALUE=%G\" & (IF DEFINED OSB (CALL SET \"REGVALUE=%REGVALUE%,\" & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f /reg:64) ELSE (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f)) & POPD");
 
@@ -1212,13 +1221,13 @@ int Kleenup (HWND hwnd, bool weareatBoot)
 			DisplayError (hwnd, L"Problems with file deletion. Solved with next Disk Cleanup...", 0, 0);
 			free (tempDest);
 			free (thisexePath);
-			return 0;
+			return false;
 			}
 			else
 			{
 			free (tempDest);
 			free (thisexePath);
-			return 1;
+			return true;
 			}
 
 }
@@ -1293,6 +1302,37 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
 
     return result;
 }
+
+NTDLLptr DynamicLoader (HWND hwnd,  bool progInit)
+{
+	HMODULE hdlNtCreateFile = LoadLibraryW(L"NtDll.dll");
+	foundNTDLL = (NTDLLptr) GetProcAddress (hdlNtCreateFile, createFnString);
+	if (foundNTDLL)
+		{
+			if (progInit)
+			{
+			memset(&ioStatus, 0, sizeof(ioStatus));
+			memset(&fileObject, 0, sizeof(fileObject));
+			fileObject.Length = sizeof(fileObject);
+			fileObject.Attributes = OBJ_CASE_INSENSITIVE;
+			}
+			else
+			{
+			my_RtlInitUnicodeString RtlInitUnicodeString = (my_RtlInitUnicodeString) GetProcAddress(hdlNtCreateFile, initUnicodeFnString);
+			RtlInitUnicodeString(&fn, tempDest);
+			fileObject.ObjectName = &fn; //Ntdll.dll
+			}
+			return foundNTDLL;
+		}
+	else
+		{
+		FreeLibrary (hdlNtCreateFile);
+		return foundNTDLL;
+		}
+
+}
+
+
 int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder])
 	//*folderTreeArray[1000][1000][maxPathFolder] *(folderTreeArray)[260][maxPathFolder]
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found i.e. folderTreeArray[1000][jsize][maxPathFolder]
@@ -1444,7 +1484,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				// No Folders so this must be top level
 				GetCurrentDirectoryW(maxPathFolder, findPathW);
 					if (!SetCurrentDirectoryW (L"..")) ErrorExit("SetCurrentDirectoryW: Non zero");
-					//L"\\\\\?\\C:\\"
+
 					if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero");
 					if (treeLevel == 1) //Last folder to do!!
 					{
@@ -1458,7 +1498,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 						else
 						{
 							ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.");
-							//free (currPathWtmp);
+
 							return 1; //Need more than this
 						}
 
@@ -1467,7 +1507,6 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				//GetCurrentDirectoryW(maxPathFolder, findPathW);
 				if (RemoveDirectoryW (currPathW))
 				{
-					//wcscpy_s(***folderTreeArray[treeLevel][j], maxPathFolder, L"{\0}"); //NULL the branch we have just entered
 					trackFTA [treeLevel][1] = 0;  //important
 					treeLevel -=1;
 					if (RecurseRemovePath(trackFTA, folderTreeArray))
