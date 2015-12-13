@@ -28,6 +28,8 @@
   #endif
 #endif
 
+
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
@@ -38,3 +40,21 @@
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
+
+#ifndef WINDOWS_NTSTATUS_H
+#define WINDOWS_NTSTATUS_H
+
+/**
+* @author Roger Karlsson
+* @since 2009-03-13
+*/
+
+#ifndef NT_SUCCESS
+#define NT_SUCCESS(Status) ((NTSTATUS)(Status) >= 0)
+#endif
+
+#ifndef NT_ERROR
+#define NT_ERROR(Status) ((ULONG)(Status) >> 30 == 3)
+#endif
+
+#endif //WINDOWS_NTSTATUS_H
