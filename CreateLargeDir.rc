@@ -1,0 +1,102 @@
+// Microsoft Visual C++ generated resource script.
+//
+#include "CreateLargeDir.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "windows.h"
+#undef APSTUDIO_HIDDEN_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#include ""windows.h""\r\n"
+    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_MAIN DIALOGEX 0, 0, 701, 181
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Controls One"
+FONT 8, "MS Sans Serif", 0, 0, 0x0
+BEGIN
+    LTEXT           "Add",IDC_STATIC,506,
+	10,14,8
+    EDITTEXT        IDC_TEXT,528,7,120,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_NUMBER,647,7,21,14,ES_NUMBER
+    LTEXT           "times.",IDC_STATIC,671,10,23,8
+    LISTBOX         IDC_LIST,7,22,641,148,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Add",IDC_ADD,650,30,46,14
+    PUSHBUTTON      "&Make New",IDC_CREATE,650,47,47,14
+    PUSHBUTTON      "&Del Dir",IDC_REMOVE,650,63,47,14
+    PUSHBUTTON      "&Clear",IDC_CLEAR,650,80,47,14
+    PUSHBUTTON      "&RunAtLogon",IDC_LOGON,650,97,47,14
+    PUSHBUTTON      "&NoLogon",IDC_NOLOGON,650,114,47,14
+    LTEXT           "This entry is ranked",IDC_STATIC_ONE,530,170,70,8
+    CTEXT           "-",IDC_SHOWCOUNT,600,170,25,8
+    LTEXT           "on the list",IDC_STATIC_TWO,625,170,30,8
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_MAIN, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 750
+        VERTGUIDE, 647
+        VERTGUIDE, 648
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 200
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
