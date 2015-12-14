@@ -5,6 +5,7 @@
 #include "tlhelp32.h" //Find process stuff
 #include "CreateLargeDir64.h" //my file
 #include "Winternl.h" //NtCreateFile
+//#include <ntstatus.h>
 //#include <ntstrsafe.h>
 
 #pragma once 
@@ -19,8 +20,9 @@ wchar_t hrtext[256]; //An array name is essentially a pointer to the first eleme
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATA da;
 int const pathLength = 32760, maxPathFolder = MAX_PATH - 3;
-wchar_t const *lpref = L"\\\\\?\\";
-const wchar_t *driveIDBaseW = L"\\\\\?\\C:\\";
+wchar_t const *lpref = L"\\\\?\\";
+const wchar_t *driveIDBaseW = L"\\\\?\\C:\\";
+const wchar_t *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
 const char *driveIDBase = "C:\\";
 wchar_t *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // directory pointers. cannot be initialised as a pointer
 char *currPath;
@@ -31,7 +33,6 @@ wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folder
 
 int folderdirCS, folderdirCW;
 long long listTotal = 0;
-HANDLE hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 long long idata, treeLevel, trackFTA[1000][2];
 long long index; //variable for listbox items
 BOOL buttEnable = FALSE;
@@ -39,7 +40,8 @@ BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
 BOOL am64Bit, exe64Bit; 
 PVOID OldValue = NULL; //Redirection
-typedef BOOL (WINAPI *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
+HANDLE hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
+typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 
 
 
@@ -48,7 +50,7 @@ typedef BOOL (WINAPI *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 typedef NTSTATUS (__stdcall *NTDLLptr)(
     PHANDLE FileHandle, 
     ACCESS_MASK DesiredAccess, 
-    OBJECT_ATTRIBUTES *ObjectAttributes, 
+    POBJECT_ATTRIBUTES ObjectAttributes, 
     PIO_STATUS_BLOCK IoStatusBlock, 
     PLARGE_INTEGER AllocationSize,
     ULONG FileAttributes, 
@@ -76,6 +78,7 @@ typedef VOID (__stdcall *my_RtlInitUnicodeString) (
     IN PCWSTR  SourceString );
 //static my_RtlInitUnicodeString rtlInitUnicodeString; //Makes no difference
 
+//PHANDLE hdlNTOut;
 NTDLLptr foundNTDLL = NULL; //returns variable here
 UNICODE_STRING fn;
 OBJECT_ATTRIBUTES fileObject;
@@ -746,6 +749,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				//wcscpy_s(cumPath, pathLength, L"\\\\\?\\C:\\");
 				wcscpy_s(currPathW, maxPathFolder, L"");
+
 				SetCurrentDirectoryW(L"\\\\\?\\C:\\");
 				//Another loop & variables for recursive create here
 				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
@@ -759,24 +763,35 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
   
 					if (foundNTDLL)
 					{
-						wcscat_s(tempDest, maxPathFolder, driveIDBaseW);
+						wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT);
 						wcscat_s(tempDest, maxPathFolder, currPathW);
-
+						//wcscpy_s(tempDest, maxPathFolder, L"\\??\\C:\\testfile");
+				
 						if (DynamicLoader (hwnd,  false))
 						{
 
-						NTSTATUS ntStatus;
-						//Do not specify FILE_READ_DATA, FILE_WRITE_DATA, FILE_APPEND_DATA, or FILE_EXECUTE 
-						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
-
 						
+						//Do not specify FILE_READ_DATA, FILE_WRITE_DATA, FILE_APPEND_DATA, or FILE_EXECUTE 
+						NTSTATUS ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
 
-						if (NT_ERROR(ntStatus))
+						switch (ntStatus)
+						{
+						//case STATUS_OBJECT_NAME_COLLISION:
+						}
+						break;
+						//default: //C2361 message re ntstatus
 						{
 						}
+							
+							
+							
+							//NT_ERROR(ntStatus))
+						
+						
 
 						if (!NT_SUCCESS(ntStatus))
 						{
+							errorcode = 1; //success
 							switch(ioStatus.Information)
 							{
 							case FILE_EXISTS:
