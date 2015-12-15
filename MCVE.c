@@ -20,6 +20,7 @@ typedef VOID (__stdcall *my_RtlInitUnicodeString) (
     IN PCWSTR  SourceString );
 
 my_RtlInitUnicodeString RtlInitUnicodeString = NULL; //error C2365: 'RtlInitUnicodeString' : redefinition; previous definition was 'function'	
+//comment out above line and remove comment from line 53 it compiles.
 NTDLLptr foundNTDLL = NULL;
 UNICODE_STRING fn;
 OBJECT_ATTRIBUTES fileObject;
