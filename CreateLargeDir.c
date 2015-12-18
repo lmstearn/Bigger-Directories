@@ -56,11 +56,11 @@ wchar_t longPathName=(char)0;  //same as '\0'
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
 char ***new2DArr(size_t rows, size_t cols); //2D array function we will probably never use.
-int RecurseRemovePath(int trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder]);
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
-DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
+DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
+int RecurseRemovePath(int trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder]);
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 {
@@ -68,7 +68,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//hrtext[0] = (wchar_t)LocalAlloc(LPTR, 256*sizeof(wchar_t)); This dynamic allocation NOT required- see below
 		//if (hrtext[0] == NULL) ErrorExit("LocalAlloc");
 		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough nut not req'd
-		
+	
 		if (errorcode ==0){
 		swprintf_s(hrtext, _countof(hrtext), L"%s.", messageText);
 		}
@@ -528,6 +528,123 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				}
 				break;
+				case IDC_CREATE:
+				{
+					currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+					if (currPathW == NULL)
+					{
+						/* We were not so display a message */
+					errorcode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+				//return;
+				}
+
+				//cumPath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				//if (cumPath == NULL)
+				//{
+				/* We were not so display a message */
+				//	errorcode = -1;
+				//	DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+				//return;
+				//}
+					
+				HWND hList = GetDlgItem(hwnd, IDC_LIST);
+				//get total for loop
+				listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+
+					if (listTotal == folderdirCS + folderdirCW)
+					{
+					errorcode = 0;
+					DisplayError (hwnd, L"You didn't Add any strings to create!", errorcode, 0);
+					goto EndCreate;
+					}
+
+				//wcscpy_s(cumPath, pathLength, L"\\\\\?\\C:\\");
+				wcscpy_s(currPathW, maxPathFolder, L"");
+				SetCurrentDirectoryW(L"\\\\\?\\C:\\");
+				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
+				{
+						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+						//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
+
+						wcscat_s(currPathW, maxPathFolder, L"\\");
+						// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
+						//wcscat_s(cumPath, pathLength, currPathW);
+  
+					if (exe64Bit)
+					{
+						errorcode = CreateDirectoryW(currPathW, NULL);
+					}
+					else
+					{
+							wcscat_s(currPathW, maxPathFolder, L"\\");
+							if (exe64Bit)
+							{
+							if (CreateDirectoryW(currPathW, NULL)) 
+								{
+									errorcode = 0;
+								}
+							else
+								{
+									errorcode = 1;
+									ErrorExit("CreateDirectoryW: ");
+									break;
+								}
+							}
+							else
+							{
+								if (Wow64DisableWow64FsRedirection(&OldValue))
+								{
+									if (CreateDirectoryW(currPathW, NULL)) 
+									{
+									errorcode = 0;
+									}
+								else
+									{
+									errorcode = 1;
+									ErrorExit("CreateDirectoryW: ");
+									break;
+									}
+								}
+								if (!Wow64RevertWow64FsRedirection(&OldValue))
+								{
+								DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
+								break;
+								}
+
+							}
+
+						}
+					}
+
+				}
+				//Also check if Directory exists?
+				//There is a default string size limit for paths of 248 characters
+				//errorcode = CreateDirectoryW(cumPath, NULL);
+
+				//wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
+				//\a  audible bell
+
+				//LB_GETTEXTLEN  https://msdn.microsoft.com/en-us/library/windows/desktop/bb761315(v=vs.85).aspx
+					
+					
+
+				//longPathName
+				//Clear all the added items
+				EndCreate:
+				free(currPathW);
+				//free(cumPath);
+				if (errorcode == 0) //succeeded
+				{
+				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+				PopulateList(hwnd, errorcode);
+				}
+				else
+				{
+				errorcode = 0;
+				}
+				}
+				break;
 				case IDC_REMOVE:
 				{
 					// When the user clicks the Remove button, we first get the number
@@ -655,93 +772,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				break;
 				case IDC_CLEAR:
 				{
-					
 
 					SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 					PopulateList(hwnd, errorcode);
-				}
-				break;
-				case IDC_CREATE:
-				{
-
-					currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					if (currPathW == NULL)
-					{
-						/* We were not so display a message */
-					errorcode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-				//return;
-				}
-
-				//cumPath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-				//if (cumPath == NULL)
-				//{
-				/* We were not so display a message */
-				//	errorcode = -1;
-				//	DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-				//return;
-				//}
-					
-				HWND hList = GetDlgItem(hwnd, IDC_LIST);
-				//get total for loop
-				listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-
-					if (listTotal == folderdirCS + folderdirCW)
-					{
-					errorcode = 0;
-					DisplayError (hwnd, L"You didn't Add any strings to create!", errorcode, 0);
-					goto EndCreate;
-					}
-
-				//wcscpy_s(cumPath, pathLength, L"\\\\\?\\C:\\");
-				wcscpy_s(currPathW, maxPathFolder, L"");
-				SetCurrentDirectoryW(L"\\\\\?\\C:\\");
-				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
-				{
-						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-						//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
-
-						wcscat_s(currPathW, maxPathFolder, L"\\");
-						// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
-						//wcscat_s(cumPath, pathLength, currPathW);
-  
-					if (exe64Bit)
-					{
-						errorcode = CreateDirectoryW(currPathW, NULL);
-					}
-					else
-					{
-					if (Wow64DisableWow64FsRedirection(&OldValue)) errorcode = CreateDirectoryW(currPathW, NULL);
-					if (!Wow64RevertWow64FsRedirection(&OldValue))
-						{
-						DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
-						break;
-						}
-					}
-
-				}
-				//Also check if Directory exists?
-				//There is a default string size limit for paths of 248 characters
-				//errorcode = CreateDirectoryW(cumPath, NULL);
-
-				//wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
-				//\a  audible bell
-
-				//LB_GETTEXTLEN  https://msdn.microsoft.com/en-us/library/windows/desktop/bb761315(v=vs.85).aspx
-					
-					
-
-				//longPathName
-				//Clear all the added items
-				EndCreate:
-				free(currPathW);
-				//free(cumPath);
-				if (errorcode != 0) //succeeded
-				{
-				errorcode = 0; //flag okay now
-				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-				PopulateList(hwnd, errorcode);
-				}
 				}
 				break;
 
@@ -934,8 +967,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 					}
 				break;
-			}
-		break;
+
 		case WM_CLOSE:
 
 			//Cleanup
@@ -1389,7 +1421,6 @@ int RecurseRemovePath(int trackFTA[1000][2], wchar_t folderTreeArray[2000][1000]
 
 
 
-					if (RecurseRemovePath(trackFTA, folderTreeArray)) return 1;
 				}
 
 		else //Do an iteration on this new branch
