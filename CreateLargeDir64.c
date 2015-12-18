@@ -657,7 +657,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
 					//wcscat_s(cumPath, pathLength, currPathW);
   
-					if (!foundNTDLL)
+					if (foundNTDLL)
 					{
 						wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT);
 						wcscat_s(tempDest, maxPathFolder, currPathW);
