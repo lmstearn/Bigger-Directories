@@ -206,7 +206,7 @@ void PopulateList(HWND hwnd, int errorcode)
 	BOOL findhandle;
 	int gotolooper = 0;
 	errorcode = 0;
-	
+
 
 	size_t cbDest = arraysize * sizeof(TCHAR); //the use of size_t implies C++ compile.
 	LPCTSTR pszFormat = TEXT("%s");
@@ -657,7 +657,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
 					//wcscat_s(cumPath, pathLength, currPathW);
   
-					if (foundNTDLL)
+					if (!foundNTDLL)
 					{
 						wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT);
 						wcscat_s(tempDest, maxPathFolder, currPathW);
@@ -674,39 +674,17 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return NULL;
 
 						DWORD Status = RtlNtStatusToDosError (ntStatus);
-						
+
 						switch ((DWORD)(ntStatus) >> 30)
 						{
 						case 0: //NT_SUCCESS
 							{
-								errorcode = 1; //success
-								switch(ioStatus.Information)
-								{
-								case FILE_EXISTS:
-								{
-								DisplayError (hwnd, L"IoStatus.Information is DIR_EXISTS", errorcode, 0);
-								}
-								break;
-								case FILE_OPENED:
-								{
-								DisplayError (hwnd, L"IoStatus.Information is DIR_OPENED", errorcode, 0);
-								}
-								break;
-								case FILE_DOES_NOT_EXIST:
-								{
-								DisplayError (hwnd, L"IoStatus.Information is DIR_DOES_NOT_EXIST", errorcode, 0);
-								}
-								break;
-								default:
-								{
-
-								}
-								}
 
 							}
 						break;
 						case 1: //NT_INFORMATION
 							{
+								DisplayError (hwnd, L"Informational: No error ", Status, 0);
 							}
 						break;
 						case 2: //NT_WARNING 
@@ -718,18 +696,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							{
 								
 								ErrorExit("NtCreateFile: ", Status);
-								
-								
-								
-								
+								errorcode = 1;
 								goto EndCreate;
 							}
 						break;
 						}
 
-
 						}
-
 
 
 
@@ -743,11 +716,32 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							wcscat_s(currPathW, maxPathFolder, L"\\");
 							if (exe64Bit)
 							{
-							errorcode = CreateDirectoryW(currPathW, NULL);
+							if (CreateDirectoryW(currPathW, NULL)) 
+								{
+									errorcode = 0;
+								}
+							else
+								{
+									errorcode = 1;
+									ErrorExit("CreateDirectoryW: ", 0);
+									break;
+								}
 							}
 							else
 							{
-								if (Wow64DisableWow64FsRedirection(&OldValue)) errorcode = CreateDirectoryW(currPathW, NULL);
+								if (Wow64DisableWow64FsRedirection(&OldValue))
+								{
+									if (CreateDirectoryW(currPathW, NULL)) 
+									{
+									errorcode = 0;
+									}
+								else
+									{
+									errorcode = 1;
+									ErrorExit("CreateDirectoryW: ", 0);
+									break;
+									}
+								}
 								if (!Wow64RevertWow64FsRedirection(&OldValue))
 								{
 								DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
@@ -777,11 +771,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				free(tempDest);
 				if (foundNTDLL) FreeLibrary ((HMODULE)hdlNtCreateFile);
 				//free(cumPath);
-				if (errorcode != 0) //succeeded
+				if (errorcode == 0) //succeeded
 				{
-				errorcode = 0; //flag okay now
 				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 				PopulateList(hwnd, errorcode);
+				}
+				else
+				{
+				errorcode = 0;
 				}
 				}
 				break;
