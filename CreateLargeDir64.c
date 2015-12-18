@@ -2,9 +2,9 @@
 #include<stdio.h> //sprintf
 #include <windows.h>
 #include <Strsafe.h> //safe string copy
-#include "tlhelp32.h" //Find process stuff
+#include <tlhelp32.h> //Find process stuff
 #include "CreateLargeDir64.h" //my file
-#include "Winternl.h" //NtCreateFile
+#include <Winternl.h> //NtCreateFile
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
 
@@ -73,10 +73,13 @@ typedef NTSTATUS (__stdcall *NTDLLptr)(
 
 
 //for NTcreatefile fileObject
-typedef VOID (__stdcall *my_RtlInitUnicodeString) (
+typedef VOID (__stdcall *PFN_RtlInitUnicodeString) (
     IN OUT PUNICODE_STRING  DestinationString,
     IN PCWSTR  SourceString );
+typedef ULONG (__stdcall *PFN_RtlNtStatusToDosError) (
+    IN NTSTATUS Status );
 //static my_RtlInitUnicodeString rtlInitUnicodeString; //Makes no difference
+//PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 
 //PHANDLE hdlNTOut;
 NTDLLptr foundNTDLL = NULL; //returns variable here
@@ -84,9 +87,9 @@ UNICODE_STRING fn;
 OBJECT_ATTRIBUTES fileObject;
 IO_STATUS_BLOCK ioStatus;
 NTSTATUS status;
-const char createFnString[13] = "NtCreateFile";
+const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
-
+const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 
 //A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
@@ -102,12 +105,13 @@ const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
 char ***new2DArr(size_t rows, size_t cols); //2D array function we will probably never use.
-int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder]);
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
-DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 bool Kleenup (HWND hwnd, bool weareatBoot);
-NTDLLptr DynamicLoader (HWND hwnd,  bool progInit);
 int ExistRegValue ();
+DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
+NTDLLptr DynamicLoader (bool progInit);
+int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder]);
+
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 {
@@ -143,14 +147,32 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//wchar_t hrtext[256] allocates memory to the stack. It is not a dynamic allocation http://stackoverflow.com/questions/419022/char-x256-vs-char-malloc256sizeofchar
 }
 
-void ErrorExit(LPCTSTR lpszFunction)
+void ErrorExit(LPCTSTR lpszFunction, DWORD NTStatusMessage)
 {
 	//courtesy https ://msdn.microsoft.com/en-us/library/windows/desktop/ms680582(v=vs.85).aspx
 	// Retrieve the system error message for the last-error code
-
+	DWORD dww = 0;
 	LPVOID lpMsgBuf;
 	LPVOID lpDisplayBuf;
-	DWORD dww = GetLastError();
+
+	if (NTStatusMessage)
+	{
+		dww = NTStatusMessage;
+		FormatMessage( 
+		FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+		FORMAT_MESSAGE_FROM_SYSTEM | 
+		FORMAT_MESSAGE_FROM_HMODULE,
+		hdlNtCreateFile,
+		dww,  
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		(LPTSTR) &lpMsgBuf,  
+		0,  
+		NULL );
+	}
+	else
+	{
+	
+		dww = GetLastError();
 
 	FormatMessage(
 		FORMAT_MESSAGE_ALLOCATE_BUFFER |
@@ -159,16 +181,20 @@ void ErrorExit(LPCTSTR lpszFunction)
 		NULL,
 		dww,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),	(LPTSTR)&lpMsgBuf,0, NULL);
-
+	}
 	// Display the error message and exit the process
 
 	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlen((LPCTSTR)lpMsgBuf) + lstrlen((LPCTSTR)lpszFunction) + 40) * sizeof(TCHAR));
+	
+	
 	StringCchPrintf((LPTSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), TEXT("%s failed with error %lu: %s"), lpszFunction, dww, lpMsgBuf);
 	printf("\a");  //audible bell
 	MessageBox(NULL, (LPCTSTR)lpDisplayBuf, "Error", MB_OK);
+	LocalFree(lpDisplayBuf);
+	
 
 	LocalFree(lpMsgBuf);
-	LocalFree(lpDisplayBuf);
+	
 	//ExitProcess(dw);
 }
 
@@ -180,6 +206,7 @@ void PopulateList(HWND hwnd, int errorcode)
 	BOOL findhandle;
 	int gotolooper = 0;
 	errorcode = 0;
+	
 
 	size_t cbDest = arraysize * sizeof(TCHAR); //the use of size_t implies C++ compile.
 	LPCTSTR pszFormat = TEXT("%s");
@@ -188,7 +215,7 @@ void PopulateList(HWND hwnd, int errorcode)
 	
 	//if (foundNTDLL) we can use the better function
 
-	if (!DynamicLoader (hwnd, true)) DisplayError (hwnd, L"The long path function has been removed. Using short path functions...", errorcode, 0);
+	if (!DynamicLoader (true)) DisplayError (hwnd, L"The long path function has been removed. Using short path functions...", errorcode, 0);
 
 	
 	#if defined(ENV64BIT) //#if is a directive: see header file
@@ -254,7 +281,7 @@ else
 
 
 	createlargedirVAR= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", createlargedirVAR, maxPathFolder)) ErrorExit("ExpandEnvironmentStringsW failed for some reason.");
+	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", createlargedirVAR, maxPathFolder)) ErrorExit("ExpandEnvironmentStringsW failed for some reason.",0);
 	wcscat_s(createlargedirVAR, maxPathFolder, L"\\Temp\\CreateLargeDir.exe");
 
 		if (GetFileAttributesW(createlargedirVAR)!=INVALID_FILE_ATTRIBUTES)
@@ -577,6 +604,188 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				}
 				break;
+			case IDC_CREATE:
+				{
+				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+					if (currPathW == NULL)
+					{
+						/* We were not so display a message */
+					errorcode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+					//return;
+					}
+				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+					if (tempDest == NULL)
+					{
+						/* We were not so display a message */
+					errorcode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+					//return;
+					}
+					
+				//cumPath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				//if (cumPath == NULL)
+				//{
+				/* We were not so display a message */
+				//	errorcode = -1;
+				//	DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+				//return;
+				//}
+					
+				HWND hList = GetDlgItem(hwnd, IDC_LIST);
+				//get total for loop
+				listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+
+					if (listTotal == folderdirCS + folderdirCW)
+					{
+					errorcode = 0;
+					DisplayError (hwnd, L"You didn't Add any strings to create!", errorcode, 0);
+					goto EndCreate;
+					}
+
+				//wcscpy_s(cumPath, pathLength, L"\\\\\?\\C:\\");
+				wcscpy_s(currPathW, maxPathFolder, L"");
+
+				SetCurrentDirectoryW(L"\\\\\?\\C:\\");
+				//Another loop & variables for recursive create here
+				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
+					{
+					SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+					//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
+
+
+					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
+					//wcscat_s(cumPath, pathLength, currPathW);
+  
+					if (foundNTDLL)
+					{
+						wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT);
+						wcscat_s(tempDest, maxPathFolder, currPathW);
+						//wcscpy_s(tempDest, maxPathFolder, L"\\??\\C:\\testfile");
+						
+						if (DynamicLoader (false))
+						{
+
+						
+						//Do not specify FILE_READ_DATA, FILE_WRITE_DATA, FILE_APPEND_DATA, or FILE_EXECUTE 
+						NTSTATUS ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
+
+						PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
+						if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return NULL;
+
+						DWORD Status = RtlNtStatusToDosError (ntStatus);
+						
+						switch ((DWORD)(ntStatus) >> 30)
+						{
+						case 0: //NT_SUCCESS
+							{
+								errorcode = 1; //success
+								switch(ioStatus.Information)
+								{
+								case FILE_EXISTS:
+								{
+								DisplayError (hwnd, L"IoStatus.Information is DIR_EXISTS", errorcode, 0);
+								}
+								break;
+								case FILE_OPENED:
+								{
+								DisplayError (hwnd, L"IoStatus.Information is DIR_OPENED", errorcode, 0);
+								}
+								break;
+								case FILE_DOES_NOT_EXIST:
+								{
+								DisplayError (hwnd, L"IoStatus.Information is DIR_DOES_NOT_EXIST", errorcode, 0);
+								}
+								break;
+								default:
+								{
+
+								}
+								}
+
+							}
+						break;
+						case 1: //NT_INFORMATION
+							{
+							}
+						break;
+						case 2: //NT_WARNING 
+							{
+								ErrorExit("NtCreateFile: ", Status);
+							}
+						break;
+						case 3://NT_ERROR
+							{
+								
+								ErrorExit("NtCreateFile: ", Status);
+								
+								
+								
+								
+								goto EndCreate;
+							}
+						break;
+						}
+
+
+						}
+
+
+
+
+						else
+						{
+							//DynamicLoader failed
+						}
+					} //foundNtdll
+					else
+						{
+							wcscat_s(currPathW, maxPathFolder, L"\\");
+							if (exe64Bit)
+							{
+							errorcode = CreateDirectoryW(currPathW, NULL);
+							}
+							else
+							{
+								if (Wow64DisableWow64FsRedirection(&OldValue)) errorcode = CreateDirectoryW(currPathW, NULL);
+								if (!Wow64RevertWow64FsRedirection(&OldValue))
+								{
+								DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
+								break;
+								}
+
+							}
+						
+						}
+					}
+
+				//Also check if Directory exists?
+				//There is a default string size limit for paths of 248 characters
+				//errorcode = CreateDirectoryW(cumPath, NULL);
+
+				//wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
+				//\a  audible bell
+
+				//LB_GETTEXTLEN  https://msdn.microsoft.com/en-us/library/windows/desktop/bb761315(v=vs.85).aspx
+					
+					
+
+				//longPathName
+				//Clear all the added items
+				EndCreate:
+				free(currPathW);
+				free(tempDest);
+				if (foundNTDLL) FreeLibrary ((HMODULE)hdlNtCreateFile);
+				//free(cumPath);
+				if (errorcode != 0) //succeeded
+				{
+				errorcode = 0; //flag okay now
+				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+				PopulateList(hwnd, errorcode);
+				}
+				}
+				break;
+
 				case IDC_REMOVE:
 				{
 					// When the user clicks the Remove button, we first get the number
@@ -708,166 +917,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				PopulateList(hwnd, errorcode);
 				}
 			break;
-			case IDC_CREATE:
-				{
-				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					if (currPathW == NULL)
-					{
-						/* We were not so display a message */
-					errorcode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-					//return;
-					}
-				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					if (tempDest == NULL)
-					{
-						/* We were not so display a message */
-					errorcode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-					//return;
-					}
-					
-				//cumPath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-				//if (cumPath == NULL)
-				//{
-				/* We were not so display a message */
-				//	errorcode = -1;
-				//	DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-				//return;
-				//}
-					
-				HWND hList = GetDlgItem(hwnd, IDC_LIST);
-				//get total for loop
-				listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-
-					if (listTotal == folderdirCS + folderdirCW)
-					{
-					errorcode = 0;
-					DisplayError (hwnd, L"You didn't Add any strings to create!", errorcode, 0);
-					goto EndCreate;
-					}
-
-				//wcscpy_s(cumPath, pathLength, L"\\\\\?\\C:\\");
-				wcscpy_s(currPathW, maxPathFolder, L"");
-
-				SetCurrentDirectoryW(L"\\\\\?\\C:\\");
-				//Another loop & variables for recursive create here
-				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
-					{
-					SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-					//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
-
-
-					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
-					//wcscat_s(cumPath, pathLength, currPathW);
-  
-					if (foundNTDLL)
-					{
-						wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT);
-						wcscat_s(tempDest, maxPathFolder, currPathW);
-						//wcscpy_s(tempDest, maxPathFolder, L"\\??\\C:\\testfile");
-				
-						if (DynamicLoader (hwnd,  false))
-						{
-
-						
-						//Do not specify FILE_READ_DATA, FILE_WRITE_DATA, FILE_APPEND_DATA, or FILE_EXECUTE 
-						NTSTATUS ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
-
-						switch (ntStatus)
-						{
-						//case STATUS_OBJECT_NAME_COLLISION:
-						}
-						break;
-						//default: //C2361 message re ntstatus
-						{
-						}
-							
-							
-							
-							//NT_ERROR(ntStatus))
-						
-						
-
-						if (!NT_SUCCESS(ntStatus))
-						{
-							errorcode = 1; //success
-							switch(ioStatus.Information)
-							{
-							case FILE_EXISTS:
-							{
-							DisplayError (hwnd, L"IoStatus.Information is DIR_EXISTS", errorcode, 0);
-							}
-							break;
-							case FILE_OPENED:
-							{
-							DisplayError (hwnd, L"IoStatus.Information is DIR_OPENED", errorcode, 0);
-							}
-							break;
-							case FILE_DOES_NOT_EXIST:
-							{
-							DisplayError (hwnd, L"IoStatus.Information is DIR_DOES_NOT_EXIST", errorcode, 0);
-							}
-							break;
-							default:
-							{
-								ErrorExit("NtCreateFile: Failed!");
-							}
-							}
-						}
-						}
-						else
-						{
-							//DynamicLoader failed
-						}
-					} //foundNtdll
-					else
-						{
-							wcscat_s(currPathW, maxPathFolder, L"\\");
-							if (exe64Bit)
-							{
-							errorcode = CreateDirectoryW(currPathW, NULL);
-							}
-							else
-							{
-								if (Wow64DisableWow64FsRedirection(&OldValue)) errorcode = CreateDirectoryW(currPathW, NULL);
-								if (!Wow64RevertWow64FsRedirection(&OldValue))
-								{
-								DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
-								break;
-								}
-
-							}
-						
-						}
-					}
-
-				//Also check if Directory exists?
-				//There is a default string size limit for paths of 248 characters
-				//errorcode = CreateDirectoryW(cumPath, NULL);
-
-				//wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
-				//\a  audible bell
-
-				//LB_GETTEXTLEN  https://msdn.microsoft.com/en-us/library/windows/desktop/bb761315(v=vs.85).aspx
-					
-					
-
-				//longPathName
-				//Clear all the added items
-				EndCreate:
-				free(currPathW);
-				free(tempDest);
-				if (foundNTDLL) FreeLibrary ((HMODULE)hdlNtCreateFile);
-				//free(cumPath);
-				if (errorcode != 0) //succeeded
-				{
-				errorcode = 0; //flag okay now
-				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-				PopulateList(hwnd, errorcode);
-				}
-				}
-				break;
 
 				case IDC_LOGON:
 			{
@@ -880,14 +929,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					wcscat_s(tempDest,  maxPathFolder, L"\\Temp\\CreateLargeDir.exe");
 					if (GetCreateLargeDirPath (hwnd, thisexePath, errorcode) == 1)
 					{
-							ErrorExit("GetCreateLargeDirPath: Problem with program copy.");
+							ErrorExit("GetCreateLargeDirPath: Problem with program copy.", 0);
 							break;
 					}
 
 
 					if (CopyFileW(thisexePath, tempDest, FALSE) == 0)
 					{
-						ErrorExit("CopyFile: Copy to Temp failed... aborting.");
+						ErrorExit("CopyFile: Copy to Temp failed... aborting.", 0);
 						EnableWindow(GetDlgItem(hwnd, IDC_LOGON), buttEnable);
 						EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), buttEnable);
 						free (thisexePath);
@@ -1212,7 +1261,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 
 			thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
 			tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
-			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  maxPathFolder)) ErrorExit("ExpandEnvironmentStringsW failed for some reason.");
+			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  maxPathFolder)) ErrorExit("ExpandEnvironmentStringsW failed for some reason.", 0);
 			wcscpy_s(thisexePath, maxPathFolder, tempDest); //Small hole in logic here
 			wcscat_s(tempDest, maxPathFolder, L"\\Temp\\CreateLargeDir.exe");
 
@@ -1228,7 +1277,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 				ZeroMemory (&lpStartupInfo, sizeof(lpStartupInfo));
 
 				SetLastError(ERROR_INVALID_PARAMETER); //https://msdn.microsoft.com/en-us/library/ms682425(VS.85).aspx
-				if (!CreateProcessW(thisexePath, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit("userinit could not be started through this program. Please reboot after closing this program.");
+				if (!CreateProcessW(thisexePath, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit("userinit could not be started through this program. Please reboot after closing this program.", 0);
 				//The reg value is restored to userinit before theis point
 				}
 			if(!MoveFileExW(tempDest,NULL,MOVEFILE_DELAY_UNTIL_REBOOT))
@@ -1318,10 +1367,10 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
     return result;
 }
 
-NTDLLptr DynamicLoader (HWND hwnd,  bool progInit)
+NTDLLptr DynamicLoader (bool progInit)
 {
-	HMODULE hdlNtCreateFile = LoadLibraryW(L"NtDll.dll");
-	foundNTDLL = (NTDLLptr) GetProcAddress (hdlNtCreateFile, createFnString);
+	hdlNtCreateFile = LoadLibraryW(L"NtDll.dll");
+	foundNTDLL = (NTDLLptr) GetProcAddress ((HMODULE) hdlNtCreateFile, createFnString);
 	if (foundNTDLL)
 		{
 			if (progInit)
@@ -1333,7 +1382,13 @@ NTDLLptr DynamicLoader (HWND hwnd,  bool progInit)
 			}
 			else
 			{
-			my_RtlInitUnicodeString RtlInitUnicodeString = (my_RtlInitUnicodeString) GetProcAddress(hdlNtCreateFile, initUnicodeFnString);
+			//status error codes //also try GetModuleHandle("ntdll.dll"),
+			//RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress((HMODULE)hdlNtCreateFile, NtStatusToDosErrorString);
+			PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
+			if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return NULL;
+			//init Unicode string
+			PFN_RtlInitUnicodeString RtlInitUnicodeString;
+			if( !(RtlInitUnicodeString = (PFN_RtlInitUnicodeString) GetProcAddress( (HMODULE)hdlNtCreateFile, initUnicodeFnString )) ) return NULL;
 			RtlInitUnicodeString(&fn, tempDest);
 			fileObject.ObjectName = &fn; //Ntdll.dll
 			}
@@ -1341,7 +1396,7 @@ NTDLLptr DynamicLoader (HWND hwnd,  bool progInit)
 		}
 	else
 		{
-		FreeLibrary (hdlNtCreateFile);
+		FreeLibrary ((HMODULE) hdlNtCreateFile);
 		return foundNTDLL;
 		}
 
@@ -1378,7 +1433,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 			trackFTA [treeLevel][1] = 0;  //important
 			treeLevel -=1;
 			wcscpy_s(currPathW, maxPathFolder, folderTreeArray[treeLevel][trackFTA [treeLevel][0]-1]);
-			if (!SetCurrentDirectoryW (L"..")) ErrorExit("SetCurrentDirectoryW: Non zero");
+			if (!SetCurrentDirectoryW (L"..")) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 				
 				if (RemoveDirectoryW (currPathW))
 				{
@@ -1399,7 +1454,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				}
 				else
 				{
-					ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.");
+					ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 					return 1; //Need more than this
 				}
 
@@ -1416,7 +1471,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				// set inits for this branch
 				wcscpy_s(findPathW, maxPathFolder, L"\0");
 				wcscat_s(findPathW, maxPathFolder, folderTreeArray[treeLevel][trackFTA[treeLevel][0]-1]);
-				if (!SetCurrentDirectoryW (findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero");
+				if (!SetCurrentDirectoryW (findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 
 				GetCurrentDirectoryW(maxPathFolder, findPathW); //Get fulqualpath
 				treeLevel +=1; // up next tree
@@ -1435,7 +1490,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				trackFTA[treeLevel][0] = 0;
 				trackFTA[treeLevel][1] = 0;
 				treeLevel -=1;
-				ErrorExit("Too many folders in the tree: If folder was created by this program, a warning should have been issued on folder creation.");
+				ErrorExit("Too many folders in the tree: If folder was created by this program, a warning should have been issued on folder creation.", 0);
 				return 1; 
 				}
 		}
@@ -1458,7 +1513,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 		{
 			// No Folders so this must be top level
 			FindClose(ds);
-			ErrorExit("FindFirstFileW: Should never get here. No can do!");
+			ErrorExit("FindFirstFileW: Should never get here. No can do!", 0);
 			return 1; //Need more than this
 							
 		}
@@ -1498,9 +1553,9 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				{
 				// No Folders so this must be top level
 				GetCurrentDirectoryW(maxPathFolder, findPathW);
-					if (!SetCurrentDirectoryW (L"..")) ErrorExit("SetCurrentDirectoryW: Non zero");
+					if (!SetCurrentDirectoryW (L"..")) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 
-					if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero");
+					if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 					if (treeLevel == 1) //Last folder to do!!
 					{
 					wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
@@ -1512,38 +1567,33 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 						}
 						else
 						{
-							ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.");
+							ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 
 							return 1; //Need more than this
 						}
 
 					}
 
-				//GetCurrentDirectoryW(maxPathFolder, findPathW);
-				if (RemoveDirectoryW (currPathW))
-				{
-					trackFTA [treeLevel][1] = 0;  //important
-					treeLevel -=1;
-					if (RecurseRemovePath(trackFTA, folderTreeArray))
-						{
-						return 1;
-						}
-						else
-						{
-						return 0;
-						}
-				}
-				else
-				{
-					ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.");
-					return 1; //Need more than this
-				}
+					//GetCurrentDirectoryW(maxPathFolder, findPathW);
+					if (RemoveDirectoryW (currPathW))
+					{
+						trackFTA [treeLevel][1] = 0;  //important
+						treeLevel -=1;
+						if (RecurseRemovePath(trackFTA, folderTreeArray))
+							{
+							return 1;
+							}
+							else
+							{
+							return 0;
+							}
+					}
+					else
+					{
+						ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+						return 1; //Need more than this
+					}
 
-
-
-
-
-					if (RecurseRemovePath(trackFTA, folderTreeArray)) return 1;
 				}
 
 		else //Do an iteration on this new branch
