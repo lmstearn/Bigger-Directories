@@ -201,7 +201,7 @@ void ErrorExit(LPCTSTR lpszFunction, DWORD NTStatusMessage)
 
 void PopulateList(HWND hwnd, int errorcode)
 {
-	TCHAR* pszTxt = TEXT("My very big nested path");
+	TCHAR* pszTxt = TEXT("My large nested directory");
 	TCHAR pszDest[arraysize];
 	BOOL findhandle;
 	int gotolooper = 0;
@@ -646,7 +646,22 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//wcscpy_s(cumPath, pathLength, L"\\\\\?\\C:\\");
 				wcscpy_s(currPathW, maxPathFolder, L"");
 
-				SetCurrentDirectoryW(L"\\\\\?\\C:\\");
+				if (!SetCurrentDirectoryW(driveIDBaseW))
+					{
+					ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+					goto EndCreate;;
+					}
+
+
+
+
+
+				wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT); ///TEMPORARY ONLY
+
+
+
+
+
 				//Another loop & variables for recursive create here
 				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
 					{
@@ -656,11 +671,11 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
 					//wcscat_s(cumPath, pathLength, currPathW);
-  
+						
 					if (foundNTDLL)
 					{
-						wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT);
-						wcscat_s(tempDest, maxPathFolder, currPathW);
+						wcscat_s(currPathW, pathLength, L"\\");
+						wcscat_s(tempDest, pathLength, currPathW);
 						//wcscpy_s(tempDest, maxPathFolder, L"\\??\\C:\\testfile");
 						
 						if (DynamicLoader (false))
@@ -668,7 +683,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						
 						//Do not specify FILE_READ_DATA, FILE_WRITE_DATA, FILE_APPEND_DATA, or FILE_EXECUTE 
-						NTSTATUS ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, 0, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
+						NTSTATUS ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE | SYNCHRONIZE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
 
 						PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 						if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return NULL;
@@ -701,14 +716,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 						break;
 						}
+						wcscat_s(currPathW, maxPathFolder, L"\\");
+						if (!SetCurrentDirectoryW(currPathW))
+							{
+								//Always fails with error 32 "used by another process"
+								ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+								goto EndCreate;
+							}
 
 						}
 
 
-
 						else
 						{
-							//DynamicLoader failed
+							ErrorExit("DynamicLoader failed: Cannot create. ", 1);
+							goto EndCreate;
 						}
 					} //foundNtdll
 					else
@@ -719,6 +741,11 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							if (CreateDirectoryW(currPathW, NULL)) 
 								{
 									errorcode = 0;
+									if (!SetCurrentDirectoryW(currPathW))
+									{
+									ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+									goto EndCreate;
+									}
 								}
 							else
 								{
@@ -734,6 +761,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (CreateDirectoryW(currPathW, NULL)) 
 									{
 									errorcode = 0;
+									if (!SetCurrentDirectoryW(currPathW))
+									{
+									ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+									goto EndCreate;
+									}
+
 									}
 								else
 									{
@@ -841,7 +874,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						trackFTA [j][0] = 0; //Initial conditons before search on path
 						trackFTA [j][1] = 0;
 						}
-						SetCurrentDirectory (driveIDBase);
+						
+						if (!SetCurrentDirectoryW (driveIDBaseW))
+						{
+						ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+						return 1;
+						}						
+
 						if (RecurseRemovePath(trackFTA, folderTreeArray)) DisplayError (hwnd, L"Remove failed.", errorcode, 0);
 				
 					
@@ -1430,30 +1469,61 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 			trackFTA [treeLevel][1] = 0;  //important
 			treeLevel -=1;
 			wcscpy_s(currPathW, maxPathFolder, folderTreeArray[treeLevel][trackFTA [treeLevel][0]-1]);
-			if (!SetCurrentDirectoryW (L"..")) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
-				
-				if (RemoveDirectoryW (currPathW))
-				{
-					if (treeLevel == 0)
-					{
-						//everything above this folder is deleted
-						return 0;
-					}
 
-					if (RecurseRemovePath(trackFTA, folderTreeArray))
+
+					if (treeLevel == 0) //Last folder to do!! 
+					{
+						if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
 						{
+						ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 						return 1;
+						}
+						wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						currPathWtmp = currPathW + 4;
+						//GetCurrentDirectoryW(maxPathFolder, findPathW);
+						if (RemoveDirectoryW (currPathWtmp))
+						{
+							return 0;
 						}
 						else
 						{
-						return 0;
+							ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+
+							return 1; //Need more than this
 						}
-				}
-				else
-				{
-					ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
-					return 1; //Need more than this
-				}
+
+					}
+
+					else
+					{
+						if (!SetCurrentDirectoryW (L".."))
+						{
+							ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+							return 1;
+						}
+						//if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+						if (RemoveDirectoryW (currPathW))
+						{
+
+						if (RecurseRemovePath(trackFTA, folderTreeArray))
+							{
+							return 1;
+							}
+							else
+							{
+							return 0;
+							}
+						}
+						else
+							{
+								ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+								return 1; //Need more than this
+							}
+
+
+					}
+
+
 
 
 			}
@@ -1468,9 +1538,13 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				// set inits for this branch
 				wcscpy_s(findPathW, maxPathFolder, L"\0");
 				wcscat_s(findPathW, maxPathFolder, folderTreeArray[treeLevel][trackFTA[treeLevel][0]-1]);
-				if (!SetCurrentDirectoryW (findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+				//
+				if (!SetCurrentDirectoryW (findPathW))
+				{
+					ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+					return 1;
+				}
 
-				GetCurrentDirectoryW(maxPathFolder, findPathW); //Get fulqualpath
 				treeLevel +=1; // up next tree
 					if (RecurseRemovePath(trackFTA, folderTreeArray))
 						{
@@ -1490,7 +1564,7 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				ErrorExit("Too many folders in the tree: If folder was created by this program, a warning should have been issued on folder creation.", 0);
 				return 1; 
 				}
-		}
+				}
 
 	}
 
@@ -1501,19 +1575,25 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 
 	//Do find folders in new branch, findPathW already set
 			
-					
+				
 		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
 		//Find first file
+		//Get fulqualpath
+		if (!GetCurrentDirectoryW (maxPathFolder, findPathW))
+			{
+				ErrorExit("GetCurrentDirectoryW: Zero", 0);
+				return 1;
+			}
 		wcscat_s(findPathW, maxPathFolder, L"\\*");
 		ds = FindFirstFileW(findPathW, &dw);
-			if (ds == INVALID_HANDLE_VALUE) //redundant as first 2 pickups are "." and ..
-		{
-			// No Folders so this must be top level
-			FindClose(ds);
-			ErrorExit("FindFirstFileW: Should never get here. No can do!", 0);
-			return 1; //Need more than this
+			if (ds == INVALID_HANDLE_VALUE) //redundant as first 2 pickups are "." and ".."
+			{
+				// No Folders so this must be top level
+				FindClose(ds);
+				ErrorExit("FindFirstFileW: Should never get here. No can do!", 0);
+				return 1; //Need more than this
 							
-		}
+			}
 
 
 						
@@ -1543,21 +1623,24 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				findhandle = FindNextFileW(ds, &dw);
 			}
 
-			FindClose(ds);
+			if (!FindClose(ds)) ErrorExit("FindClose: Non zero", 0);
+			//wcscpy_s(currPathW, maxPathFolder, folderTreeArray[treeLevel][j-1]);
 			trackFTA [treeLevel][0] = 0; //check reset counter if necessary here
 
 			if (j == 0)
 				{
 				// No Folders so this must be top level
-				GetCurrentDirectoryW(maxPathFolder, findPathW);
-					if (!SetCurrentDirectoryW (L"..")) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 
-					if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
-					if (treeLevel == 1) //Last folder to do!!
+					if (treeLevel == 1) //Last folder to do!! 
 					{
+						if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
+						{
+						ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+						return 1;
+						}
 					wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 					currPathWtmp = currPathW + 4;
-					GetCurrentDirectoryW(maxPathFolder, findPathW);
+					//GetCurrentDirectoryW(maxPathFolder, findPathW);
 						if (RemoveDirectoryW (currPathWtmp))
 						{
 							return 0;
@@ -1569,6 +1652,16 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 							return 1; //Need more than this
 						}
 
+					}
+
+					else
+					{
+
+						if (!SetCurrentDirectoryW (L".."))
+						{
+						ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+						return 1;
+						}
 					}
 
 					//GetCurrentDirectoryW(maxPathFolder, findPathW);
@@ -1594,18 +1687,19 @@ int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000]
 				}
 
 		else //Do an iteration on this new branch
-			{
-				trackFTA [treeLevel][1] = j;
+				{
+					//if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+					trackFTA [treeLevel][1] = j;
 
-				if (RecurseRemovePath(trackFTA, folderTreeArray))
-				{
-				return 1;
+					if (RecurseRemovePath(trackFTA, folderTreeArray))
+					{
+					return 1;
+					}
+					else
+					{
+					return 0;
+					}
 				}
-				else
-				{
-				return 0;
-				}
-			}
 	} //trackFTA[treeLevel][0] = 0
  
 }
