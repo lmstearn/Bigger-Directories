@@ -209,7 +209,6 @@
       <TargetMachine>MachineX86</TargetMachine>
       <UACExecutionLevel>RequireAdministrator</UACExecutionLevel>
       <AdditionalOptions>/VERBOSE %(AdditionalOptions)</AdditionalOptions>
-      <UACUIAccess>true</UACUIAccess>
     </Link>
     <Bscmake>
       <SuppressStartupBanner>true</SuppressStartupBanner>
