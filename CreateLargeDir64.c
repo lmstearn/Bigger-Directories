@@ -19,7 +19,7 @@
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATA da;
-int const pathLength = 32760, maxPathFolder = MAX_PATH - 3;
+int const pathLength = 32760, maxPathFolder = MAX_PATH - 3, treeLevelLimit = 2000, branchLimit = 1000;
 wchar_t const *lpref = L"\\\\?\\";
 const wchar_t *driveIDBaseW = L"\\\\?\\C:\\";
 const wchar_t *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
@@ -28,12 +28,12 @@ wchar_t *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // 
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
 char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
-wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[2000][1000][maxPathFolder];
+wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder];
 
 
-int folderdirCS, folderdirCW;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchCut;
 long long listTotal = 0;
-long long idata, treeLevel, trackFTA[1000][2];
+long long idata, treeLevel, trackFTA[branchLimit][2];
 long long index; //variable for listbox items
 BOOL buttEnable = FALSE;
 BOOL weareatBoot = FALSE;
@@ -41,6 +41,16 @@ BOOL setforDeletion = FALSE;
 BOOL am64Bit, exe64Bit; 
 PVOID OldValue = NULL; //Redirection
 HANDLE hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
+
+
+struct fileSystemNames
+{
+    char FT[treeLevelLimit][branchLimit][maxPathFolder];
+	//char FB[1000];
+
+}fileSystem;
+
+
 typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 
 
@@ -60,19 +70,8 @@ typedef NTSTATUS (__stdcall *NTDLLptr)(
     PVOID EaBuffer, 
     ULONG EaLength );
 
-//unicode string for NTcreatefile fileObject
-//typedef VOID (__stdcall *RtlInitUnicodeStringPtr) (
-//    IN OUT PUNICODE_STRING  DestinationString,
-//    IN wchar_t  *SourceString );
 
-//typedef VOID ( NTAPI *my_RtlInitUnicodeString ) (
-//    PUNICODE_STRING DestinationString,
-//    PCWSTR SourceString
-//    );
-//unicode string for NTcreatefile fileObject
-
-
-//for NTcreatefile fileObject
+//for NTcreatefile fileObject,  NTAPI is __stdcall
 typedef VOID (__stdcall *PFN_RtlInitUnicodeString) (
     IN OUT PUNICODE_STRING  DestinationString,
     IN PCWSTR  SourceString );
@@ -110,7 +109,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
-int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder]);
+int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder]);
 
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
@@ -154,7 +153,7 @@ void ErrorExit(LPCTSTR lpszFunction, DWORD NTStatusMessage)
 	DWORD dww = 0;
 	LPVOID lpMsgBuf;
 	LPVOID lpDisplayBuf;
-
+	
 	if (NTStatusMessage)
 	{
 		dww = NTStatusMessage;
@@ -215,7 +214,7 @@ void PopulateList(HWND hwnd, int errorcode)
 	
 	//if (foundNTDLL) we can use the better function
 
-	if (!DynamicLoader (true)) DisplayError (hwnd, L"The long path function has been removed. Using short path functions...", errorcode, 0);
+	if (!DynamicLoader (true)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions...", errorcode, 0);
 
 	
 	#if defined(ENV64BIT) //#if is a directive: see header file
@@ -303,10 +302,13 @@ else
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  "\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
 	//http://stackoverflow.com/questions/15610506/can-the-null-character-be-used-to-represent-the-zero-character  NO
+	branchCut = 0;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
 	memset(dacfoldersW, '\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, '\0', sizeof(folderTreeArray)); //required for remove function
-	
+	EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+	EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+
 	//Bad:
 	//malloc(sizeof(char *) * 5) // Will allocate 20 or 40 bytes depending on 32 63 bit system
 	//Good:
@@ -543,6 +545,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					//On the first call of IDC_ADD change text & button enables. 
 					//Add button disabled until a successful create or Clear
 					//FIX LATER
+
+					currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+					if (currPathW == NULL)
+					{
+						/* We were not so display a message */
+					errorcode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+					//return;
+					}
+
 					SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is repeated");
 
 					SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times");
@@ -602,9 +614,79 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						DisplayError (hwnd, L"Couldn't translate that number :(", errorcode, 0);
 
 					}
+					//DO NOT REFRESH LIST until dirs created.
+					if (branchTotal)
+					{
+					}
+					else
+					{
+					}
+
+
+					if (foundNTDLL)
+					{
+						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
+						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+						HWND hList = GetDlgItem(hwnd, IDC_LIST);
+						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+						wcscpy_s(currPathW, maxPathFolder, L"");
+											//check on bounds
+						if (branchTotal < branchLimit)
+						{
+						branchTotal +=1;
+						}
+						else
+						{
+						break;
+						}
+						branchLevel = 0;
+						for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
+						{
+						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+						wcscpy_s(folderTreeArray[branchLevel][branchTotal -1], maxPathFolder, (wchar_t *) currPathW);
+						//branchTotal's next iteration to branchCut only
+						if (i < listTotal - branchCut)
+						{
+						wcscpy_s(folderTreeArray[branchLevel][branchTotal], maxPathFolder, folderTreeArray[branchLevel][branchTotal]);
+						}
+						if (branchCut + branchLevel < treeLevelLimit)
+						{
+						branchLevel += 1;
+						}
+						else
+						{
+							break;
+						}
+						}
+						//save branchCut & branchLevel 
+						branchCut = 0;
+					}
 
 				}
 				break;
+
+
+				case IDC_UP: //adds directories nested ntimes
+					//rule is cannot go back up a tree once we have branched.
+				{
+					//check validity with branchCut + branchLevel and grey out
+					EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
+					(branchCut > 0) ? branchCut -=1 : EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+
+				}
+				break;
+
+				case IDC_DOWN: //adds directories nested ntimes
+				{
+					EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+					(branchCut < branchLevel) ? branchCut +=1 : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+
+				}
+				break;
+
+
+
+
 			case IDC_CREATE:
 				{
 				NTSTATUS ntStatus;
@@ -685,7 +767,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						
 						//Do not specify FILE_READ_DATA, FILE_WRITE_DATA, FILE_APPEND_DATA, or FILE_EXECUTE 
-						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_TRAVERSE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_CREATE, FILE_DIRECTORY_FILE, NULL, 0);
+							ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | SYNCHRONIZE, &fileObject, &ioStatus, NULL, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_CREATE, FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT, NULL, 0);
 
 						PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 						if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return NULL;
@@ -822,6 +904,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 				}
 				break;
+
+
 				case IDC_REMOVE:
 				{
 					// When the user clicks the Remove button, we first get the number
@@ -875,7 +959,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						trackFTA [0][0] = 0; //Initial conditions before search on path
 						trackFTA [0][1] = 1;
 
-						for (int j = 1; j < 1000; j++)
+						for (int j = 1; j < branchLimit; j++)
 						{
 						trackFTA [j][0] = 0; //Initial conditons before search on path
 						trackFTA [j][1] = 0;
@@ -1441,8 +1525,8 @@ NTDLLptr DynamicLoader (bool progInit)
 }
 
 
-int RecurseRemovePath(long long trackFTA[1000][2], wchar_t folderTreeArray[2000][1000][maxPathFolder])
-	//*folderTreeArray[1000][1000][maxPathFolder] *(folderTreeArray)[260][maxPathFolder]
+int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder])
+
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found i.e. folderTreeArray[1000][jsize][maxPathFolder]
 {
 	int j;
