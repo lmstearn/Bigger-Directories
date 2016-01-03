@@ -43,12 +43,12 @@ PVOID OldValue = NULL; //Redirection
 HANDLE hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 
 
-struct fileSystemNames
-{
-    char FT[treeLevelLimit][branchLimit][maxPathFolder];
+//struct fileSystem
+//{
+//    char FT[treeLevelLimit][branchLimit][maxPathFolder];
 	//char FB[1000];
 
-}fileSystem;
+//};
 
 
 typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
@@ -130,7 +130,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		if (yesNo)
 		{
 		int msgboxID = MessageBoxW(hwnd, hrtext, L"Warning", MB_YESNO);
-			if (msgboxID =IDYES)
+			if (msgboxID == IDYES)
 			{
 			return 1;
 			}
@@ -1523,6 +1523,121 @@ NTDLLptr DynamicLoader (bool progInit)
 		}
 
 }
+
+bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
+{
+	
+	//fileSystem fs;
+	char buffer1[treeLevelLimit + 1];
+	char buffer2[branchLimit + 1];
+
+	int  result;
+	int  i,j;
+	wchar_t *ch, *chold;
+	bool p;
+
+
+	//buffer = (char*) malloc (sizeof(char) * (maxPathFolder + 1) )
+	wchar_t *fsName= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, maxPathFolder)) ErrorExit("ExpandEnvironmentStringsW failed for some reason.",0);
+	wcscat_s(fsName, maxPathFolder, L"\\Temp\\CreateLargeFileSystem.bin");
+	FILE *stream = _wfopen(fsName, L"r");
+	//If the file already exists and is opened for reading or appending, the Byte Order Mark (BOM), if it present in the file, determines the encoding.
+	if (!stream) //returns NULL Pointer
+	{
+	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file...", 0, 1))
+	{
+	FILE *stream = _wfopen(fsName, L"w+");
+	}
+	else
+	{
+	return false;
+	}
+	}
+	else //file exists
+	{
+	FILE *stream = _wfopen(fsName, L"a+");
+	//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
+	if (!stream) //returns NULL Pointer
+	{
+	ErrorExit("Problems with input File: Cannot append.", 0);
+	return false;
+	}
+
+	}
+
+
+	if (falseReadtrueWrite) //write to file
+	{
+
+	
+
+	fseek(stream,0,SEEK_END);
+	//offset from the first to the last byte, or in other words, filesize
+	int string_size = ftell (stream);
+	//go back to the start of the file
+	rewind(stream);
+	
+
+	
+		for (i = 0; (i  < (sizeof(buffer2)-1) &&
+		((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); i++)
+		//if first char is NULL quit, note, null is not written to file
+			{
+			if (wcschr(ch, '\0')) break; 
+			for (j = 0; (j  < (sizeof(buffer1)-1) &&
+			((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); j++)
+			{
+			//buffer1 is treeLevelLimit
+		
+				//if (chold =="\0\0") break
+				//else ch = NULL;
+			
+			
+			//gets whole string	
+			if( fgetws(folderTreeArray[j][i], maxPathFolder -1, stream ) == NULL)
+		
+			{
+			ErrorExit("Problems with input File: fgetws returns NULL.", 0);
+			return false;
+			}
+			else
+			{
+			//
+			//Have written newline char at end of folder name
+			//if (strchr(ch, '\n')) break; //problems if newline //covered in loop!
+		
+			}
+ 
+
+ 			}
+			wcscat_s(chold, 2, ch);
+			}
+
+	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the */
+                                      /* beginning of the file    */
+	if (result == 0)
+	printf("Pointer successfully moved to the beginning of the file.\n");
+	else
+	printf("Failed moving pointer to the beginning of the file.\n");
+
+	// Close stream if it is not NULL 
+
+	if (fclose (stream))
+	{
+	ErrorExit("Stream was not closed properly: exit & restart?", 0);
+	return false;
+	}
+
+
+	}
+	else //read from file
+  	{
+
+	}
+
+
+	}
 
 
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder])
