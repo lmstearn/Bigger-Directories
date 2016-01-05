@@ -31,13 +31,14 @@ char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array ch
 wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchCut;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelStatusOld, branchLevelStatus;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
 long long index; //variable for listbox items
 BOOL buttEnable = FALSE;
 BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
+BOOL createButtonEnabled;
 BOOL am64Bit, exe64Bit; 
 PVOID OldValue = NULL; //Redirection
 HANDLE hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
@@ -302,12 +303,22 @@ else
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  "\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
 	//http://stackoverflow.com/questions/15610506/can-the-null-character-be-used-to-represent-the-zero-character  NO
-	branchCut = 0;
+	branchLevelStatusOld = 0;
+	branchLevelCum = 0;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
 	memset(dacfoldersW, '\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, '\0', sizeof(folderTreeArray)); //required for remove function
 	EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+	EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+	createButtonEnabled = false;
+	for (int j = 1; j < branchLimit; j++)
+		{
+		trackFTA [j][0] = 0; //Initial conditons before search on path
+		trackFTA [j][1] = 0;
+		}
+
+
 
 	//Bad:
 	//malloc(sizeof(char *) * 5) // Will allocate 20 or 40 bytes depending on 32 63 bit system
@@ -546,6 +557,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					//Add button disabled until a successful create or Clear
 					//FIX LATER
 
+
+
 					currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 					if (currPathW == NULL)
 					{
@@ -625,7 +638,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					if (foundNTDLL)
 					{
-						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
+						(branchLevelStatus) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+						//next add is always at base
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 						HWND hList = GetDlgItem(hwnd, IDC_LIST);
 						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
@@ -640,27 +654,52 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 						}
 						branchLevel = 0;
-						for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
+
+						for (int i = folderdirCS + folderdirCW + branchLevelCum; i < listTotal; i++)
+
 						{
 						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-						wcscpy_s(folderTreeArray[branchLevel][branchTotal -1], maxPathFolder, (wchar_t *) currPathW);
-						//branchTotal's next iteration to branchCut only
-						if (i < listTotal - branchCut)
+						wcscpy_s(folderTreeArray[branchLevelStatusOld + branchLevel][branchTotal - 1], maxPathFolder, (wchar_t *) currPathW); //branchLevelStatusOld can be neg?
+
+
+							if (branchLevelStatusOld + branchLevel < treeLevelLimit)
+							{
+							branchLevel += 1;
+							}
+							else
+							{
+								break;
+							}
+						}
+
+						//save branchLevelStatusOld & branchLevel
+						branchLevelStatusOld = branchLevelStatus;
+
+						for (int i = 0; i < branchLevelStatus; i++)
 						{
-						wcscpy_s(folderTreeArray[branchLevel][branchTotal], maxPathFolder, folderTreeArray[branchLevel][branchTotal]);
+						//branchTotal's next iteration only
+						wcscpy_s(folderTreeArray[i][branchTotal], maxPathFolder, folderTreeArray[branchLevel][branchTotal-1]); //populate the entire string
 						}
-						if (branchCut + branchLevel < treeLevelLimit)
+						trackFTA [branchTotal-1][0] = branchLevelStatus; //Initial conditons before search on path
+
+						
+						for (int i = branchLevelStatus; i < treeLevelLimit; i++)
 						{
-						branchLevel += 1;
+							//clear the the directory after the cut
+							wcscpy_s(folderTreeArray[i][branchTotal -1], maxPathFolder, L"\0");
+
 						}
-						else
-						{
-							break;
-						}
-						}
-						//save branchCut & branchLevel 
-						branchCut = 0;
+
+
+
+						branchLevelCum += branchLevel; //number of items added to list
 					}
+
+
+				if (createButtonEnabled == false) EnableWindow(GetDlgItem(hwnd, IDC_CREATE), true);
+				
+
+
 
 				}
 				break;
@@ -669,17 +708,17 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				case IDC_UP: //adds directories nested ntimes
 					//rule is cannot go back up a tree once we have branched.
 				{
-					//check validity with branchCut + branchLevel and grey out
-					EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
-					(branchCut > 0) ? branchCut -=1 : EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+					//check validity with branchLevelStatusOld + branchLevel and grey out
+					branchLevelStatus +=1;
+					(branchLevelStatus < branchLevel + branchLevelStatusOld ) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 
 				}
 				break;
 
 				case IDC_DOWN: //adds directories nested ntimes
 				{
-					EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
-					(branchCut < branchLevel) ? branchCut +=1 : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+					branchLevelStatus -=1;
+					(branchLevelStatus == 0) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false) : EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 
 				}
 				break;
@@ -696,7 +735,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						/* We were not so display a message */
 					errorcode = -1;
 					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-					//return;
+					goto EndCreate;
 					}
 				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 					if (tempDest == NULL)
@@ -704,7 +743,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						/* We were not so display a message */
 					errorcode = -1;
 					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-					//return;
+					goto EndCreate;
 					}
 					
 				//cumPath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -720,12 +759,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//get total for loop
 				listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 
-					if (listTotal == folderdirCS + folderdirCW)
-					{
-					errorcode = 0;
-					DisplayError (hwnd, L"You didn't Add any strings to create!", errorcode, 0);
-					goto EndCreate;
-					}
 
 				//wcscpy_s(cumPath, pathLength, L"\\\\\?\\C:\\");
 				wcscpy_s(currPathW, maxPathFolder, L"");
@@ -733,31 +766,41 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				if (!SetCurrentDirectoryW(driveIDBaseW))
 					{
 					ErrorExit("SetCurrentDirectoryW: Non zero", 0);
-					goto EndCreate;;
+					goto EndCreate;
 					}
 
 
 
-
-
-				wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT); ///TEMPORARY ONLY
-
-
-
-
-
-				//Another loop & variables for recursive create here
-				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
-					{
-					SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-					//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
-
-
-					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
-					//wcscat_s(cumPath, pathLength, currPathW);
-						
 					if (foundNTDLL)
 					{
+
+						//Validation check for dups
+						//compare all folderTreeArray items that have the same trackFTA
+						for (int j = 0; j < treeLevelLimit; j++)
+						{
+							for (int i = 0; i < branchTotal; i++)
+							{
+							if (trackFTA [i][0] = j)
+							{
+								//if (folderTreeArray[i][branchTotal], maxPathFolder, folderTreeArray[branchLevel][branchTotal-1]); //populate the entire string
+								//wcscpy_s(folderTreeArray[i][branchTotal], maxPathFolder, folderTreeArray[branchLevel][branchTotal-1]); //populate the entire string
+							}
+							//Initial conditons before search on pat
+							
+							}
+
+						}
+						
+
+
+
+
+
+
+						wcscat_s(tempDest, maxPathFolder, driveIDBaseWNT); ///TEMPORARY ONLY
+\
+						
+	
 						wcscat_s(currPathW, pathLength, L"\\");
 						wcscat_s(tempDest, pathLength, currPathW);
 						//wcscpy_s(tempDest, maxPathFolder, L"\\??\\C:\\testfile");
@@ -816,9 +859,22 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							ErrorExit("DynamicLoader failed: Cannot create. ", 1);
 							goto EndCreate;
 						}
-					} //foundNtdll
-					else
-						{
+				} //foundNtdll
+
+				else
+				{
+
+
+				//Another loop & variables for recursive create here
+				for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
+					{
+					SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+					//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
+
+
+					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
+					//wcscat_s(cumPath, pathLength, currPathW);
+						
 							wcscat_s(currPathW, maxPathFolder, L"\\");
 							if (exe64Bit)
 							{
@@ -865,10 +921,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 
 							}
-						}
-					}
 
-				//Also check if Directory exists?
+
+
+						//AFTER each directory created successfully save to folderTreeArray
+						//folderTreeArray[j][i] initialized every refresh, trackFTA[branchLimit][2];
+
+
+					}
+				}
+
 				//There is a default string size limit for paths of 248 characters
 				//errorcode = CreateDirectoryW(cumPath, NULL);
 
@@ -1533,7 +1595,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 	int  result;
 	int  i,j;
-	wchar_t *ch, *chold;
+	wchar_t *ch;
 	bool p;
 
 
@@ -1547,7 +1609,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	{
 	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file...", 0, 1))
 	{
-	FILE *stream = _wfopen(fsName, L"w+");
+	if (falseReadtrueWrite) FILE *stream = _wfopen(fsName, L"w+"); else return false; // can't read from empty file
 	}
 	else
 	{
@@ -1567,31 +1629,19 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	}
 
 
-	if (falseReadtrueWrite) //write to file
+	if (falseReadtrueWrite) //write or append to file
 	{
 
 	
 
-	fseek(stream,0,SEEK_END);
-	//offset from the first to the last byte, or in other words, filesize
-	int string_size = ftell (stream);
-	//go back to the start of the file
-	rewind(stream);
-	
-
-	
-		for (i = 0; (i  < (sizeof(buffer2)-1) &&
-		((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); i++)
+		for (i = 0; (i  < (sizeof(buffer2) - 1) &&  ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); i++)
 		//if first char is NULL quit, note, null is not written to file
 			{
 			if (wcschr(ch, '\0')) break; 
-			for (j = 0; (j  < (sizeof(buffer1)-1) &&
-			((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); j++)
+			for (j = 0; (j  < (sizeof(buffer1) - 1) && ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); j++)
 			{
 			//buffer1 is treeLevelLimit
 		
-				//if (chold =="\0\0") break
-				//else ch = NULL;
 			
 			
 			//gets whole string	
@@ -1599,27 +1649,64 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 		
 			{
 			ErrorExit("Problems with input File: fgetws returns NULL.", 0);
+			fclose (stream);
 			return false;
 			}
-			else
-			{
-			//
+
+
 			//Have written newline char at end of folder name
 			//if (strchr(ch, '\n')) break; //problems if newline //covered in loop!
 		
-			}
+
  
 
  			}
-			wcscat_s(chold, 2, ch);
+
 			}
 
-	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the */
-                                      /* beginning of the file    */
-	if (result == 0)
-	printf("Pointer successfully moved to the beginning of the file.\n");
-	else
-	printf("Failed moving pointer to the beginning of the file.\n");
+
+	}
+	else //read from file
+  	{
+
+
+	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the beginning of the file */
+	//rewind(stream); //does the same?
+	if (!result)
+	{
+	ErrorExit("fseek: Could not rewind!", 0);
+	fclose (stream);
+	return false;
+	}
+
+	
+
+		for (i = 0; (i  < (sizeof(buffer2) - 1) &&  ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n') && (*ch != '\0')); i++) //we are reading so last null condition mandatory
+		//if first char is NULL quit, note, null is not written to file
+			{
+			if (wcschr(ch, '\0')) break; 
+			for (j = 0; (j  < (sizeof(buffer1) - 1) && ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')&& (*ch != '\0')); j++)
+			{
+		
+			
+			
+			//gets string to write to array
+			if( fgetws(folderTreeArray[j][i], maxPathFolder -1, stream ) == NULL)
+		
+			{
+			ErrorExit("Problems with input File: fgetws returns NULL.", 0);
+			fclose (stream);
+			return false;
+			}
+
+ 			}
+
+			}
+
+
+
+	}
+
 
 	// Close stream if it is not NULL 
 
@@ -1628,13 +1715,12 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	ErrorExit("Stream was not closed properly: exit & restart?", 0);
 	return false;
 	}
-
-
+	else
+	{
+	return true;
 	}
-	else //read from file
-  	{
 
-	}
+
 
 
 	}
