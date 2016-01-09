@@ -28,7 +28,7 @@ wchar_t *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // 
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
 char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
-wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder], pathsToSave [branchLimit];
+wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[treeLevelLimit + 1][branchLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit];
 
 
 int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelStatusOld, branchLevelStatus, branchTotalSaveFile;
@@ -110,7 +110,7 @@ int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite);
-int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder]);
+int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit + 1][branchLimit + 1][maxPathFolder]);
 
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
@@ -238,7 +238,7 @@ void PopulateList(HWND hwnd, int errorcode)
 			exit(1);
 		}
     
-		if (FindProcessId (hwnd, L"CreateLargeDir64.exe", exeHandle) == NULL)
+		if (FindProcessId (hwnd, L"CreateLargeDir64.exe", exeHandle) != NULL)
 		{
 
 			am64Bit = false;
@@ -253,10 +253,12 @@ void PopulateList(HWND hwnd, int errorcode)
 
 		}
 
-	else
-	{
-		//Weird, can't get our own handle
-	}
+		else
+
+		{
+			DisplayError (hwnd, L"Our own process isn't active!? Must terminate!", 1, 0);
+			exit(1);
+		}
 }	
 
 	#else
@@ -308,13 +310,14 @@ else
 	branchTotalSaveFile = 0;
 	branchTotal = 0;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
-	memset(dacfoldersW, '\0', sizeof(dacfoldersW));
-	memset(folderTreeArray, '\0', sizeof(folderTreeArray)); //required for remove function
-	memset(pathsToSave, '\0', sizeof(pathsToSave)); //required for create
+	memset(dacfoldersW, L'\0', sizeof(dacfoldersW));
+	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
+	memset(pathsToSave, L'\0', sizeof(pathsToSave)); //required for create
 	EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 	removeButtonEnabled = true;
+		
 	for (int j = 1; j < branchLimit; j++)
 		{
 		trackFTA [j][0] = 0; //Initial conditons before search on path
@@ -631,41 +634,42 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						DisplayError (hwnd, L"Couldn't translate that number :(", errorcode, 0);
 						goto NoAddSuccess;
 					}
-					//DO NOT REFRESH LIST until dirs created.
-					if (branchTotal)
-					{
-					}
-					else
-					{
-					}
 
 
 					if (foundNTDLL)
 					{
-						if (!branchTotal) branchTotal = branchTotalSaveFile; //populate after the save file contents
+						//update branchTotal
+						if (branchTotal)
+						{
+							if (branchTotal < branchLimit - 1)
+							{
+							branchTotal +=1;
+							}
+							else
+							{
+							DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore!", errorcode, 0);
+							goto NoAddSuccess;
+							}
+						}
+						else
+						{
+							(branchTotalSaveFile) ? branchTotal = branchTotalSaveFile + 1: branchTotalSaveFile = -1;
+							//populate after the save file contents
+						}
 						(branchLevelStatus) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						//next add is always at base
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 						HWND hList = GetDlgItem(hwnd, IDC_LIST);
 						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 						wcscpy_s(currPathW, maxPathFolder, L"");
-											//check on bounds
-						if (branchTotal < branchLimit)
-						{
-						branchTotal +=1;
-						}
-						else
-						{
-						DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore!", errorcode, 0);
-						goto NoAddSuccess;
-						}
 						branchLevel = 0;
+											//check on bounds
 
 						for (int i = folderdirCS + folderdirCW + branchLevelCum; i < listTotal; i++)
 
 						{
 						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-						wcscpy_s(folderTreeArray[branchLevelStatusOld + branchLevel][branchTotal - 1], maxPathFolder, (wchar_t *) currPathW); //branchLevelStatusOld can be neg?
+						wcscpy_s(folderTreeArray[branchLevelStatusOld + branchLevel][branchTotal], maxPathFolder, (wchar_t *) currPathW); //branchLevelStatusOld can be neg?
 
 
 							if (branchLevelStatusOld + branchLevel < treeLevelLimit)
@@ -680,20 +684,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 
 						//save branchLevelStatusOld & branchLevel
+
 						branchLevelStatusOld = branchLevelStatus;
 
 						for (int i = 0; i < branchLevelStatus; i++)
 						{
 						//branchTotal's next iteration only
-						wcscpy_s(folderTreeArray[i][branchTotal], maxPathFolder, folderTreeArray[branchLevel][branchTotal-1]); //populate the entire string
+						wcscpy_s(folderTreeArray[i][branchTotal + 1], maxPathFolder, folderTreeArray[branchLevel][branchTotal]); //populate the entire string
 						}
-						trackFTA [branchTotal-1][0] = branchLevelStatus; //for validation
+						trackFTA [branchTotal][0] = branchLevelStatus; //for validation
 
 						
 						for (int i = branchLevelStatus; i < treeLevelLimit; i++)
 						{
 							//clear the the directory after the cut
-							wcscpy_s(folderTreeArray[i][branchTotal -1], maxPathFolder, L"\0");
+							wcscpy_s(folderTreeArray[i][branchTotal + 1], maxPathFolder, L"\0");
 
 						}
 
@@ -737,6 +742,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			case IDC_CREATE:
 				{
 				NTSTATUS ntStatus;
+				int i,j,k;
 
 				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 					if (currPathW == NULL)
@@ -785,12 +791,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 
 						//convert to single folder items: -previously created folders done
-						for (int j = branchTotalSaveFile + 1 ; j < branchTotal; j++)
+						for (j = branchTotalSaveFile + 1; j <= branchTotal; j++)
 						{
 							
 							//pathsToSave [branchLimit]
 							//if (folderTreeArray[i][branchTotal]
-							for (int i = 0; (i < treeLevelLimit) && (folderTreeArray[j][i] != '\0'); i++)
+							for (i = 0; (i < treeLevelLimit) && (folderTreeArray[j][i][0] != '\0'); i++)
 							{
 								wcscat_s(&pathsToSave[i], maxPathFolder, folderTreeArray[j][i]);
 								wcscat_s(&pathsToSave[i], maxPathFolder, L"\\");
@@ -801,18 +807,18 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						//Validation check for dups
 						//compare all folderTreeArray items that have the same trackFTA
-						for (int j = 0; j < treeLevelLimit; j++)
+						for (j = 0; j < treeLevelLimit; j++)
 						{
-							for (int i = 0; i < branchTotal; i++) //do items in save file as well
+							for (i = 0; i <= branchTotal; i++) //do items in save file as well
 								{
-								for (int k = 0; k > i; k++)
+								for (k = 0; k > i; k++)
 									{
 									if (trackFTA [i][0] = j)
 
 									{
 									if (0 == wcscmp(&pathsToSave[i], &pathsToSave[k]))
 									{
-										wcscpy_s(&pathsToSave[i], 1, L"\0");
+										wcscpy_s(&pathsToSave[i], 1, L'\0');
 										for (int l = 0; l < treeLevelLimit; l++)
 										{
 										wcscpy_s(folderTreeArray[l][i], maxPathFolder, L"\0");
@@ -830,22 +836,20 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 
-
-
-
-
-						wcscat_s(tempDest, pathLength, driveIDBaseWNT); ///TEMPORARY ONLY
-\
-
-
-						for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
-						{
-						//cannot create the entire nested path at once or get a "status_wait_3"
-						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-						//maxPathFolder;
-						wcscat_s(currPathW, pathLength, L"\\");
-						wcscat_s(tempDest, pathLength, currPathW);
 						
+
+						for (i = (branchTotalSaveFile + 1); i <= branchTotal; i++)
+						{//new loop required						
+						
+						wcscpy_s(tempDest, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
+
+						for (j = 0; (j < treeLevelLimit) && (folderTreeArray[j][i][0] != L'\0'); j++)
+						//cannot create the entire nested path at once or get a "status_wait_3"
+						{
+
+						wcscat_s(tempDest, pathLength, folderTreeArray[j][i]);
+						wcscat_s(tempDest, pathLength, L"\\");
+
 
 
 
@@ -887,14 +891,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 						break;
 						}
-						wcscat_s(currPathW, maxPathFolder, L"\\");
-						if (!SetCurrentDirectoryW(currPathW))
-							{
-								//Always fails with error 32 "used by another process"
-								errorcode = 1;
-								ErrorExit("SetCurrentDirectoryW: Non zero", 0);
-								goto EndCreate;
-							}
+						//SetCurrentDirectory Often fails here at root node with error 32 "used by another process"
 
 						}
 
@@ -905,6 +902,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							ErrorExit("DynamicLoader failed: Cannot create. ", 1);
 							goto EndCreate;
 						}
+					}
 					}
 				} //foundNtdll
 
@@ -1036,7 +1034,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							
 
-							memset(dacfoldersWtmp, '\0', sizeof(dacfoldersWtmp)); //sizeof(dacfoldersW) ok
+							memset(dacfoldersWtmp, L'\0', sizeof(dacfoldersWtmp)); //sizeof(dacfoldersW) ok
 							//SHFileOperationW(_Inout_ LPSHFILEOPSTRUCT lpFileOp);
 							errorcode = 0;
 							for (int i = 0; i < folderdirCS; i++)
@@ -1588,12 +1586,7 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
 				}
             break;
         }
-		else
-		{
-			DisplayError (hwnd, L"Process isn't active!?", 1, 0);
-			CloseHandle(hProcessSnap);
-			return(NULL);
-		}
+
     } while (Process32Next(hProcessSnap, &pe32));
 
     CloseHandle(hProcessSnap);
@@ -1756,9 +1749,9 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 			wcscat_s(&pathsToSave[i], maxPathFolder, L"\\");
 
  			}
-
+			branchTotalSaveFile = i;
 			}
-		branchTotalSaveFile = i;
+		
 
 
 	}
@@ -1782,7 +1775,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	}
 
 
-int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit][branchLimit][maxPathFolder])
+int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit + 1][branchLimit + 1][maxPathFolder])
 
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found i.e. folderTreeArray[1000][jsize][maxPathFolder]
 {
