@@ -31,7 +31,7 @@ char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array ch
 wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[treeLevelLimit + 1][branchLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelStatusOld, branchLevelStatus, branchTotalSaveFile;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
 long long index; //variable for listbox items
@@ -305,10 +305,10 @@ else
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  "\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
 	//http://stackoverflow.com/questions/15610506/can-the-null-character-be-used-to-represent-the-zero-character  NO
-	branchLevelStatusOld = 0;
+	branchLevelClickOld = 0;
 	branchLevelCum = 0;
-	branchTotalSaveFile = 0;
-	branchTotal = 0;
+	branchTotalSaveFile = -1;
+	branchTotal = -1;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
 	memset(dacfoldersW, L'\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
@@ -638,25 +638,20 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					if (foundNTDLL)
 					{
-						//update branchTotal
-						if (branchTotal)
+					//update branchTotal: always 0 for the first branch
+
+					//populate after the save file contents
+						if (branchTotal < branchLimit - 1)
 						{
-							if (branchTotal < branchLimit - 1)
-							{
-							branchTotal +=1;
-							}
-							else
-							{
-							DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore!", errorcode, 0);
-							goto NoAddSuccess;
-							}
+						branchTotal +=1;
 						}
 						else
 						{
-							(branchTotalSaveFile) ? branchTotal = branchTotalSaveFile + 1: branchTotalSaveFile = -1;
-							//populate after the save file contents
+						DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore!", errorcode, 0);
+						goto NoAddSuccess;
 						}
-						(branchLevelStatus) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+
+						(branchLevelClick) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						//next add is always at base
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 						HWND hList = GetDlgItem(hwnd, IDC_LIST);
@@ -669,10 +664,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						{
 						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-						wcscpy_s(folderTreeArray[branchLevelStatusOld + branchLevel][branchTotal], maxPathFolder, (wchar_t *) currPathW); //branchLevelStatusOld can be neg?
+						wcscpy_s(folderTreeArray[branchLevelClickOld + branchLevel][branchTotal], maxPathFolder, (wchar_t *) currPathW); //branchLevelClickOld can be neg?
 
 
-							if (branchLevelStatusOld + branchLevel < treeLevelLimit)
+							if (branchLevelClickOld + branchLevel < treeLevelLimit)
 							{
 							branchLevel += 1;
 							}
@@ -683,25 +678,29 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 						}
 
-						//save branchLevelStatusOld & branchLevel
-
-						branchLevelStatusOld = branchLevelStatus;
-
-						for (int i = 0; i < branchLevelStatus; i++)
-						{
-						//branchTotal's next iteration only
-						wcscpy_s(folderTreeArray[i][branchTotal + 1], maxPathFolder, folderTreeArray[branchLevel][branchTotal]); //populate the entire string
-						}
-						trackFTA [branchTotal][0] = branchLevelStatus; //for validation
+						//save branchLevelClickOld & branchLevel
+						trackFTA [branchTotal][0] = branchLevelClickOld  + branchLevel; //total no of backslashes for validation
+						
+						if (branchLevel + branchLevelClickOld > maxBranchLevelReached) maxBranchLevelReached = branchLevelClickOld  + branchLevel;
+						
+						
 
 						
-						for (int i = branchLevelStatus; i < treeLevelLimit; i++)
+						branchLevelClickOld = branchLevelClick;
+
+
+						for (int i = 0; i < branchLevelClick; i++)
+						{
+						//branchTotal's next iteration only
+						wcscpy_s(folderTreeArray[i][branchTotal + 1], maxPathFolder, folderTreeArray[i][branchTotal]); //populate the entire string
+						}
+						
+						for (int i = branchLevelClick; i < treeLevelLimit; i++)
 						{
 							//clear the the directory after the cut
 							wcscpy_s(folderTreeArray[i][branchTotal + 1], maxPathFolder, L"\0");
 
 						}
-
 
 
 						branchLevelCum += branchLevel; //number of items added to list
@@ -710,6 +709,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				
 				removeButtonEnabled = false;
 				EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
+
 				NoAddSuccess:
 				EnableWindow(GetDlgItem(hwnd, IDC_CREATE), true);
 
@@ -721,17 +721,27 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				case IDC_UP: //adds directories nested ntimes
 					//rule is cannot go back up a tree once we have branched.
 				{
-					//check validity with branchLevelStatusOld + branchLevel and grey out
-					branchLevelStatus +=1;
-					(branchLevelStatus < branchLevel + branchLevelStatusOld ) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+					//check validity with branchLevelClickOld + branchLevel and grey out
+					branchLevelClick +=1;
+					if (branchLevelClick == branchLevel + branchLevelClickOld )
+					{
+						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
+						EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+					}
+					else (branchLevelClick < branchLevel + branchLevelClickOld ) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 
 				}
 				break;
 
-				case IDC_DOWN: //adds directories nested ntimes
+				case IDC_DOWN: //adds directories nested ntimes: branchLevelClick never < 0
 				{
-					branchLevelStatus -=1;
-					(branchLevelStatus == 0) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false) : EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+					branchLevelClick -=1;
+					if (branchLevelClick == 0 )
+					{
+						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+					}
+					else EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 
 				}
 				break;
@@ -796,7 +806,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							
 							//pathsToSave [branchLimit]
 							//if (folderTreeArray[i][branchTotal]
-							for (i = 0; (i < treeLevelLimit) && (folderTreeArray[j][i][0] != '\0'); i++)
+							for (i = 0; (i < maxBranchLevelReached) && (folderTreeArray[j][i][0] != '\0'); i++)
 							{
 								wcscat_s(&pathsToSave[i], maxPathFolder, folderTreeArray[j][i]);
 								wcscat_s(&pathsToSave[i], maxPathFolder, L"\\");
@@ -807,7 +817,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						//Validation check for dups
 						//compare all folderTreeArray items that have the same trackFTA
-						for (j = 0; j < treeLevelLimit; j++)
+						for (j = 0; j < maxBranchLevelReached; j++)
 						{
 							for (i = 0; i <= branchTotal; i++) //do items in save file as well
 								{
@@ -843,7 +853,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						
 						wcscpy_s(tempDest, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
 
-						for (j = 0; (j < treeLevelLimit) && (folderTreeArray[j][i][0] != L'\0'); j++)
+						for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[j][i][0] != L'\0'); j++)
 						//cannot create the entire nested path at once or get a "status_wait_3"
 						{
 
@@ -904,6 +914,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 					}
 					}
+
+					//sort all andwrite to file
+					if (!ProcessfileSystem(hwnd, true)) goto EndCreate;
+
 				} //foundNtdll
 
 				else
@@ -1637,31 +1651,45 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	char buffer2[branchLimit + 1];
 
 	int  result;
-	int  i,j;
-	wchar_t *ch;
+	int  i,j,k;
+	wchar_t ch = NULL;
 	bool p;
+	FILE *stream = NULL;
 
 
 	//buffer = (char*) malloc (sizeof(char) * (maxPathFolder + 1) )
 	wchar_t *fsName= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, maxPathFolder)) ErrorExit("ExpandEnvironmentStringsW failed for some reason.",0);
-	wcscat_s(fsName, maxPathFolder, L"\\Temp\\CreateLargeFileSystem.bin");
-	FILE *stream = _wfopen(fsName, L"r");
+	wcscat_s(fsName, maxPathFolder, L"\\Temp\\CreateLargeFileSystem.txt");
+	stream = _wfopen(fsName, L"r");
 	//If the file already exists and is opened for reading or appending, the Byte Order Mark (BOM), if it present in the file, determines the encoding.
 	if (!stream) //returns NULL Pointer
 	{
-	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file...", 0, 1))
-	{
-	if (falseReadtrueWrite) FILE *stream = _wfopen(fsName, L"w+"); else return false; // can't read from empty file
-	}
-	else
-	{
-	return false;
-	}
+		if (falseReadtrueWrite) 
+		{
+			if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort...", 0, 1))
+			{
+			stream = _wfopen(fsName, L"w+");
+				if (stream == NULL) 
+				{
+					ErrorExit("Problems with opening input File.", 0);
+					return false;
+				}
+			}
+			else
+			{
+			return false; // can't read from empty file
+			}
+		}
+		else
+		{
+		DisplayError (hwnd, L"Cannot Find Input file so cannot read!", 0, 0);
+		return false;
+		}
 	}
 	else //file exists
 	{
-	FILE *stream = _wfopen(fsName, L"a+");
+	stream = _wfopen(fsName, L"a+");
 	//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
 	if (!stream) //returns NULL Pointer
 	{
@@ -1675,40 +1703,43 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	if (falseReadtrueWrite) //write or append to file
 	{
 
-	
 
-		for (i = 0; (i  < (sizeof(buffer2) - 1) &&  ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); i++)
-		//if first char is NULL quit, note, null is not written to file
+		//buffer1 is treeLevelLimit : store according to trackFTA, biggest first
+		for (k = maxBranchLevelReached; k >= 0; k--)
+		{
+
+
+		for (j = 0; j < maxBranchLevelReached; j++)
 			{
-			if (wcschr(ch, '\0')) break; 
-			for (j = 0; (j  < (sizeof(buffer1) - 1) && ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')); j++)
-			{
-			//buffer1 is treeLevelLimit
+				if (trackFTA [k][0] == j )
+				{
+				for (i = 0; i <= branchTotal; i++)
+					{
+
 		
 			
 			
-			//gets whole string	
-			if( fgetws(folderTreeArray[j][i], maxPathFolder -1, stream ) == NULL)
+					//gets whole string	
+					if( fputws(folderTreeArray[j][i], stream ) == EOF)
 		
-			{
-			ErrorExit("Problems with input File: fgetws returns NULL.", 0);
-			fclose (stream);
-			return false;
-			}
+					{
+					ErrorExit("fputws: Problems with writing to input File.", 0);
+					fclose (stream);
+					return false;
+					}
 
-			wcscat_s(&pathsToSave[j], maxPathFolder, folderTreeArray[j][i]);
-			wcscat_s(&pathsToSave[j], maxPathFolder, L"\\");
 
-			//Have written newline char at end of folder name
-			//if (strchr(ch, '\n')) break; //problems if newline //covered in loop!
+					//Have written newline char at end of folder name
+					//if (strchr(ch, '\n')) break; //problems if newline //covered in loop!
 		
 
  
 
- 			}
+ 					}
+				} //if trackFTA
 
 			}
-
+		}
 
 	}
 	else //read from file
@@ -1726,15 +1757,15 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 	
 
-		for (i = 0; (i  < (sizeof(buffer2) - 1) &&  ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n') && (*ch != '\0')); i++) //we are reading so last null condition mandatory
+		for (i = 0; (i  < (sizeof(buffer2) - 1) &&  ((ch = fgetwc(stream)) != EOF) && (ch != '\n') && (ch != '\0')); i++) //we are reading so last null condition mandatory
 		//if first char is NULL quit, note, null is not written to file
 
 			{
-			if (wcschr(ch, '\0')) break; 
-			for (j = 0; (j  < (sizeof(buffer1) - 1) && ((*ch = fgetwc(stream)) != EOF) && (*ch != '\n')&& (*ch != '\0')); j++)
+			if (wcschr(&ch, '\0')) break; 
+			for (j = 0; (j  < (sizeof(buffer1) - 1) && ((ch = fgetwc(stream)) != EOF) && (ch != '\n')&& ( ch != '\0')); j++)
 			{
 		
-			
+			ungetwc(ch, stream);
 			
 			//gets string to write to array
 			if( fgetws(folderTreeArray[j][i], maxPathFolder -1, stream ) == NULL)
@@ -1751,7 +1782,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
  			}
 			branchTotalSaveFile = i;
 			}
-		
+		branchTotal = 0; 
 
 
 	}
