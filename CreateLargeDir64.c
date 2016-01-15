@@ -20,6 +20,7 @@ wchar_t hrtext[256]; //An array name is essentially a pointer to the first eleme
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATA da;
 int const pathLength = 32760, maxPathFolder = MAX_PATH - 3, treeLevelLimit = 2000, branchLimit = 1000;
+wchar_t const *invalidPathName = L":\"/\\|?*<>";
 wchar_t const *lpref = L"\\\\?\\";
 const wchar_t *driveIDBaseW = L"\\\\?\\C:\\";
 const wchar_t *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
@@ -28,7 +29,7 @@ wchar_t *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // 
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
 char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
-wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[treeLevelLimit + 1][branchLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit];
+wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit];
 
 
 int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached;
@@ -40,6 +41,7 @@ BOOL setforDeletion = FALSE;
 BOOL removeButtonEnabled = true;
 BOOL am64Bit, exe64Bit; 
 PVOID OldValue = NULL; //Redirection
+WNDPROC g_pOldProc;
 HANDLE hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 
 
@@ -103,6 +105,7 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
+LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 char ***new2DArr(size_t rows, size_t cols); //2D array function we will probably never use.
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
 bool Kleenup (HWND hwnd, bool weareatBoot);
@@ -110,7 +113,7 @@ int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite);
-int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit + 1][branchLimit + 1][maxPathFolder]);
+int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
@@ -510,6 +513,20 @@ CLEANUP:
 }
 
 
+LRESULT CALLBACK ValidateProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+      wchar_t chChar;
+      switch (message)
+      {
+		case WM_CHAR:
+			chChar = (wchar_t) wParam;
+			if(wcschr(invalidPathName, chChar)) return 0;
+		break;
+      }
+      return CallWindowProc (g_pOldProc, hwnd, message, wParam, lParam);
+}
+
+
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
 	int errorcode =0;
@@ -519,6 +536,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
             {	
 				PopulateList (hwnd, errorcode);
+				 HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
+               /// Subclass the Edit control with ValidateProc
+               g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWL_WNDPROC, (LONG)ValidateProc);
 				switch (errorcode)
 				{
 				case 1:
@@ -546,8 +566,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		break;
 		case  IDC_TEXT:
 		{
+		//validation done elsewhere
 		}
-		//check and reject illegal chars : " /  \ | ? *
 		case IDC_NUMBER:
 		{
 			//no greater than 32760
@@ -562,6 +582,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					//On the first call of IDC_ADD change text & button enables. 
 					//Add button disabled until a successful create or Clear
 					//FIX LATER
+
+
+					int i, len;
+					wchar_t* buf, buf1;
 
 
 
@@ -593,21 +617,48 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						// First we need to find out how long it is so that we can
 						// allocate some memory (2* +1 for two words > long)
 
-						int len = 2 * (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT)) +1);
+						len = (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT))); //wchar
 						if(len > 0)
 						{
 							// Now we allocate, and get the string into our buffer
 
-							int i;
-							wchar_t * buf;
 
-							buf = (wchar_t*)GlobalAlloc(GPTR, len );
-							GetDlgItemTextW(hwnd, IDC_TEXT, buf, len);
+							
+							wchar_t *buf1 = (wchar_t *)calloc(2 * len + 1, sizeof(wchar_t));
+							GetDlgItemTextW(hwnd, IDC_TEXT, buf1, 2 * len + 1);
 
-							// Now we add the string to the list box however many times
-							// the user asked us to.
 
-							for(i = 0;i < nTimes; i++)
+
+						//validation for terminating space & period
+			
+						for(i = len-1; i >= 0; i--)
+						{
+
+							if (!(wcsncmp(&buf1[i], L" ", 1 )) || !(wcsncmp(&buf1[i], L".", 1)) )
+							{
+								wcscpy_s(&buf1[i], i, L"\0");
+								SetDlgItemTextW(hwnd, IDC_TEXT, (wchar_t*)(buf1));
+							}
+
+							else
+
+							{
+							break; //all good
+							}
+						}
+						free(buf1);
+					}
+
+						int len = 2 * (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT)) +1); //wchar again
+						if(len > 0)
+						{
+						buf = (wchar_t*)GlobalAlloc(GPTR, len );
+						GetDlgItemTextW(hwnd, IDC_TEXT, buf, len);
+
+
+							// Now we add the string to the list box however many times user asked us to.
+
+							for(i = 0 ; i < nTimes; i++)
 							{
 								index = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)buf);
 
@@ -618,8 +669,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)index, (LPARAM)nTimes);
 							}
 
-							// Dont' forget to free the memory!
+							// free the memory!
 							GlobalFree((HANDLE)buf);
+
 						}
 						else 
 						{
@@ -660,15 +712,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						branchLevel = 0;
 											//check on bounds
 
-						for (int i = folderdirCS + folderdirCW + branchLevelCum; i < listTotal; i++)
+						for (i = folderdirCS + folderdirCW + branchLevelCum; i < listTotal; i++)
 
 						{
-						SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-						wcscpy_s(folderTreeArray[branchLevelClickOld + branchLevel][branchTotal], maxPathFolder, (wchar_t *) currPathW); //branchLevelClickOld can be neg?
 
-
-							if (branchLevelClickOld + branchLevel < treeLevelLimit)
+							if (branchLevelClick + branchLevel < treeLevelLimit)
 							{
+							
+							SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+							wcscpy_s(folderTreeArray[branchTotal][branchLevelClick + branchLevel], maxPathFolder, (wchar_t *) currPathW); //branchLevelClickOld can be neg?
 							branchLevel += 1;
 							}
 							else
@@ -678,10 +730,17 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 						}
 
+						//clear redundant branches
+						for (i = branchLevelClick + branchLevel; i < treeLevelLimit; i++)
+						{
+						wcscpy_s(folderTreeArray[branchTotal][i], maxPathFolder, L"\0");
+						}
+
 						//save branchLevelClickOld & branchLevel
-						trackFTA [branchTotal][0] = branchLevelClickOld  + branchLevel; //total no of backslashes for validation
+						trackFTA [branchTotal][0] = branchLevelClick;
+						trackFTA [branchTotal][1] = branchLevelClick + branchLevel; //total no of backslashes for validation
 						
-						if (branchLevel + branchLevelClickOld > maxBranchLevelReached) maxBranchLevelReached = branchLevelClickOld  + branchLevel;
+						if (branchLevel + branchLevelClick > maxBranchLevelReached) maxBranchLevelReached = branchLevelClick  + branchLevel;
 						
 						
 
@@ -689,19 +748,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						branchLevelClickOld = branchLevelClick;
 
 
-						for (int i = 0; i < branchLevelClick; i++)
+						for (i = 0; i <= branchLevelClick + branchLevel; i++)
 						{
 						//branchTotal's next iteration only
-						wcscpy_s(folderTreeArray[i][branchTotal + 1], maxPathFolder, folderTreeArray[i][branchTotal]); //populate the entire string
+						wcscpy_s(folderTreeArray[branchTotal + 1][i], maxPathFolder, folderTreeArray[branchTotal][i]); //populate the entire string
 						}
 						
-						for (int i = branchLevelClick; i < treeLevelLimit; i++)
-						{
-							//clear the the directory after the cut
-							wcscpy_s(folderTreeArray[i][branchTotal + 1], maxPathFolder, L"\0");
-
-						}
-
 
 						branchLevelCum += branchLevel; //number of items added to list
 					}
@@ -801,15 +853,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 
 						//convert to single folder items: -previously created folders done
-						for (j = branchTotalSaveFile + 1; j <= branchTotal; j++)
+						for (i = branchTotalSaveFile + 1; i <= branchTotal; i++)
 						{
 							
 							//pathsToSave [branchLimit]
 							//if (folderTreeArray[i][branchTotal]
-							for (i = 0; (i < maxBranchLevelReached) && (folderTreeArray[j][i][0] != '\0'); i++)
+							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); i++)
 							{
-								wcscat_s(&pathsToSave[i], maxPathFolder, folderTreeArray[j][i]);
-								wcscat_s(&pathsToSave[i], maxPathFolder, L"\\");
+								wcscat_s(&pathsToSave[j], maxPathFolder, folderTreeArray[i][j]);
+								wcscat_s(&pathsToSave[j], maxPathFolder, L"\\");
 							
 							}
 
@@ -817,21 +869,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						//Validation check for dups
 						//compare all folderTreeArray items that have the same trackFTA
-						for (j = 0; j < maxBranchLevelReached; j++)
+						for (i = 0; i < branchTotal; i++)
 						{
-							for (i = 0; i <= branchTotal; i++) //do items in save file as well
+							for (j = 0; j <= maxBranchLevelReached; j++) //do items in save file as well
 								{
-								for (k = 0; k > i; k++)
+								for (k = 0; k > j; k++)
 									{
-									if (trackFTA [i][0] = j)
+									if (trackFTA [j][1] == j)
 
 									{
-									if (0 == wcscmp(&pathsToSave[i], &pathsToSave[k]))
+									if (0 == wcscmp(&pathsToSave[j], &pathsToSave[k]))
 									{
-										wcscpy_s(&pathsToSave[i], 1, L'\0');
+										wcscpy_s(&pathsToSave[j], 1, L'\0');
 										for (int l = 0; l < treeLevelLimit; l++)
 										{
-										wcscpy_s(folderTreeArray[l][i], maxPathFolder, L"\0");
+										wcscpy_s(folderTreeArray[l][j], maxPathFolder, L"\0");
 										}
 
 									} 
@@ -853,14 +905,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						
 						wcscpy_s(tempDest, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
 
-						for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[j][i][0] != L'\0'); j++)
+						for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != L'\0'); j++)
 						//cannot create the entire nested path at once or get a "status_wait_3"
 						{
-
-						wcscat_s(tempDest, pathLength, folderTreeArray[j][i]);
+						
+						
+						wcscat_s(tempDest, pathLength, folderTreeArray[i][j]);
 						wcscat_s(tempDest, pathLength, L"\\");
-
-
+						if (j >= trackFTA [i][0]) //create dir if new path
+						{
 
 
 						if (DynamicLoader (false))
@@ -912,6 +965,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							ErrorExit("DynamicLoader failed: Cannot create. ", 1);
 							goto EndCreate;
 						}
+					} //trackFTA condition
 					}
 					}
 
@@ -1084,10 +1138,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						trackFTA [0][0] = 0; //Initial conditions before search on path
 						trackFTA [0][1] = 1;
 
-						for (int j = 1; j < branchLimit; j++)
+						for (int i = 1; i < branchLimit; i++)
 						{
-						trackFTA [j][0] = 0; //Initial conditons before search on path
-						trackFTA [j][1] = 0;
+						trackFTA [i][0] = 0; //Initial conditons before search on path
+						trackFTA [i][1] = 0;
 						}
 						
 						if (!SetCurrentDirectoryW (driveIDBaseW))
@@ -1250,6 +1304,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							HWND hList = GetDlgItem(hwnd, IDC_LIST);
 							int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
+							bool removeTrig = false;
 							if(count != LB_ERR)
 							{
 								// We only want to continue if one and only one item is
@@ -1271,8 +1326,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (index >= folderdirCS + folderdirCW)
 									{
 										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
+										if (index >= listTotal - branchLevel)
+										{
 										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-
+										}
+										else
+										{
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										}
 									}
 									else
 									{
@@ -1282,7 +1343,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										if (wcsstr(dacfoldersW[index], lpref) == NULL)
 											//Check for wide string folder here
 										{
-											if (removeButtonEnabled) EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
 										}
 										else
 										{
@@ -1322,17 +1383,48 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									// Either way, we aren't going to process this.
 									
 									index = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
-									
-									if (index >= folderdirCS + folderdirCW)
+									int selItems[10000]; //what's the max?
+									SendMessage(hwnd, LB_GETSELITEMS, count, (LPARAM)selItems);
+
+									if (listTotal > folderdirCS + folderdirCW)
 									{
+										for (int i = 0; i < count; i++)
+										{
+											if (selItems[i] < listTotal - branchLevel)
+											{
+												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+												SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
+												removeTrig = true;
+											}
+
+										}
+										if (!removeTrig)
+										{
 										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
 										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+										}
 									}
-									else //Don't care really, user must change selection: a tooltip?
+									else
 									{
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-										if (removeButtonEnabled) EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										for (int i = 0; i < count; i++)
+										{
+											if (selItems[i] < folderdirCS)
+											{
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+											removeTrig = true;
+											}
+
+										}
+											if (!removeTrig)
+											{
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+											}
+										
 									}
+
+
 
 
 									SetDlgItemTextW(hwnd, IDC_SHOWCOUNT, L"-");
@@ -1711,7 +1803,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 		for (j = 0; j < maxBranchLevelReached; j++)
 			{
-				if (trackFTA [k][0] == j )
+				if (trackFTA [k][1] == j )
 				{
 				for (i = 0; i <= branchTotal; i++)
 					{
@@ -1720,7 +1812,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 			
 			
 					//gets whole string	
-					if( fputws(folderTreeArray[j][i], stream ) == EOF)
+					if( fputws(folderTreeArray[i][j], stream ) == EOF)
 		
 					{
 					ErrorExit("fputws: Problems with writing to input File.", 0);
@@ -1775,7 +1867,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 			fclose (stream);
 			return false;
 			}
-			trackFTA [i][0] = j; //track the nesting level for validation
+			trackFTA [i][1] = j; //track the nesting level for validation
 			wcscat_s(&pathsToSave[i], maxPathFolder, folderTreeArray[j][i]);
 			wcscat_s(&pathsToSave[i], maxPathFolder, L"\\");
 
@@ -1806,7 +1898,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	}
 
 
-int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[treeLevelLimit + 1][branchLimit + 1][maxPathFolder])
+int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found i.e. folderTreeArray[1000][jsize][maxPathFolder]
 {
@@ -1835,7 +1927,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 			//Must go down but we have already found the files of directory below
 			trackFTA [treeLevel][1] = 0;  //important
 			treeLevel -=1;
-			wcscpy_s(currPathW, maxPathFolder, folderTreeArray[treeLevel][trackFTA [treeLevel][0]-1]);
+			wcscpy_s(currPathW, maxPathFolder, folderTreeArray[trackFTA [treeLevel][0]-1][treeLevel]);
 
 
 					if (treeLevel == 0) //Last folder to do!! 
@@ -1904,7 +1996,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 
 				// set inits for this branch
 				wcscpy_s(findPathW, maxPathFolder, L"\0");
-				wcscat_s(findPathW, maxPathFolder, folderTreeArray[treeLevel][trackFTA[treeLevel][0]-1]);
+				wcscat_s(findPathW, maxPathFolder, folderTreeArray[trackFTA[treeLevel][0]-1][treeLevel]);
 				//
 				if (!SetCurrentDirectoryW (findPathW))
 				{
@@ -1983,7 +2075,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 				wcscat_s(currPathW, maxPathFolder, L"\\");
 
 
-				wcscpy_s(folderTreeArray[treeLevel][j], maxPathFolder, (wchar_t *)currPathW);
+				wcscpy_s(folderTreeArray[j][treeLevel], maxPathFolder, (wchar_t *)currPathW);
 				j +=1;
 
 			}
