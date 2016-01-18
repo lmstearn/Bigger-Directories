@@ -32,7 +32,7 @@ char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array ch
 wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchTotalIncI, branchLevelInc, branchLevelIncCum;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
 long long index; //variable for listbox items
@@ -42,7 +42,7 @@ BOOL removeButtonEnabled = true;
 BOOL am64Bit, exe64Bit; 
 PVOID OldValue = NULL; //Redirection
 WNDPROC g_pOldProc;
-HANDLE hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
+HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 
 
 //struct fileSystem
@@ -106,7 +106,6 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
-char ***new2DArr(size_t rows, size_t cols); //2D array function we will probably never use.
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
@@ -309,6 +308,7 @@ else
 	//If (NULL == 0) isn't true you're not using C.  "\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
 	//http://stackoverflow.com/questions/15610506/can-the-null-character-be-used-to-represent-the-zero-character  NO
 	branchLevelClickOld = 0;
+	branchLevelClick = 0;
 	branchLevelCum = 0;
 	branchTotalSaveFile = -1;
 	branchTotal = -1;
@@ -535,6 +535,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		case WM_INITDIALOG:
 			
             {	
+				
+				hMutex = CreateMutex( NULL, TRUE, "CreateLargeDir64.exe" );
+				if ( GetLastError() == ERROR_ALREADY_EXISTS )
+				{
+					DisplayError (hwnd, L"One instance is already running!", errorcode, 0);
+					ExitProcess(1);
+				}
+
+ 
+				
 				PopulateList (hwnd, errorcode);
 				 HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
                /// Subclass the Edit control with ValidateProc
@@ -738,7 +748,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						//save branchLevelClickOld & branchLevel
 						trackFTA [branchTotal][0] = branchLevelClick;
-						trackFTA [branchTotal][1] = branchLevelClick + branchLevel; //total no of backslashes for validation
+						trackFTA [branchTotal][1] = branchLevel; //the sum of these is total no of backslashes for validation
 						
 						if (branchLevel + branchLevelClick > maxBranchLevelReached) maxBranchLevelReached = branchLevelClick  + branchLevel;
 						
@@ -774,26 +784,110 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					//rule is cannot go back up a tree once we have branched.
 				{
 					//check validity with branchLevelClickOld + branchLevel and grey out
+					SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
 					branchLevelClick +=1;
+					branchLevelIncCum = 0;
+					for (int i = 0; i == branchTotal; i++)
+						{
+//							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
+						}
+					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					if (branchLevelClick == branchLevel + branchLevelClickOld )
 					{
 						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 					}
-					else (branchLevelClick < branchLevel + branchLevelClickOld ) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+					else 
+						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
+
+						//if (branchLevelClick <= branchLevelClickOld)
+							{
+							for (int i = branchTotal; i >= 0; i--)
+							{
+							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
+							if (trackFTA [i][0] + 1 == branchLevelClick) //always satisfied on new branch
+							{
+								branchLevelInc = 0;
+								branchLevelIncCum = branchLevelCum - branchLevelIncCum; //start before last nesting here
+								break;
+							}
+							else
+							{
+								branchLevelInc += 1;
+								branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
+								break;
+							}
+
+							}
+
+
+							}
+						//else
+							{
+							//	branchLevelIncCum = branchLevelCum - (branchLevelClickOld + branchLevel - branchLevelClick + 1);
+							}							
+
+					if (branchLevelClick > 0)
+					{
+						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+						SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
+						SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelIncCum));
+						//SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(folderdirCS + folderdirCW + branchLevelCum - (branchLevel - branchLevelClick))); //DOES NOT WORK!
+					}
+
 
 				}
 				break;
 
 				case IDC_DOWN: //adds directories nested ntimes: branchLevelClick never < 0
 				{
+					SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
 					branchLevelClick -=1;
+					branchLevelIncCum = 0;
+					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					if (branchLevelClick == 0 )
 					{
+						branchLevelInc += -1;
+						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 					}
-					else EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+					else 
+						{
+
+						//if (branchLevelClick <= branchLevelClickOld)
+							{
+
+							for (int i = branchTotal; i >= 0; i--)
+							{
+							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
+							if (trackFTA [i][0] + 1 == branchLevelClick)
+							{
+								branchLevelInc = 0;
+								branchTotalIncI = i; //for the up cycle
+								branchLevelIncCum = branchLevelCum - branchLevelIncCum;
+								break; //first is sufficient as older higher levels are overwritten
+							}
+							else
+							{
+								branchLevelInc -= 1;
+								branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
+								break;
+							}
+
+							}
+							}
+						//else
+							{
+								//branchLevelIncCum = branchLevelCum - (branchLevelClickOld + branchLevel - branchLevelClick + 1);
+							}
+						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+						SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
+						SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelIncCum));
+						}
 
 				}
 				break;
@@ -875,7 +969,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								{
 								for (k = 0; k > j; k++)
 									{
-									if (trackFTA [j][1] == j)
+									if (trackFTA [j][0] + trackFTA [j][1]== j)
 
 									{
 									if (0 == wcscmp(&pathsToSave[j], &pathsToSave[k]))
@@ -1189,10 +1283,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								// Now we loop through the list and remove each item that was
 								// selected.  
 
-								// WARNING!!!  
-								// We loop backwards, because if we removed items
-								// from top to bottom, it would change the indexes of the other
-								// items!!!
+								// We loop backwards, because if we removed items from top to bottom, it would change the indexes of the other items!!!
 
 								for (i = count - 1; i >= 0; i--)
 								{
@@ -1200,6 +1291,24 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 
 								GlobalFree(buf);
+
+
+								branchLevelClick -=1;
+								branchLevelCum -= 1;
+								branchLevel -= 1;
+								if (branchLevelClick == 0 )
+									{
+										EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+										EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+									}
+								else EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+								SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+								SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelCum - (branchLevel - branchLevelClick + 1))), 0);
+								SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelCum - (branchLevel - branchLevelClick + 1)));
+
+
+
+
 							}
 							else
 							{
@@ -1470,25 +1579,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), NULL, DlgProc);
 }
 
-char ***new2DArr(size_t rows, size_t cols)
-{
-  char ***newArr = NULL;
-  size_t i;
-  //newArr = malloc(sizeof *newArr * rows); //IntelliSense: a value of type "void *" cannot be assigned to an entity of type "char ***"
-
-  if (newArr)
-  {
-    for (i = 0; i < rows; i++)
-    {
-      //newArr[i] = malloc(sizeof *newArr[i] * cols); //IntelliSense: a value of type "void *" cannot be assigned to an entity of type "char ***"
-      if (newArr[i])
-      {
-        /* initialize or assign newArr[i][0] - newArr[i][cols-1] here */
-      }
-    }
-  }
-  return newArr;
-}
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode)
 {
 DWORD result;
