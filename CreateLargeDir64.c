@@ -32,7 +32,7 @@ char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array ch
 wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchTotalIncI, branchLevelInc, branchLevelIncCum;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
 long long index; //variable for listbox items
@@ -321,7 +321,7 @@ else
 	EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 	removeButtonEnabled = true;
 		
-	for (int j = 1; j < branchLimit; j++)
+	for (int j = 0; j < branchLimit; j++)
 		{
 		trackFTA [j][0] = 0; //Initial conditons before search on path
 		trackFTA [j][1] = 0;
@@ -364,7 +364,7 @@ else
 		return;
 
 	}
-	SetDlgItemInt(hwnd, IDC_NUMBER, 5, FALSE);
+	SetDlgItemInt(hwnd, IDC_NUMBER, 3, FALSE); //set repeat number
 	
 
 gotoloop: //Wide Char loop
@@ -595,7 +595,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 					int i, len;
-					wchar_t* buf, buf1;
+					wchar_t* buf;
 
 
 
@@ -720,6 +720,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 						wcscpy_s(currPathW, maxPathFolder, L"");
 						branchLevel = 0;
+						branchSaveI = 0;
 											//check on bounds
 
 						for (i = folderdirCS + folderdirCW + branchLevelCum; i < listTotal; i++)
@@ -787,10 +788,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
 					branchLevelClick +=1;
 					branchLevelIncCum = 0;
-					for (int i = 0; i == branchTotal; i++)
-						{
-//							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
-						}
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					if (branchLevelClick == branchLevel + branchLevelClickOld )
 					{
@@ -800,36 +797,35 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					else 
 						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
 
-						//if (branchLevelClick <= branchLevelClickOld)
 							{
 							for (int i = branchTotal; i >= 0; i--)
 							{
 							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
-							if (trackFTA [i][0] + 1 == branchLevelClick) //always satisfied on new branch
-							{
-								branchLevelInc = 0;
-								branchLevelIncCum = branchLevelCum - branchLevelIncCum; //start before last nesting here
-								break;
-							}
-							else
-							{
-								branchLevelInc += 1;
-								branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
-								break;
-							}
+								if (branchLevelClick == trackFTA [i][0] + 1) //always satisfied on new branch
+								{
+									branchSaveI = i;
+									branchLevelInc = 0;
+									branchLevelIncCum = branchLevelCum - branchLevelIncCum; //start before last nesting here
+									break;
+								}
+								else
+								{
+									if ((branchLevelClick > trackFTA [i][0] + 1) && (branchSaveI == i))
+									{
+									branchLevelInc += 1; //always 1 less than item
+									branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
+									break;
+									}
+								}
 
 							}
 
 
 							}
-						//else
-							{
-							//	branchLevelIncCum = branchLevelCum - (branchLevelClickOld + branchLevel - branchLevelClick + 1);
-							}							
 
 					if (branchLevelClick > 0)
 					{
-						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+						(branchSaveI == branchTotal) ? EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true): EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 						SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
 						SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelIncCum));
@@ -848,7 +844,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					if (branchLevelClick == 0 )
 					{
-						branchLevelInc += -1;
+						branchLevelInc -= 1;
 						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
@@ -856,33 +852,32 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					else 
 						{
 
-						//if (branchLevelClick <= branchLevelClickOld)
 							{
 
 							for (int i = branchTotal; i >= 0; i--)
 							{
 							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
-							if (trackFTA [i][0] + 1 == branchLevelClick)
-							{
-								branchLevelInc = 0;
-								branchTotalIncI = i; //for the up cycle
-								branchLevelIncCum = branchLevelCum - branchLevelIncCum;
-								break; //first is sufficient as older higher levels are overwritten
-							}
-							else
-							{
-								branchLevelInc -= 1;
-								branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
-								break;
-							}
+								if (branchLevelClick == trackFTA [i][0]) //always satisfied on new branch
+								{
+									branchSaveI = i - 1; //go to next branch down
+									branchLevelInc = trackFTA [i][0] - trackFTA [i - 1][0] - 1;
+									branchLevelIncCum = branchLevelCum - (branchLevelIncCum + trackFTA [i - 1][1] - branchLevelInc); //start before last nesting here
+									break;
+								}
+								else
+								{
+									if ((branchLevelClick > trackFTA [i][0]) && (branchSaveI == i))
+									{
+									branchLevelInc -= 1; //always 1 less than item
+									branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
+									break;
+									}
+								}
 
 							}
 							}
-						//else
-							{
-								//branchLevelIncCum = branchLevelCum - (branchLevelClickOld + branchLevel - branchLevelClick + 1);
-							}
-						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+
+						(branchSaveI == branchTotal) ? EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true): EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 						SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
@@ -1279,7 +1274,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								long long i;
 								long long *buf = (long long*)GlobalAlloc(GPTR, sizeof(long long) * count);
 								SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
-
+								index = SendMessageW(hList, LB_GETCURSEL, 0, 0L) + 1;
 								// Now we loop through the list and remove each item that was
 								// selected.  
 
@@ -1293,20 +1288,34 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								GlobalFree(buf);
 
 
-								branchLevelClick -=1;
+								
 								branchLevelCum -= 1;
 								branchLevel -= 1;
-								if (branchLevelClick == 0 )
+								if (!branchLevelIncCum) branchLevelIncCum = branchLevel;
+								if (branchLevelInc) branchLevelInc -= 1;
+								
+								index =  index - (folderdirCS + folderdirCW + branchLevelCum - branchLevel);
+
+								
+																
+								trackFTA [branchTotal][1] -= 1;
+								if (index <= branchLevelClick - branchLevelClickOld)
+									{
+									branchLevelClick -= 1;
+									trackFTA [branchTotal][0] -= 1;
+									}
+								if (branchLevelClick)
+									{
+									EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+									}
+								else 
 									{
 										EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 										EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 									}
-								else EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 								SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
-								SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelCum - (branchLevel - branchLevelClick + 1))), 0);
-								SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelCum - (branchLevel - branchLevelClick + 1)));
-
-
+								SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
+								
 
 
 							}
