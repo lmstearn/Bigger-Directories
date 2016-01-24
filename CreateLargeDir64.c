@@ -21,10 +21,12 @@ WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to 
 WIN32_FIND_DATA da;
 int const pathLength = 32760, maxPathFolder = MAX_PATH - 3, treeLevelLimit = 2000, branchLimit = 1000;
 wchar_t const *invalidPathName = L":\"/\\|?*<>";
+wchar_t const separateFTA = L'\\';
+wchar_t const eolFTA = L'\n';
 wchar_t const *lpref = L"\\\\?\\";
-const wchar_t *driveIDBaseW = L"\\\\?\\C:\\";
-const wchar_t *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
-const char *driveIDBase = "C:\\";
+wchar_t const *driveIDBaseW = L"\\\\?\\C:\\";
+wchar_t const *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
+char const *driveIDBase = "C:\\";
 wchar_t *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // directory pointers. cannot be initialised as a pointer
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
@@ -328,7 +330,7 @@ else
 		}
 
 
-
+	//ProcessfileSystem(hwnd, false); //TESTING
 	//Bad:
 	//malloc(sizeof(char *) * 5) // Will allocate 20 or 40 bytes depending on 32 63 bit system
 	//Good:
@@ -1059,6 +1061,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					}
 
 					//sort all andwrite to file
+
 					if (!ProcessfileSystem(hwnd, true)) goto EndCreate;
 
 				} //foundNtdll
@@ -1181,12 +1184,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					long long count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
+					listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 					if (count != LB_ERR)
 					{
 						
 						long long err = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 
-						index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
+						//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
 						if (count == 1 && (index < (folderdirCS + folderdirCW)))
 						{
 							
@@ -1209,7 +1213,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								
 								}
 							}
-							
+
+						if (foundNTDLL)
+						{}
+							//if (!ProcessfileSystem(hwnd, false)) goto RemoveKleenup;
+
+
 							if (errorcode ==0)
 							{
 								if (!DisplayError (hwnd, L"This directory might have been created by this program. Continue?", errorcode, 1)) goto RemoveKleenup;
@@ -1242,14 +1251,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				
 					
 					RemoveKleenup:
-					free (findPathW);
-					free (currPathW);
+					if (findPathW) free (findPathW);
+					if (currPathW) free (currPathW);
 					//longPathName
 					//Clear all the added items
 
 					if (errorcode != 0) //succeeded
 					{
 					errorcode = 0; //flag okay now
+					listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 					SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 					PopulateList(hwnd, errorcode);
 					}
@@ -1274,7 +1284,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								long long i;
 								long long *buf = (long long*)GlobalAlloc(GPTR, sizeof(long long) * count);
 								SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
-								index = SendMessageW(hList, LB_GETCURSEL, 0, 0L) + 1;
+								//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L) + 1; //+ 1 ???
 								// Now we loop through the list and remove each item that was
 								// selected.  
 
@@ -1294,14 +1304,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								if (!branchLevelIncCum) branchLevelIncCum = branchLevel;
 								if (branchLevelInc) branchLevelInc -= 1;
 								
-								index =  index - (folderdirCS + folderdirCW + branchLevelCum - branchLevel);
+								index =  index + 1 - (folderdirCS + folderdirCW + branchLevelCum - branchLevel);
 
 								
 																
 								trackFTA [branchTotal][1] -= 1;
 								if (index <= branchLevelClick - branchLevelClickOld)
 									{
-									branchLevelClick -= 1;
+									if (branchLevelClick) branchLevelClick -= 1;
 									trackFTA [branchTotal][0] -= 1;
 									}
 								if (branchLevelClick)
@@ -1310,11 +1320,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									}
 								else 
 									{
+										removeButtonEnabled = true; //Last branch removed
 										EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 										EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 									}
 								SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 								SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
+								listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 								
 
 
@@ -1838,12 +1850,11 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 {
 	
 	//fileSystem fs;
-	char buffer1[treeLevelLimit + 1];
-	char buffer2[branchLimit + 1];
-
+	wchar_t treeLevelLimitBuf[treeLevelLimit + 1];
+	wchar_t branchLimitBuf[branchLimit + 1];
 	int  result;
 	int  i,j,k;
-	wchar_t ch = NULL;
+	int ch = 0;
 	bool p;
 	FILE *stream = NULL;
 
@@ -1895,41 +1906,36 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	{
 
 
-		//buffer1 is treeLevelLimit : store according to trackFTA, biggest first
-		for (k = maxBranchLevelReached; k >= 0; k--)
+		//copy to whole string first: no sorting for write
+
+
+		for (i = 0; i <= branchTotal; i++)
 		{
 
-
-		for (j = 0; j < maxBranchLevelReached; j++)
+			for (j = 0; j < maxBranchLevelReached; j++)
 			{
-				if (trackFTA [k][1] == j )
+		
+			
+				//gets whole string,
+				
+				if(fwprintf(stream, L"%s%c", folderTreeArray[i][j], separateFTA) < 0)
+		
 				{
-				for (i = 0; i <= branchTotal; i++)
-					{
-
-		
-			
-			
-					//gets whole string	
-					if( fputws(folderTreeArray[i][j], stream ) == EOF)
-		
-					{
-					ErrorExit("fputws: Problems with writing to input File.", 0);
-					fclose (stream);
-					return false;
-					}
+				ErrorExit("fwprintf: Problems with writing to input File.", 0);
+				fclose (stream);
+				return false;
+				}
 
 
-					//Have written newline char at end of folder name
-					//if (strchr(ch, '\n')) break; //problems if newline //covered in loop!
+				//Have written newline char at end of folder name
+				//if (strchr(ch, '\n')) break; //problems if newline //covered in loop!
 		
 
  
 
- 					}
-				} //if trackFTA
-
-			}
+ 				}
+		//insert \n
+		fwprintf(stream, L"%c", eolFTA);
 		}
 
 	}
@@ -1939,46 +1945,56 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the beginning of the file */
 	//rewind(stream); //does the same?
-	if (!result)
+	if (result)
 	{
 	ErrorExit("fseek: Could not rewind!", 0);
 	fclose (stream);
 	return false;
 	}
 
-	
 
-		for (i = 0; (i  < (sizeof(buffer2) - 1) &&  ((ch = fgetwc(stream)) != EOF) && (ch != '\n') && (ch != '\0')); i++) //we are reading so last null condition mandatory
+
+		for (i = 0; (i  < (sizeof(branchLimitBuf) - 1) && ((ch = fgetwc(stream)) != WEOF) && (ch != '\0')); i++) //we are reading so last null condition mandatory
 		//if first char is NULL quit, note, null is not written to file
-
-			{
-			if (wcschr(&ch, '\0')) break; 
-			for (j = 0; (j  < (sizeof(buffer1) - 1) && ((ch = fgetwc(stream)) != EOF) && (ch != '\n')&& ( ch != '\0')); j++)
+			
+		{
+			ungetwc(ch, stream);
+			//if (wcschr(&ch, '\0')) break; // covered above?
+			branchTotalSaveFile = i;
+			for (j = 0; (j  < (sizeof(treeLevelLimitBuf) - 1) && ((ch = fgetwc(stream)) != eolFTA)); j++) //\n is the stopper
 			{
 		
 			ungetwc(ch, stream);
+			//populate folderTreeArray- using getline method (or "template function") might be more efficent
+			for (k = 0; (k  < (maxPathFolder - 1) && ((ch = fgetwc(stream)) != separateFTA)); k++) //\\ is the stopper
+
+			{
+
+			ungetwc(ch, stream);
 			
-			//gets string to write to array
-			if( fgetws(folderTreeArray[j][i], maxPathFolder -1, stream ) == NULL)
+			folderTreeArray[i][j][k] = (wchar_t)(ch = fgetwc(stream));
+			//wcscat_s(folderTreeArray[i][j], maxPathFolder - 1, (wchar_t *)(ch = fgetwc(stream)));
 		
 			{
-			ErrorExit("Problems with input File: fgetws returns NULL.", 0);
-			fclose (stream);
-			return false;
+			//ErrorExit("Problems with input File: fgetws returns NULL.", 0);
+			//fclose (stream);
+			//return false;
 			}
+			}
+			folderTreeArray[i][j][k] = L'\0';
 			trackFTA [i][1] = j; //track the nesting level for validation
-			wcscat_s(&pathsToSave[i], maxPathFolder, folderTreeArray[j][i]);
-			wcscat_s(&pathsToSave[i], maxPathFolder, L"\\");
+			wcscat_s(&pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
+			wcscat_s(&pathsToSave[i], maxPathFolder, L"\\"); //tacking them back on: what a waste doing it this way
 
  			}
-			branchTotalSaveFile = i;
-			}
-		branchTotal = 0; 
-
-
+			
+		}
 	}
 
+			
 
+
+	branchTotal = 0;
 	// Close stream if it is not NULL 
 
 	if (fclose (stream))
@@ -1999,7 +2015,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
-	 //first element of trackFTA is LAST_VISIT, second is number of folders found i.e. folderTreeArray[1000][jsize][maxPathFolder]
+	 //first element of trackFTA is LAST_VISIT, second is number of folders found
 {
 	int j;
 		//(folderTreeArray[treeLevel][j] == NULL) is ALWAYS true
@@ -2087,7 +2103,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 			}
 
 			else
-				{
+			{
 				//folderTreeArray[treeLevel][j+1]
 				if (trackFTA[treeLevel][0] <= 999)
 				{
@@ -2122,7 +2138,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 				ErrorExit("Too many folders in the tree: If folder was created by this program, a warning should have been issued on folder creation.", 0);
 				return 1; 
 				}
-				}
+			}
 
 	}
 
@@ -2223,7 +2239,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 					}
 
 					//GetCurrentDirectoryW(maxPathFolder, findPathW);
-					if (RemoveDirectoryW (currPathW))
+					if (RemoveDirectoryW (folderTreeArray[trackFTA[treeLevel-1][0]-1][treeLevel-1]))
 					{
 						trackFTA [treeLevel][1] = 0;  //important
 						treeLevel -=1;
