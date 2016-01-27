@@ -31,7 +31,7 @@ wchar_t *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // 
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
 char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
-wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit];
+wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit][maxPathFolder];
 
 
 int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI;
@@ -303,8 +303,6 @@ else
 	}
 
 
-
-
 	//NULL is a macro that's guaranteed to expand to a null pointer constant.
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  "\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
@@ -329,8 +327,7 @@ else
 		trackFTA [j][1] = 0;
 		}
 
-
-	//ProcessfileSystem(hwnd, false); //TESTING
+	
 	//Bad:
 	//malloc(sizeof(char *) * 5) // Will allocate 20 or 40 bytes depending on 32 63 bit system
 	//Good:
@@ -951,8 +948,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							//if (folderTreeArray[i][branchTotal]
 							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); i++)
 							{
-								wcscat_s(&pathsToSave[j], maxPathFolder, folderTreeArray[i][j]);
-								wcscat_s(&pathsToSave[j], maxPathFolder, L"\\");
+								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[i][j]);
+								wcscat_s(pathsToSave[j], maxPathFolder, L"\\");
 							
 							}
 
@@ -969,9 +966,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (trackFTA [j][0] + trackFTA [j][1]== j)
 
 									{
-									if (0 == wcscmp(&pathsToSave[j], &pathsToSave[k]))
+									if (0 == wcscmp(pathsToSave[j], pathsToSave[k]))
 									{
-										wcscpy_s(&pathsToSave[j], 1, L'\0');
+										wcscpy_s(pathsToSave[j], 1, L'\0');
 										for (int l = 0; l < treeLevelLimit; l++)
 										{
 										wcscpy_s(folderTreeArray[l][j], maxPathFolder, L"\0");
@@ -1215,8 +1212,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 
 						if (foundNTDLL)
-						{}
+						{
 							//if (!ProcessfileSystem(hwnd, false)) goto RemoveKleenup;
+
+							//FSDelete
+							//trackFTA [i][1] = j; //track the nesting level for validation
+							//wcscat_s(pathsToSave[i], maxPathFolder, L"\\"); //tacking them back on: what a waste doing it this way
+							//wcscat_s(pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
+
+						}
+							
 
 
 							if (errorcode ==0)
@@ -1250,19 +1255,19 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						if (RecurseRemovePath(trackFTA, folderTreeArray)) DisplayError (hwnd, L"Remove failed.", errorcode, 0);
 				
 					
-					RemoveKleenup:
-					if (findPathW) free (findPathW);
-					if (currPathW) free (currPathW);
-					//longPathName
-					//Clear all the added items
+						RemoveKleenup:
+						if (findPathW) free (findPathW);
+						if (currPathW) free (currPathW);
+						//longPathName
+						//Clear all the added items
 
-					if (errorcode != 0) //succeeded
-					{
-					errorcode = 0; //flag okay now
-					listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-					SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-					PopulateList(hwnd, errorcode);
-					}
+						if (errorcode != 0) //succeeded
+						{
+						errorcode = 0; //flag okay now
+						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+						SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+						PopulateList(hwnd, errorcode);
+						}
 
 
 
@@ -1863,7 +1868,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	wchar_t *fsName= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, maxPathFolder)) ErrorExit("ExpandEnvironmentStringsW failed for some reason.",0);
 	wcscat_s(fsName, maxPathFolder, L"\\Temp\\CreateLargeFileSystem.txt");
-	stream = _wfopen(fsName, L"r");
+	stream = _wfopen(fsName, L"rb");
 	//If the file already exists and is opened for reading or appending, the Byte Order Mark (BOM), if it present in the file, determines the encoding.
 	if (!stream) //returns NULL Pointer
 	{
@@ -1871,7 +1876,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 		{
 			if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort...", 0, 1))
 			{
-			stream = _wfopen(fsName, L"w+");
+			stream = _wfopen(fsName, L"w+b");
 				if (stream == NULL) 
 				{
 					ErrorExit("Problems with opening input File.", 0);
@@ -1891,7 +1896,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	}
 	else //file exists
 	{
-	stream = _wfopen(fsName, L"a+");
+	stream = _wfopen(fsName, L"a+b");
 	//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
 	if (!stream) //returns NULL Pointer
 	{
@@ -1905,14 +1910,24 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	if (falseReadtrueWrite) //write or append to file
 	{
 
-
+		//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
+		if(fwprintf(stream, L"%c", L'\xFEFF') < 0)
+		
+		{
+			ErrorExit("fwprintf: Problems with writing to input File.", 0);
+			fclose (stream);
+			return false;
+		}
+		
+		
 		//copy to whole string first: no sorting for write
+
 
 
 		for (i = 0; i <= branchTotal; i++)
 		{
 
-			for (j = 0; j < maxBranchLevelReached; j++)
+			for (j = 0; j < trackFTA[i][0] + trackFTA[i][1]; j++)
 			{
 		
 			
@@ -1937,12 +1952,11 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 		//insert \n
 		fwprintf(stream, L"%c", eolFTA);
 		}
-
 	}
 	else //read from file
   	{
 
-
+	ch = 1;
 	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the beginning of the file */
 	//rewind(stream); //does the same?
 	if (result)
@@ -1952,49 +1966,51 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	return false;
 	}
 
-
-
-		for (i = 0; (i  < (sizeof(branchLimitBuf) - 1) && ((ch = fgetwc(stream)) != WEOF) && (ch != '\0')); i++) //we are reading so last null condition mandatory
-		//if first char is NULL quit, note, null is not written to file
-			
-		{
-			ungetwc(ch, stream);
-			//if (wcschr(&ch, '\0')) break; // covered above?
-			branchTotalSaveFile = i;
-			for (j = 0; (j  < (sizeof(treeLevelLimitBuf) - 1) && ((ch = fgetwc(stream)) != eolFTA)); j++) //\n is the stopper
-			{
+	//Read BOM
+	ch = fgetwc(stream);
 		
-			ungetwc(ch, stream);
-			//populate folderTreeArray- using getline method (or "template function") might be more efficent
-			for (k = 0; (k  < (maxPathFolder - 1) && ((ch = fgetwc(stream)) != separateFTA)); k++) //\\ is the stopper
-
-			{
-
-			ungetwc(ch, stream);
-			
-			folderTreeArray[i][j][k] = (wchar_t)(ch = fgetwc(stream));
-			//wcscat_s(folderTreeArray[i][j], maxPathFolder - 1, (wchar_t *)(ch = fgetwc(stream)));
+	if(ch != L'\xFEFF')
 		
-			{
-			//ErrorExit("Problems with input File: fgetws returns NULL.", 0);
-			//fclose (stream);
-			//return false;
-			}
-			}
-			folderTreeArray[i][j][k] = L'\0';
-			trackFTA [i][1] = j; //track the nesting level for validation
-			wcscat_s(&pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
-			wcscat_s(&pathsToSave[i], maxPathFolder, L"\\"); //tacking them back on: what a waste doing it this way
-
- 			}
-			
-		}
+	{
+		DisplayError(hwnd, L"fgetwc: input file does not have BOM!", 0, 0);
+		fclose (stream);
+		return false;
 	}
 
+
+
+		for (i = 0; (i  < (sizeof(branchLimitBuf) - 1) && (ch != WEOF) && (ch != '\0')); i++) //we are reading so last null condition mandatory
+		
+		{
 			
 
+			branchTotalSaveFile = i;
+			for (j = 0; (j  < (sizeof(treeLevelLimitBuf) - 1) && (ch != eolFTA) && (ch != '\0')); j++)
+			{
 
-	branchTotal = 0;
+			//populate folderTreeArray- using getline method (or "template function") might be more efficent
+			for (k = 0; (k  < (maxPathFolder - 1) && ((ch = fgetwc(stream)) != separateFTA) && (ch != eolFTA) && (ch != WEOF) && (ch != '\0')); k++) 
+
+			{
+			
+			folderTreeArray[i][j][k] = (wchar_t)ch;
+		
+			}
+			if (ch == WEOF) break;
+
+			trackFTA [i][0] = j; //track the nesting level for validation
+			wcscat_s(pathsToSave[i], maxPathFolder, L"\\"); //tacking them back on: what a waste doing it this way
+			wcscat_s(pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
+
+ 			}
+			if (ch == eolFTA) ch = 1;
+		}
+	branchTotal = i - 1;
+
+	}
+
+
+
 	// Close stream if it is not NULL 
 
 	if (fclose (stream))
@@ -2013,6 +2029,76 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	}
 
 
+bool FSDelete (wchar_t *rootDir)
+{
+		for (int i = 0; (i  < branchTotal); i++)
+	{
+		trackFTA [i][1] = trackFTA [i][0];
+	}
+
+
+		for (int i = 0; (i  < branchTotal); i++)
+	{
+		int tmp = trackFTA [i][1]; //insertion sort
+		for (int j = i; (j  >= 1 && tmp < trackFTA [j-1][1]); j--)
+		{
+			trackFTA [j][1] = trackFTA [j-1][1];
+			trackFTA [j][1] = tmp;
+		}
+	}
+
+	for (int i = 0; (i  < branchTotal); i++)
+	{
+	//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [j][1] 
+	
+	//wcscat_s(pathsToSave[i], maxPathFolder, L"\\"); //tacking them back on: what a waste doing it this way
+	//wcscat_s(pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
+	if (wcsncmp(rootDir, pathsToSave[i], wcslen (rootDir)))
+	{
+			for (int j = 0; (j  < branchTotal); j++)
+			{
+			if (trackFTA [i][1] = trackFTA [i][0])
+			{
+				if (RemoveDirectoryW (pathsToSave[trackFTA [j][1]]))
+						{
+							wcscpy_s(pathsToSave[trackFTA [j][1]], maxPathFolder, L"\0");
+							wcscpy_s(folderTreeArray[i][trackFTA [j][1]], maxPathFolder, L"\0");
+							for (int k = 0; (k  < trackFTA [j][1]); k++)
+							{
+								wcscat_s(pathsToSave[trackFTA [j][1]], maxPathFolder, L"\\");
+								wcscat_s(pathsToSave[trackFTA [j][1]], maxPathFolder, folderTreeArray[i][k]);
+
+							}
+
+							//strip lastmost dir from pathsToSave[trackFTA [j][1]])
+							//adjust trackFTA [i][1], trackFTA [i][0]
+							//token = strtok( string, seps );
+			
+						}
+				else
+						{
+							ErrorExit("RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+
+							return 1; //Rollback?
+						}
+			}
+			}
+	}
+
+	}
+
+
+	//update trackFTA [i][0]
+	for (int i = 0; (i  < branchTotal); i++)
+	{
+
+	}
+
+
+
+	return true;
+
+}
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found
