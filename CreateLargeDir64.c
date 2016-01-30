@@ -23,6 +23,7 @@ wchar_t hrtext[256]; //An array name is essentially a pointer to the first eleme
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATA da;
 int const pathLength = 32760, maxPathFolder = MAX_PATH - 3, treeLevelLimit = 2000, branchLimit = 1000;
+const wchar_t BOM = L'\xFEFF'; //65279
 wchar_t const *invalidPathName = L":\"/\\|?*<>";
 wchar_t const eolFTA = L'\n';
 wchar_t const separatorFTA = L'\\';
@@ -1215,29 +1216,37 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 							}
 
+						findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
+						currPathW[0] = L'\0';
+						findPathW[0] = L'\0';
+
 						if (foundNTDLL)
 						{
-							//if (!ProcessfileSystem(hwnd, false)) goto RemoveKleenup;
+							if (!ProcessfileSystem(hwnd, false)) goto RemoveKleenup;
+							//Reads entire FS
 
-							//FSDelete
-							//trackFTA [i][1] = j; //track the nesting level for validation
-							//wcscat_s(pathsToSave[i], maxPathFolder, L"\\"); //tacking them back on: what a waste doing it this way
-							//wcscat_s(pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
+							do
+							{
+							} while (FSDelete (currPathW));
+							//Write remaining FS
+							if (!ProcessfileSystem(hwnd, true)) goto RemoveKleenup;
 
+						}
+						else
+						{
+							if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", errorcode, 1)) goto RemoveKleenup;
 						}
 							
 
 
 							if (errorcode ==0)
 							{
-								if (!DisplayError (hwnd, L"This directory might have been created by this program. Continue?", errorcode, 1)) goto RemoveKleenup;
+								if (!DisplayError (hwnd, L"Cannot tell whether directory was created by this program. Continue?", errorcode, 1)) goto RemoveKleenup;
 
 							}
 
-
-						findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-						currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-						wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
 						wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 						wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
 
@@ -1916,7 +1925,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 		_setmode(_fileno(stdout), _O_U16TEXT);
 		//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
-		if(fputwc(L'\XFEFF', stream) == EOF)
+		if(fputwc(BOM, stream) == EOF)
 		//if (fwrite("\xFEFF", 2, 2, stream) < 0)
 		
 		{
@@ -1980,7 +1989,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	//Read BOM
 	ch = fgetwc(stream);
 		
-	if(ch != L'\XFEFF')
+	if(ch != BOM)
 		
 	{
 		DisplayError(hwnd, L"fgetwc: input file does not have BOM!", 0, 0);
@@ -2081,11 +2090,15 @@ bool FSDelete (wchar_t *rootDir)
 			{
 			if (trackFTA [j][1] = trackFTA [i][0])
 			{
-				if (RemoveDirectoryW (driveIDBaseWNT pathsToSave[j]))
+				findPathW[0] = L'\0';
+				wcscat_s(findPathW, maxPathFolder, driveIDBaseWNT);
+				wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
+
+				if (RemoveDirectoryW (findPathW))
 						{
 							//clear
 							pathsToSave[j][0] = L'\0';
-							//wcscpy_s(pathsToSave[j], maxPathFolder, L"\0");
+							
 							folderTreeArray[i][j][0] = L'\0';
 							//wcscpy_s(folderTreeArray[i][j], maxPathFolder, L"\0");
 
@@ -2104,7 +2117,7 @@ bool FSDelete (wchar_t *rootDir)
 							//rebuild pathsToSave
 							for (k = 0; (k <= trackFTA [j][1]); k++)
 							{
-								wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
+								if (k != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
 								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[i][k]);
 
 							}
