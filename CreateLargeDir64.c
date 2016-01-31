@@ -947,15 +947,11 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//convert to single folder items: -previously created folders done
 						for (i = branchTotalSaveFile + 1; i <= branchTotal; i++)
 						{
-							
-							//pathsToSave [branchLimit]
-							//if (folderTreeArray[i][branchTotal]
+
 							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); i++)
 							{
 								if (j != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
 								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[i][j]);
-								
-							
 							}
 
 						}
@@ -1218,8 +1214,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 						currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-						wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
 						currPathW[0] = L'\0';
+						wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
+						wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						currPathWtmp = currPathW + 6;
 						findPathW[0] = L'\0';
 
 						if (foundNTDLL)
@@ -1229,7 +1227,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							do
 							{
-							} while (FSDelete (currPathW));
+							} while (FSDelete (currPathWtmp));
 							//Write remaining FS
 							if (!ProcessfileSystem(hwnd, true)) goto RemoveKleenup;
 
@@ -1867,13 +1865,9 @@ NTDLLptr DynamicLoader (bool progInit)
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 {
 	
-	//fileSystem fs;
-	wchar_t treeLevelLimitBuf[treeLevelLimit + 1];
-	wchar_t branchLimitBuf[branchLimit + 1];
 	int  result;
 	int  i,j,k, jLim;
 	wint_t ch = 0, chOld = 0;
-	bool p;
 	FILE *stream = NULL;
 
 
@@ -1975,7 +1969,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 	else //read from file
   	{
-
+	
 	ch = 1;
 	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the beginning of the file */
 	//rewind(stream); //does the same?
@@ -1999,12 +1993,12 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 
 
-		for (i = 0; (i  < (sizeof(branchLimitBuf) - 1) && (ch != WEOF) ); i++) //we are reading so last null condition mandatory
+		for (i = branchTotal + 1; (i < branchLimit) && (ch != WEOF); i++) //we are reading so last null condition mandatory
 		
 		{
 			if (ch == eolFTA) ch = 1;	//ugly
 			branchTotalSaveFile = i;
-			for (j = 0; (j  < (sizeof(treeLevelLimitBuf) - 1) && (ch != eolFTA) && (ch != WEOF)); j++)
+			for (j = 0; (j < treeLevelLimit) && (ch != eolFTA); j++)
 			{
 			if (chOld == separatorFTA) chOld = 1;
 			//populate folderTreeArray- using getline method (or "template function") might be more efficent
@@ -2023,9 +2017,9 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 			{
 				chOld = ch;
 			}
-			
-			if (ch != WEOF) folderTreeArray[i][j][k] = (wchar_t)ch;
-			
+						
+			if (ch == WEOF) goto WEOFFOUND;
+			folderTreeArray[i][j][k] = (wchar_t)ch;
 			}
 
 
@@ -2036,10 +2030,11 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
  			}
 		}
 
-		branchTotal = i - 1;
 	}
 
 
+	WEOFFOUND:
+	if (branchTotal = -1) branchTotal = i - 1; //when removing folders
 
 	// Close stream if it is not NULL 
 
@@ -2064,13 +2059,13 @@ bool FSDelete (wchar_t *rootDir)
 	int noPath = 0;
 	
 	//deletes the last or bottom level of directories with root rootdir.
-		for (i = 0; (i  < branchTotal); i++)
+		for (i = 0; (i  <= branchTotal); i++)
 	{
 		trackFTA [i][1] = trackFTA [i][0];
 	}
 
 
-		for (i = 0; (i  < branchTotal); i++)
+		for (i = 0; (i  <= branchTotal); i++)
 	{
 		int tmp = trackFTA [i][1]; //insertion sort
 		for (j = i; (j  >= 1 && tmp < trackFTA [j-1][1]); j--)
@@ -2080,13 +2075,13 @@ bool FSDelete (wchar_t *rootDir)
 		}
 	}
 
-	for (i = 0; (i  < branchTotal); i++)
+	for (i = 0; (i  <= branchTotal); i++)
 	{
 	//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [j][1] 
 	
 	if (wcsncmp(rootDir, pathsToSave[i], wcslen (rootDir)))
 	{
-			for (j = 0; (j  < branchTotal); j++)
+			for (j = 0; (j  <= branchTotal); j++)
 			{
 			if (trackFTA [j][1] = trackFTA [i][0])
 			{
