@@ -3,7 +3,7 @@
 #include <io.h> //setmode
 #include<stdio.h> //sprintf
 #include <windows.h>
-#include <Strsafe.h> //safe string copy
+#include <Strsafe.h> //safe string copy e.e. StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include "CreateLargeDir64.h" //my file
 #include <Winternl.h> //NtCreateFile
@@ -2085,8 +2085,8 @@ bool FSDelete (wchar_t *rootDir)
 			{
 			if (trackFTA [j][1] = trackFTA [i][0])
 			{
-				findPathW[0] = L'\0';
-				wcscat_s(findPathW, maxPathFolder, driveIDBaseWNT);
+				findPathW[0] = L'\0'; // driveIDBaseWNT
+				wcscat_s(findPathW, maxPathFolder, L"C:\\");
 				wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
 
 				if (RemoveDirectoryW (findPathW))
