@@ -8,6 +8,12 @@
 #include "CreateLargeDir64.h" //my file
 #include <Winternl.h> //NtCreateFile
 
+
+#define _CRTDBG_MAP_ALLOC
+#include <stdlib.h>
+#include <crtdbg.h>
+
+
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
 
@@ -533,8 +539,8 @@ LRESULT CALLBACK ValidateProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
-	int errorcode =0;
-		switch(Msg)
+	int errorcode = 0;
+	switch(Msg)
 	{
 		case WM_INITDIALOG:
 			
@@ -578,18 +584,23 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
             }
 		break;
-		case  IDC_TEXT:
-		{
-		//validation done elsewhere
-		}
-		case IDC_NUMBER:
-		{
-			//no greater than 32760
-		}
 
-				case WM_COMMAND:
+
+		case WM_COMMAND: //RH command keys
 			switch(LOWORD(wParam))
 			{
+				case  IDC_TEXT:
+					{
+					//validation done elsewhere //checkout WM_GETDLGCODE
+					}
+				break;
+
+				case IDC_NUMBER:
+					{
+					//no greater than 32760
+					}
+				break;
+
 				case IDC_ADD: //adds directories nested ntimes
 				{
 					//http://www.experts-exchange.com/Programming/Languages/.NET/Visual_CPP/Q_27207428.html
@@ -778,6 +789,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
 
 				NoAddSuccess:
+				free (currPathW);
 				EnableWindow(GetDlgItem(hwnd, IDC_CREATE), true);
 
 
@@ -1204,9 +1216,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								if (wcscmp(dacfoldersW[index-folderdirCW] + 4, dacfoldersWtmp[i]) == 0)
 								{
 								if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Continue?", errorcode, 1)) goto RemoveKleenup;
-
-								//for (int i = folderdirCS + folderdirCW; i < listTotal; i++)
-
 								errorcode = -4;
 								
 								}
@@ -1216,7 +1225,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 						currPathW[0] = L'\0';
 						wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
-						wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						wchar_t * currPathWtmp;
 						currPathWtmp = currPathW + 6;
 						findPathW[0] = L'\0';
 
@@ -1229,17 +1238,18 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							{
 							} while (FSDelete (currPathWtmp));
 							//Write remaining FS
-							if (!ProcessfileSystem(hwnd, true)) goto RemoveKleenup;
+							(!ProcessfileSystem(hwnd, true))? errorcode = 1: errorcode = 0;
+							goto RemoveKleenup;
 
 						}
 						else
 						{
 							if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", errorcode, 1)) goto RemoveKleenup;
-						}
+						
 							
 
 
-							if (errorcode ==0)
+							if (errorcode == 0)
 							{
 								if (!DisplayError (hwnd, L"Cannot tell whether directory was created by this program. Continue?", errorcode, 1)) goto RemoveKleenup;
 
@@ -1261,15 +1271,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						if (!SetCurrentDirectoryW (driveIDBaseW))
 						{
 						ErrorExit("SetCurrentDirectoryW: Non zero", 0);
-						return 1;
+						goto RemoveKleenup;
 						}
 						if (RecurseRemovePath(trackFTA, folderTreeArray)) DisplayError (hwnd, L"Remove failed.", errorcode, 0);
-				
+						}
 					
 						RemoveKleenup:
 						if (findPathW) free (findPathW);
 						if (currPathW) free (currPathW);
-						//longPathName
 						//Clear all the added items
 
 						if (errorcode != 0) //succeeded
@@ -1369,7 +1378,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 
 				case IDC_LOGON:
-			{
+				{
 
 					thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
 					tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
@@ -1393,15 +1402,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					}
 
 
-			system ("CD\\ & PUSHD %SystemRoot%\\Temp & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & (IF DEFINED OSB (FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% /reg:64 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\") ELSE ((FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\"))) & >NUL FINDSTR \"^\" \"Userinitregerror.txt\" && SET \"ERRTXT=\" || SET \"ERRTXT=1\" & (IF DEFINED ERRTXT (>Userinitreg.txt CALL ECHO %CURREGVALUE% & (IF '%errorlevel%' NEQ '0' (CALL ECHO Copy reg record failed! & PAUSE >NUL))) ELSE (ECHO No reg key! & PAUSE NUL)) & (IF DEFINED OSB (CALL CALL SET \"NEWREGVALUE=%SystemRoot%\\Temp\\CreateLargeDir64.exe\") ELSE (CALL CALL SET \"NEWREGVALUE=%CURREGVALUE:%SystemRoot%\\system32\\userinit.exe=%SystemRoot%\\Temp\\CreateLargeDir64.exe,%SystemRoot%\\system32\\userinit.exe%\")) & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %NEWREGVALUE% /f /reg:64 & POPD");
+				system ("CD\\ & PUSHD %SystemRoot%\\Temp & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & (IF DEFINED OSB (FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% /reg:64 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\") ELSE ((FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\"))) & >NUL FINDSTR \"^\" \"Userinitregerror.txt\" && SET \"ERRTXT=\" || SET \"ERRTXT=1\" & (IF DEFINED ERRTXT (>Userinitreg.txt CALL ECHO %CURREGVALUE% & (IF '%errorlevel%' NEQ '0' (CALL ECHO Copy reg record failed! & PAUSE >NUL))) ELSE (ECHO No reg key! & PAUSE NUL)) & (IF DEFINED OSB (CALL CALL SET \"NEWREGVALUE=%SystemRoot%\\Temp\\CreateLargeDir64.exe\") ELSE (CALL CALL SET \"NEWREGVALUE=%CURREGVALUE:%SystemRoot%\\system32\\userinit.exe=%SystemRoot%\\Temp\\CreateLargeDir64.exe,%SystemRoot%\\system32\\userinit.exe%\")) & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %NEWREGVALUE% /f /reg:64 & POPD");
 					
-			free (thisexePath);
-			free (tempDest);
-			EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
+				free (thisexePath);
+				free (tempDest);
+				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
 
-			//NOTE WOW6432node is 64bit view of 32bit setting. reg:64 bypasses VS 32bit redirection
-			//Debug & CALL ECHO %KEY_NAME% %VALUE_NAME% %CURREGVALUE% %NEWREGVALUE%
-			}
+				//NOTE WOW6432node is 64bit view of 32bit setting. reg:64 bypasses VS 32bit redirection
+				//Debug & CALL ECHO %KEY_NAME% %VALUE_NAME% %CURREGVALUE% %NEWREGVALUE%
+				}
 			break;
 		
 				case IDC_NOLOGON:
@@ -1440,163 +1449,165 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 
 
-				case IDC_LIST:
+			case IDC_LIST:
 
-					switch(HIWORD(wParam))
+				switch(HIWORD(wParam))
+				{
+					case LBN_SELCHANGE:
 					{
-						case LBN_SELCHANGE:
+						// Get the number of items selected.
+
+						HWND hList = GetDlgItem(hwnd, IDC_LIST);
+						int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
+						bool removeTrig = false;
+						if(count != LB_ERR)
 						{
-							// Get the number of items selected.
+							// We only want to continue if one and only one item is
+							// selected.
 
-							HWND hList = GetDlgItem(hwnd, IDC_LIST);
-							int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
-							bool removeTrig = false;
-							if(count != LB_ERR)
+							if(count == 1)
 							{
-								// We only want to continue if one and only one item is
-								// selected.
-
-								if(count == 1)
-								{
-									// Since we know ahead of time we're only getting one
-									// index, there's no need to allocate an array.
+								// Since we know ahead of time we're only getting one
+								// index, there's no need to allocate an array.
 									
 
 
 									
-									long long err = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
+								long long err = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 									
-									index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
+								index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
 								
 
-									if (index >= folderdirCS + folderdirCW)
+								if (index >= folderdirCS + folderdirCW)
+								{
+									SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
+									if (index >= listTotal - branchLevel)
 									{
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
-										if (index >= listTotal - branchLevel)
-										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-										}
-										else
-										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-										}
+									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 									}
 									else
 									{
-
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-
-										if (wcsstr(dacfoldersW[index], lpref) == NULL)
-											//Check for wide string folder here
-										{
-											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
-										}
-										else
-										{
-												//Cannot remove short folders
-											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-										}
+									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 									}
+								}
+								else
+								{
 
+									SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
 
-
-									if(err != LB_ERR)
+									if (wcsstr(dacfoldersW[index], lpref) == NULL)
+										//Check for wide string folder here
 									{
-										// Get the data we associated with the item above
-										// (the number of times it was added)
-
-										idata = SendMessageW(hList, LB_GETITEMDATA, (WPARAM)index, 0); //lparam not used, but return value IS value of lparam in setitemdata
-										//SO idata becomes ntimes when items are added
-
-										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
-										//This function performs like:
-										//TCHAR buf[16];
-										//wnsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
-										//SetDlgItemText(hDlg, nIDDlgItem, buf);
-
-
-
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
 									}
-									else 
+									else
 									{
-										errorcode = 0;
-										DisplayError (hwnd, L"Error getting selected item :(", errorcode, 0);
+											//Cannot remove short folders
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 									}
+								}
+
+
+
+								if(err != LB_ERR)
+								{
+									// Get the data we associated with the item above
+									// (the number of times it was added)
+
+									idata = SendMessageW(hList, LB_GETITEMDATA, (WPARAM)index, 0); //lparam not used, but return value IS value of lparam in setitemdata
+									//SO idata becomes ntimes when items are added
+
+									SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
+									//This function performs like:
+									//TCHAR buf[16];
+									//wnsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
+									//SetDlgItemText(hDlg, nIDDlgItem, buf);
+
+
+
 								}
 								else 
 								{
-									// No items selected, or more than one
-									// Either way, we aren't going to process this.
-									
-									index = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
-									int selItems[10000]; //what's the max?
-									SendMessage(hwnd, LB_GETSELITEMS, count, (LPARAM)selItems);
-
-									if (listTotal > folderdirCS + folderdirCW)
-									{
-										for (i = 0; i < count; i++)
-										{
-											if (selItems[i] < listTotal - branchLevel)
-											{
-												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-												SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
-												removeTrig = true;
-											}
-
-										}
-										if (!removeTrig)
-										{
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-										}
-									}
-									else
-									{
-										for (i = 0; i < count; i++)
-										{
-											if (selItems[i] < folderdirCS)
-											{
-											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-											removeTrig = true;
-											}
-
-										}
-											if (!removeTrig)
-											{
-											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-											}
-										
-									}
-
-
-
-
-									SetDlgItemTextW(hwnd, IDC_SHOWCOUNT, L"-");
+									errorcode = 0;
+									DisplayError (hwnd, L"Error getting selected item :(", errorcode, 0);
 								}
 							}
-							else
+							else 
 							{
-								errorcode = 0;
-								DisplayError (hwnd, L"Error counting items :(", errorcode, 0);
+								// No items selected, or more than one
+								// Either way, we aren't going to process this.
+									
+								index = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
+								int selItems[10000]; //what's the max?
+								SendMessage(hwnd, LB_GETSELITEMS, count, (LPARAM)selItems);
+
+								if (listTotal > folderdirCS + folderdirCW)
+								{
+									for (i = 0; i < count; i++)
+									{
+										if (selItems[i] < listTotal - branchLevel)
+										{
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
+											removeTrig = true;
+										}
+
+									}
+									if (!removeTrig)
+									{
+									SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
+									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+									}
+								}
+								else
+								{
+									for (i = 0; i < count; i++)
+									{
+										if (selItems[i] < folderdirCS)
+										{
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										removeTrig = true;
+										}
+
+									}
+										if (!removeTrig)
+										{
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+										}
+										
+								}
+
+
+
+
+								SetDlgItemTextW(hwnd, IDC_SHOWCOUNT, L"-");
 							}
 						}
-						break;
+						else
+						{
+							errorcode = 0;
+							DisplayError (hwnd, L"Error counting items :(", errorcode, 0);
+						}
 					}
-				break;
-			}
+					break;
+				}
+			break;
+			} //end WM_COMMAND
 		break;
 		case WM_CLOSE:
-
+			{
 			//Cleanup
 			if (weareatBoot) Kleenup (hwnd, weareatBoot);
 			 
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			EndDialog(hwnd, 0);
+			_CrtDumpMemoryLeaks();
+			}
 		break;
-		default:
-			return FALSE;
+		default: return FALSE;
+		break;	
 	}
 	return TRUE;
 }
@@ -1887,17 +1898,20 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 				if (stream == NULL) 
 				{
 					ErrorExit("Problems with opening input File.", 0);
+					free (fsName);
 					return false;
 				}
 			}
 			else
 			{
+			free (fsName);
 			return false; // can't read from empty file
 			}
 		}
 		else
 		{
 		DisplayError (hwnd, L"Cannot Find Input file so cannot read!", 0, 0);
+		free (fsName);
 		return false;
 		}
 	}
@@ -1908,6 +1922,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	if (!stream) //returns NULL Pointer
 	{
 	ErrorExit("Problems with input File: Cannot append.", 0);
+	free (fsName);
 	return false;
 	}
 
@@ -1924,6 +1939,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 		
 		{
 			ErrorExit("fwprintf: Problems with writing to input File.", 0);
+			free (fsName);
 			fclose (stream);
 			return false;
 		}
@@ -1976,6 +1992,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	if (result)
 	{
 	ErrorExit("fseek: Could not rewind!", 0);
+	free (fsName);
 	fclose (stream);
 	return false;
 	}
@@ -1987,6 +2004,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 		
 	{
 		DisplayError(hwnd, L"fgetwc: input file does not have BOM!", 0, 0);
+		free (fsName);
 		fclose (stream);
 		return false;
 	}
@@ -2041,10 +2059,12 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	if (fclose (stream))
 	{
 	ErrorExit("Stream was not closed properly: exit & restart?", 0);
+	free (fsName);
 	return false;
 	}
 	else
 	{
+	free (fsName);
 	return true;
 	}
 
@@ -2086,8 +2106,9 @@ bool FSDelete (wchar_t *rootDir)
 			if (trackFTA [j][1] = trackFTA [i][0])
 			{
 				findPathW[0] = L'\0'; // driveIDBaseWNT
-				wcscat_s(findPathW, maxPathFolder, L"C:\\");
+				wcscat_s(findPathW, maxPathFolder, driveIDBaseW);
 				wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
+				wcscat_s(findPathW, maxPathFolder, L"\\");
 
 				if (RemoveDirectoryW (findPathW))
 						{
@@ -2186,7 +2207,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 						ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 						return 1;
 						}
-						wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						wchar_t * currPathWtmp;
 						currPathWtmp = currPathW + 4;
 						//GetCurrentDirectoryW(maxPathFolder, findPathW);
 						if (RemoveDirectoryW (currPathWtmp))
