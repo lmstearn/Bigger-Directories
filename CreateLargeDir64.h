@@ -8,15 +8,17 @@
 #define IDC_NUMBER                      1001
 #define IDC_LIST                        1002
 #define IDC_ADD                         1003
-#define IDC_CREATE                      1004
-#define IDC_CLEAR                       1005
-#define IDC_REMOVE                      1006
-#define IDC_LOGON                       1007
-#define IDC_NOLOGON                     1008
-#define IDC_SHOWCOUNT                   1009
-#define IDC_LIST2                       1010
-#define IDC_STATIC_ONE                  1011
-#define IDC_STATIC_TWO                  1012
+#define IDC_UP							1004
+#define IDC_DOWN						1005
+#define IDC_CREATE                      1006
+#define IDC_CLEAR                       1007
+#define IDC_REMOVE                      1008
+#define IDC_LOGON                       1009
+#define IDC_NOLOGON                     1010
+#define IDC_SHOWCOUNT                   1011
+#define IDC_LIST2                       1012
+#define IDC_STATIC_ONE                  1013
+#define IDC_STATIC_TWO                  1014
 #define IDC_STATIC                      -1
 
 //check properties/c++/preprocessor defs are _Win64
@@ -29,14 +31,13 @@
 #endif
 
 
-
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        102
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1013
+#define _APS_NEXT_CONTROL_VALUE         1015
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
