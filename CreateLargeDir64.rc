@@ -58,8 +58,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMEN
 CAPTION "CreateLargeDirectory"
 FONT 8, "MS Sans Serif", 0, 0, 0x0
 BEGIN
-    LTEXT           "Add",IDC_STATIC,506,
-	10,14,8
+    LTEXT           "Add",IDC_STATIC,506,10,14,8
     EDITTEXT        IDC_TEXT,528,7,120,14,ES_AUTOHSCROLL
     EDITTEXT        IDC_NUMBER,647,7,21,14,ES_NUMBER
     LTEXT           "times.",IDC_STATIC,671,10,23,8
@@ -100,5 +99,3 @@ END
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
-
-
