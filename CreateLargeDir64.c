@@ -2085,7 +2085,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 bool FSDelete (wchar_t *rootDir)
 {	
-	int noPath = 0;
+	int noPath = 0, folderToDel = 0;
 	
 	//deletes the last or bottom level of directories with root rootdir.
 		for (i = 0; (i  <= branchTotal); i++)
@@ -2123,10 +2123,13 @@ bool FSDelete (wchar_t *rootDir)
 						{
 							//clear everything
 							pathsToSave[j][0] = L'\0';
+							//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
 							
-							folderTreeArray[i][j][0] = L'\0';
-							
-
+							for (k = 0; ((k <= treeLevelLimit) && (folderTreeArray[j][k][0] != L'\0')); k++)
+							{
+								folderToDel = k;
+							}
+							folderTreeArray[j][folderToDel][0] = L'\0';
 
 							trackFTA [j][1] -=1;
 							trackFTA [i][0] -=1;
