@@ -24,7 +24,7 @@
 
 //findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 
-
+LPSTR lpCmdLine;
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATAA da;
@@ -120,12 +120,12 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 //------------------------------------------------------------------------------------------------------------------
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
-bool Kleenup (HWND hwnd, bool weareatBoot);
+bool Kleenup (HWND hwnd, bool weareatBoot, LPSTR lpCmdLine);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
-bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite);
-bool FSDelete (wchar_t *rootDir);
+bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend);
+bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode);
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 
 
@@ -166,7 +166,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//wchar_t hrtext[256] allocates memory to the stack. It is not a dynamic allocation http://stackoverflow.com/questions/419022/char-x256-vs-char-malloc256sizeofchar
 }
 
-void ErrorExit(LPCWSTR lpszFunction, DWORD NTStatusMessage)
+void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 {
 	//courtesy https://msdn.microsoft.com/en-us/library/windows/desktop/ms680582(v=vs.85).aspx
 	// also see http://stackoverflow.com/questions/35177972/wide-char-version-of-get-last-error/35193301#35193301
@@ -243,7 +243,7 @@ void PopulateList(HWND hwnd, int errorcode)
     {
         	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting.", errorcode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
-			exit(1);
+			exit (1);
     }
     am64Bit = true;
 	exe64Bit = true;
@@ -254,7 +254,7 @@ void PopulateList(HWND hwnd, int errorcode)
 		{
 			DisplayError (hwnd, L"ENV32BIT: Error: pointer should be 4 bytes. Exiting.", errorcode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
-			exit(1);
+			exit (1);
 		}
     
 		if (FindProcessId (hwnd, L"CreateLargeDir64.exe", exeHandle) != NULL)
@@ -276,7 +276,7 @@ void PopulateList(HWND hwnd, int errorcode)
 
 		{
 			DisplayError (hwnd, L"Our own process isn't active!? Must terminate!", 1, 0);
-			exit(1);
+			exit (1);
 		}
 }	
 
@@ -302,7 +302,7 @@ else
 
 
 	createlargedirVAR= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", createlargedirVAR, maxPathFolder)) ErrorExit(L"ExpandEnvironmentStringsW failed for some reason.",0);
+	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", createlargedirVAR, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
 	wcscat_s(createlargedirVAR, maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
 
 		if (GetFileAttributesW(createlargedirVAR)!=INVALID_FILE_ATTRIBUTES)
@@ -950,7 +950,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				if (!SetCurrentDirectoryW(driveIDBaseW))
 					{
 					errorcode = 1;
-					ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+					ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 					goto EndCreate;
 					}
 
@@ -1046,13 +1046,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 						case 2: //NT_WARNING 
 							{
-								ErrorExit(L"NtCreateFile: ", Status);
+								ErrorExit (L"NtCreateFile: ", Status);
 							}
 						break;
 						case 3://NT_ERROR
 							{
 								
-								ErrorExit(L"NtCreateFile: ", Status);
+								ErrorExit (L"NtCreateFile: ", Status);
 								errorcode = 1;
 								goto EndCreate;
 							}
@@ -1066,7 +1066,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						else
 						{
 							errorcode = 1;
-							ErrorExit(L"DynamicLoader failed: Cannot create. ", 1);
+							ErrorExit (L"DynamicLoader failed: Cannot create. ", 1);
 							goto EndCreate;
 						}
 					} //trackFTA condition
@@ -1075,7 +1075,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					//sort all andwrite to file
 
-					if (!ProcessfileSystem(hwnd, true)) goto EndCreate;
+					if (!ProcessfileSystem(hwnd, true, true)) goto EndCreate;
 
 				} //foundNtdll
 
@@ -1102,14 +1102,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (!SetCurrentDirectoryW(currPathW))
 									{
 									errorcode = 1;
-									ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+									ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 									goto EndCreate;
 									}
 								}
 							else
 								{
 									errorcode = 1;
-									ErrorExit(L"CreateDirectoryW: ", 0);
+									ErrorExit (L"CreateDirectoryW: ", 0);
 									break;
 								}
 							}
@@ -1123,14 +1123,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										if (!SetCurrentDirectoryW(currPathW))
 										{
 										errorcode = 1;
-										ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+										ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 										goto EndCreate;
 										}
 									}
 								else
 									{
 									errorcode = 1;
-									ErrorExit(L"CreateDirectoryW: ", 0);
+									ErrorExit (L"CreateDirectoryW: ", 0);
 									break;
 									}
 								}
@@ -1233,14 +1233,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						if (foundNTDLL)
 						{
-							if (!ProcessfileSystem(hwnd, false)) goto RemoveKleenup;
+							if (!ProcessfileSystem(hwnd, false, true)) goto RemoveKleenup;
 							//Reads entire FS
 
 							do
 							{
-							} while (FSDelete (currPathWtmp));
-							//Write remaining FS
-							(!ProcessfileSystem(hwnd, true))? errorcode = 1: errorcode = 0;
+							} while (FSDelete (hwnd, currPathWtmp, errorcode));
+							//Write remaining FS								
+							(lpCmdLine)? free (lpCmdLine): ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+							
 							goto RemoveKleenup;
 
 						}
@@ -1271,7 +1272,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						
 						if (!SetCurrentDirectoryW (driveIDBaseW))
 						{
-						ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 						goto RemoveKleenup;
 						}
 						if (RecurseRemovePath(trackFTA, folderTreeArray)) DisplayError (hwnd, L"Remove failed.", errorcode, 0);
@@ -1387,14 +1388,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					wcscat_s(tempDest,  maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
 					if (GetCreateLargeDirPath (hwnd, thisexePath, errorcode) == 1)
 					{
-							ErrorExit(L"GetCreateLargeDirPath: Problem with program copy.", 0);
+							ErrorExit (L"GetCreateLargeDirPath: Problem with program copy.", 0);
 							break;
 					}
 
 
 					if (CopyFileW(thisexePath, tempDest, FALSE) == 0)
 					{
-						ErrorExit(L"CopyFile: Copy to Temp failed... aborting.", 0);
+						ErrorExit (L"CopyFile: Copy to Temp failed... aborting.", 0);
 						EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
 						EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
 						free (thisexePath);
@@ -1431,7 +1432,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			}
 			
-			if (Kleenup (hwnd, weareatBoot))
+			if (Kleenup (hwnd, weareatBoot, NULL))
 			{
 				EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
 				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), true);
@@ -1600,7 +1601,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		case WM_CLOSE:
 			{
 			//Cleanup
-			if (weareatBoot) Kleenup (hwnd, weareatBoot);
+			if (weareatBoot) Kleenup (hwnd, weareatBoot, NULL);
 			 
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			EndDialog(hwnd, 0);
@@ -1625,6 +1626,7 @@ BOOL DirectoryExists(LPCTSTR szPath) //StackOverflow 6218325
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine, int nCmdShow)
 {
+	if (lpCmdLine) RemoveDirectoryA (lpCmdLine); //"fix" for rootdir bug
 	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), NULL, DlgProc);
 }
 
@@ -1726,13 +1728,40 @@ else
 	return 0;
 }
 }
-bool Kleenup (HWND hwnd, bool weareatBoot)
+bool Kleenup (HWND hwnd, bool weareatBoot, LPSTR lpCmdLine)
 {
+	STARTUPINFOW lpStartupInfo;
+	PROCESS_INFORMATION lpProcessInfo;
+
+	ZeroMemory(&lpStartupInfo, sizeof(lpStartupInfo));
+	ZeroMemory (&lpStartupInfo, sizeof(lpStartupInfo));
+	thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
+	tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
+
+	if (lpCmdLine) //on program restart on remove root directory bug
+	{
+		if (!GetModuleFileNameW(NULL, thisexePath, maxPathFolder) || (wcslen(thisexePath) > maxPathFolder))
+		{
+			DisplayError (hwnd, L"Oops, process path too long or non-existent! Quitting...", 0, 0);
+			free (tempDest);
+			free (thisexePath);
+			exit (1);
+		}
+		else
+		{
+		wcscpy_s (thisexePath, maxPathFolder, tempDest);
+		wcscpy_s (tempDest, maxPathFolder, thisexePath);
+		wcscat_s (tempDest, maxPathFolder, L" ");
+		wcscat_s (tempDest, maxPathFolder, findPathW);
+		if (!CreateProcessW(thisexePath, tempDest, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"Oops: Something went wrong. Please restart the program...", 0);
+		}
+	}
+	else
+	{
+
 			system ("CD\\ & PUSHD %SystemRoot%\\Temp & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & SET \"Userinitreg=\" & (IF EXIST Userinitreg.txt CALL SET \"Userinitreg=TRUE\") & (IF DEFINED Userinitreg (FOR /F \"usebackq tokens=1,2* delims=,\" %G IN (\"Userinitreg.txt\") DO SET \"REGVALUE=%G\" & (IF DEFINED OSB (CALL SET \"REGVALUE=%REGVALUE%,\" & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f /reg:64) ELSE (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f))) ELSE (CALL ECHO Backup reg record does not exist & PAUSE >NUL)) & (IF EXIST Userinitregerror.txt (DEL \"Userinitregerror.txt\")) & DEL \"Userinitreg.txt\" & POPD");
 			
-			thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
-			tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
-			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  maxPathFolder)) ErrorExit(L"ExpandEnvironmentStringsW failed for some reason.", 0);
+			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
 			wcscpy_s(thisexePath, maxPathFolder, tempDest); //Small hole in logic here
 			wcscat_s(tempDest, maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
 
@@ -1741,14 +1770,10 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 				//reset to vanilla
 				wcscat_s(thisexePath, maxPathFolder, L"\\system32\\userinit.exe");
 				//Create process userinit.exe
-				STARTUPINFOW lpStartupInfo;
-				PROCESS_INFORMATION lpProcessInfo;
 
-				ZeroMemory(&lpStartupInfo, sizeof(lpStartupInfo));
-				ZeroMemory (&lpStartupInfo, sizeof(lpStartupInfo));
 
 				SetLastError(ERROR_INVALID_PARAMETER); //https://msdn.microsoft.com/en-us/library/ms682425(VS.85).aspx
-				if (!CreateProcessW(thisexePath, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit(L"userinit could not be started through this program. Please reboot after closing this program.", 0);
+				if (!CreateProcessW(thisexePath, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"userinit could not be started through this program. Please reboot after closing this program.", 0);
 				//The reg value is restored to userinit before theis point
 				}
 			if(!MoveFileExW(tempDest,NULL,MOVEFILE_DELAY_UNTIL_REBOOT))
@@ -1764,7 +1789,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 			free (thisexePath);
 			return true;
 			}
-
+	}
 }
 int ExistRegValue ()
 {
@@ -1873,7 +1898,7 @@ NTDLLptr DynamicLoader (bool progInit)
 
 }
 
-bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
+bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 {
 	
 	int  result;
@@ -1884,7 +1909,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 	//buffer = (char*) malloc (sizeof(char) * (maxPathFolder + 1) )
 	wchar_t *fsName= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, maxPathFolder)) ErrorExit(L"ExpandEnvironmentStringsW failed for some reason.",0);
+	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
 	wcscat_s(fsName, maxPathFolder, L"\\Temp\\CreateLargeFileSystem.txt");
 	stream = _wfopen(fsName, L"rb");
 	//If the file already exists and is opened for reading or appending, the Byte Order Mark (BOM), if it present in the file, determines the encoding.
@@ -1897,7 +1922,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 			stream = _wfopen(fsName, L"w+b");
 				if (stream == NULL) 
 				{
-					ErrorExit(L"Problems with opening input File.", 0);
+					ErrorExit (L"Problems with opening input File.", 0);
 					free (fsName);
 					return false;
 				}
@@ -1917,11 +1942,20 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	}
 	else //file exists
 	{
+	
+	if (writeAppend)
+	{
 	stream = _wfopen(fsName, L"a+b");
+	}
+	else //load FS when deleting
+	{
+	stream = _wfopen(fsName, L"w+b");
+	}
+	
 	//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
 	if (!stream) //returns NULL Pointer
 	{
-	ErrorExit(L"Problems with input File: Cannot append.", 0);
+	ErrorExit (L"Problems with input File: Cannot append.", 0);
 	free (fsName);
 	return false;
 	}
@@ -1938,7 +1972,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 		//if (fwrite("\xFEFF", 2, 2, stream) < 0)
 		
 		{
-			ErrorExit(L"fwprintf: Problems with writing to input File.", 0);
+			ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
 			free (fsName);
 			fclose (stream);
 			return false;
@@ -1948,11 +1982,11 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 		//copy to whole string first: no sorting for write
 
 
-		for (i = 0; (i <= branchTotal) && (folderTreeArray[i][0][0] != L'\0'); i++)
+		for (i = 0; (i <= branchTotal); i++)
 		{
 			
 			jLim = trackFTA[i][0] + trackFTA[i][1] - 1;
-			for (j = 0; j <= jLim; j++)
+			for (j = 0; (j <= jLim) && (folderTreeArray[i][0][0] != L'\0'); j++)
 			{
 				k = 0;
 
@@ -1993,7 +2027,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	//rewind(stream); //does the same?
 	if (result)
 	{
-	ErrorExit(L"fseek: Could not rewind!", 0);
+	ErrorExit (L"fseek: Could not rewind!", 0);
 	free (fsName);
 	fclose (stream);
 	return false;
@@ -2022,7 +2056,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 			{
 			if (chOld == separatorFTA) chOld = 1;
 			//populate folderTreeArray- using getline method (or "template function") might be more efficent
-			for (k = 0; ((k  < (maxPathFolder - 1)) && (chOld != separatorFTA) && (ch != WEOF) ); k++) 
+			for (k = 0; ((k  < (maxPathFolder - 1)) && (chOld != separatorFTA) && (ch != WEOF) ); k++) //screwy lofic
 
 			{
 
@@ -2049,7 +2083,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 			}
 			}
 
-
+			if (ch == eolFTA) break;
 			trackFTA [i][0] = j; //track the nesting level for validation
 			if (j != 0) wcscat_s(pathsToSave[i], maxPathFolder, &separatorFTA); //tacking them back on: what a waste doing it this way
 			wcscat_s(pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
@@ -2067,7 +2101,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 
 	if (fclose (stream))
 	{
-	ErrorExit(L"Stream was not closed properly: exit & restart?", 0);
+	ErrorExit (L"Stream was not closed properly: exit & restart?", 0);
 	free (fsName);
 	return false;
 	}
@@ -2083,10 +2117,10 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite)
 	}
 
 
-bool FSDelete (wchar_t *rootDir)
+bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 {	
-	int noPath = 0, folderToDel = 0;
-	
+	int folderToDel = 0;
+	bool moreToDelete = false;
 	//deletes the last or bottom level of directories with root rootdir.
 		for (i = 0; (i  <= branchTotal); i++)
 	{
@@ -2097,11 +2131,12 @@ bool FSDelete (wchar_t *rootDir)
 		for (i = 0; (i  <= branchTotal); i++)
 	{
 		int tmp = trackFTA [i][1]; //insertion sort
-		for (j = i; (j  >= 1 && tmp < trackFTA [j-1][1]); j--)
+		for (j = i; (j  >= 1 && tmp > trackFTA [j-1][1]); j--)
 		{
 			trackFTA [j][1] = trackFTA [j-1][1];
-			trackFTA [j][1] = tmp;
+			
 		}
+		trackFTA [j][1] = tmp;
 	}
 
 	for (i = 0; (i  <= branchTotal); i++)
@@ -2118,6 +2153,10 @@ bool FSDelete (wchar_t *rootDir)
 
 				wcscpy_s(findPathW, maxPathFolder, driveIDBaseWNT);
 				wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
+				for (k = 0; ((k <= treeLevelLimit) && (folderTreeArray[j][k][0] != L'\0')); k++)
+				{
+				folderToDel = k;
+				}
 
 				if (RemoveDirectoryW (findPathW))
 						{
@@ -2125,60 +2164,67 @@ bool FSDelete (wchar_t *rootDir)
 							pathsToSave[j][0] = L'\0';
 							//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
 							
-							for (k = 0; ((k <= treeLevelLimit) && (folderTreeArray[j][k][0] != L'\0')); k++)
-							{
-								folderToDel = k;
-							}
+
 							folderTreeArray[j][folderToDel][0] = L'\0';
 
 							trackFTA [j][1] -=1;
-							trackFTA [i][0] -=1;
-
+							trackFTA [j][0] -=1;
 							if (trackFTA [j][1] == 0)
 							{
 							pathsToSave[j][0] = L'\0';
 							folderTreeArray[i][j][0] = L'\0';
-							//return false;
+							moreToDelete = false;
 							}
 							else
 							{
 							//rebuild pathsToSave
-							for (k = 0; (k <= trackFTA [j][1]); k++)
+							for (k = 0; (k <= folderToDel); k++)
 							{
 								if (k != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
 								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[i][k]);
 
 							}
+							moreToDelete = true;
 							}
 							
 			
 						}
 				else
 						{
-							ErrorExit(L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+							if (((int)GetLastError() == 32) ) //&& (folderToDel == 0) 
+							{
+								lpCmdLine= (char *)calloc(maxPathFolder, sizeof(char));
+								wcstombs (lpCmdLine, findPathW, maxPathFolder);
+								((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+								Kleenup (hwnd, weareatBoot, lpCmdLine);
 
+								//if (findPathW) free (findPathW);
+								//if (currPathW) free (currPathW);
+
+								//findPathW
+								//Problem when deleting the root dir.
+								//relaunch with command line of string to delete
+								
+
+								//LPTSTR WINAPI GetCommandLine(void);
+								//delete that command line
+
+							}
+							else
+							{
+							ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 							return false; //Rollback?
+							}
+							
+
 						}
 			}
 			}
-			return true;
 	}
-	else
-	{
-		noPath +=1;
-	}
-
 
 	}
 
-	if (noPath == i)
-	{
-	return false; //no match found
-	}
-	else
-	{
-	return true;
-	}
+return moreToDelete;
 }
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
@@ -2216,7 +2262,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 					{
 						if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
 						{
-						ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 						return 1;
 						}
 						wchar_t * currPathWtmp;
@@ -2228,7 +2274,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 						}
 						else
 						{
-							ErrorExit(L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+							ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 
 							return 1; //Need more than this
 						}
@@ -2239,7 +2285,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 					{
 						if (!SetCurrentDirectoryW (L".."))
 						{
-							ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 							return 1;
 						}
 						//if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
@@ -2257,7 +2303,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 						}
 						else
 							{
-								ErrorExit(L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+								ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 								return 1; //Need more than this
 							}
 
@@ -2282,7 +2328,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 				//
 				if (!SetCurrentDirectoryW (findPathW))
 				{
-					ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+					ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 					return 1;
 				}
 
@@ -2302,7 +2348,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 				trackFTA[treeLevel][0] = 0;
 				trackFTA[treeLevel][1] = 0;
 				treeLevel -=1;
-				ErrorExit(L"Too many folders in the tree: If folder was created by this program, a warning should have been issued on folder creation.", 0);
+				ErrorExit (L"Too many folders in the tree: If folder was created by this program, a warning should have been issued on folder creation.", 0);
 				return 1; 
 				}
 			}
@@ -2322,7 +2368,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 		//Get fulqualpath
 		if (!GetCurrentDirectoryW (maxPathFolder, findPathW))
 			{
-				ErrorExit(L"GetCurrentDirectoryW: Zero", 0);
+				ErrorExit (L"GetCurrentDirectoryW: Zero", 0);
 				return 1;
 			}
 		wcscat_s(findPathW, maxPathFolder, L"\\*");
@@ -2331,7 +2377,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 			{
 				// No Folders so this must be top level
 				FindClose(ds);
-				ErrorExit(L"FindFirstFileW: Should never get here. No can do!", 0);
+				ErrorExit (L"FindFirstFileW: Should never get here. No can do!", 0);
 				return 1; //Need more than this
 							
 			}
@@ -2364,7 +2410,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 				findhandle = FindNextFileW(ds, &dw);
 			}
 
-			if (!FindClose(ds)) ErrorExit(L"FindClose: Non zero", 0);
+			if (!FindClose(ds)) ErrorExit (L"FindClose: Non zero", 0);
 			//wcscpy_s(currPathW, maxPathFolder, folderTreeArray[treeLevel][j-1]);
 			trackFTA [treeLevel][0] = 0; //check reset counter if necessary here
 
@@ -2376,7 +2422,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 					{
 						if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
 						{
-						ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 						return 1;
 						}
 					wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
@@ -2388,7 +2434,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 						}
 						else
 						{
-							ErrorExit(L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+							ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 
 							return 1; //Need more than this
 						}
@@ -2400,7 +2446,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 
 						if (!SetCurrentDirectoryW (L".."))
 						{
-						ErrorExit(L"SetCurrentDirectoryW: Non zero", 0);
+						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 						return 1;
 						}
 					}
@@ -2421,7 +2467,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 					}
 					else
 					{
-						ErrorExit(L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+						ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 						return 1; //Need more than this
 					}
 
