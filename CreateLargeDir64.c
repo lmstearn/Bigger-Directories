@@ -24,7 +24,8 @@
 
 //findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 
-LPSTR lpCmdLine;
+LPWSTR lpCmdLine;
+bool lpCmdLineActive = false;
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATAA da;
@@ -120,7 +121,7 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 //------------------------------------------------------------------------------------------------------------------
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
-bool Kleenup (HWND hwnd, bool weareatBoot, LPSTR lpCmdLine);
+bool Kleenup (HWND hwnd, bool weareatBoot, LPWSTR lpCmdLine);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
@@ -1073,7 +1074,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					}
 					}
 
-					//sort all andwrite to file
+					//sort all and write to file
 
 					if (!ProcessfileSystem(hwnd, true, true)) goto EndCreate;
 
@@ -1240,7 +1241,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							{
 							} while (FSDelete (hwnd, currPathWtmp, errorcode));
 							//Write remaining FS								
-							(lpCmdLine)? free (lpCmdLine): ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+							(lpCmdLineActive)? free (lpCmdLine): ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
 							
 							goto RemoveKleenup;
 
@@ -1281,6 +1282,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						RemoveKleenup:
 						if (findPathW) free (findPathW);
 						if (currPathW) free (currPathW);
+						_CrtDumpMemoryLeaks();
+						if (lpCmdLineActive) exit (0);
 						//Clear all the added items
 
 						if (errorcode != 0) //succeeded
@@ -1623,10 +1626,17 @@ BOOL DirectoryExists(LPCTSTR szPath) //StackOverflow 6218325
 }
 
 
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
-	LPSTR lpCmdLine, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
 {
-	if (lpCmdLine) RemoveDirectoryA (lpCmdLine); //"fix" for rootdir bug
+	if (lpCmdLine[0] !=  L'\0') 
+	{
+
+		swprintf_s(hrtext, _countof(hrtext), L"%s", lpCmdLine);
+		MessageBoxW(NULL, hrtext, L"Display", MB_ICONINFORMATION);
+		if (!RemoveDirectoryW (lpCmdLine)) ErrorExit (L"RemoveDirectoryW: Cannot remove Folder:", 0);
+		lpCmdLineActive = false;
+			//"fix" for rootdir bug
+	}
 	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), NULL, DlgProc);
 }
 
@@ -1728,7 +1738,7 @@ else
 	return 0;
 }
 }
-bool Kleenup (HWND hwnd, bool weareatBoot, LPSTR lpCmdLine)
+bool Kleenup (HWND hwnd, bool weareatBoot, LPWSTR lpCmdLine)
 {
 	STARTUPINFOW lpStartupInfo;
 	PROCESS_INFORMATION lpProcessInfo;
@@ -1738,22 +1748,22 @@ bool Kleenup (HWND hwnd, bool weareatBoot, LPSTR lpCmdLine)
 	thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
 	tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
 
-	if (lpCmdLine) //on program restart on remove root directory bug
+	if (lpCmdLineActive) //on program restart on remove root directory bug
 	{
 		if (!GetModuleFileNameW(NULL, thisexePath, maxPathFolder) || (wcslen(thisexePath) > maxPathFolder))
 		{
 			DisplayError (hwnd, L"Oops, process path too long or non-existent! Quitting...", 0, 0);
+			free (lpCmdLine);
 			free (tempDest);
 			free (thisexePath);
 			exit (1);
 		}
 		else
 		{
-		wcscpy_s (thisexePath, maxPathFolder, tempDest);
-		wcscpy_s (tempDest, maxPathFolder, thisexePath);
-		wcscat_s (tempDest, maxPathFolder, L" ");
 		wcscat_s (tempDest, maxPathFolder, findPathW);
-		if (!CreateProcessW(thisexePath, tempDest, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"Oops: Something went wrong. Please restart the program...", 0);
+		if (!CreateProcessW (thisexePath, tempDest, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"Oops: Something went wrong. Please restart the program...", 0);
+		free (tempDest);
+		free (thisexePath);
 		}
 	}
 	else
@@ -1787,9 +1797,9 @@ bool Kleenup (HWND hwnd, bool weareatBoot, LPSTR lpCmdLine)
 			{
 			free (tempDest);
 			free (thisexePath);
-			return true;
 			}
 	}
+	return true;
 }
 int ExistRegValue ()
 {
@@ -1919,7 +1929,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 		{
 			if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort...", 0, 1))
 			{
-			stream = _wfopen(fsName, L"w+b");
+				writeAppend = false;
+				stream = _wfopen(fsName, L"w+b");
 				if (stream == NULL) 
 				{
 					ErrorExit (L"Problems with opening input File.", 0);
@@ -1968,6 +1979,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 
 		_setmode(_fileno(stdout), _O_U16TEXT);
 		//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
+	if (!writeAppend)
+	{
 		if(fputwc(BOM, stream) == EOF)
 		//if (fwrite("\xFEFF", 2, 2, stream) < 0)
 		
@@ -1977,7 +1990,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 			fclose (stream);
 			return false;
 		}
-		
+	}	
 		
 		//copy to whole string first: no sorting for write
 
@@ -1985,7 +1998,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 		for (i = 0; (i <= branchTotal); i++)
 		{
 			
-			jLim = trackFTA[i][0] + trackFTA[i][1] - 1;
+			(writeAppend)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
+			
 			for (j = 0; (j <= jLim) && (folderTreeArray[i][0][0] != L'\0'); j++)
 			{
 				k = 0;
@@ -2083,8 +2097,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 			}
 			}
 
-			if (ch == eolFTA) break;
 			trackFTA [i][0] = j; //track the nesting level for validation
+			if (ch == eolFTA) break;
 			if (j != 0) wcscat_s(pathsToSave[i], maxPathFolder, &separatorFTA); //tacking them back on: what a waste doing it this way
 			wcscat_s(pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
 
@@ -2178,7 +2192,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 							else
 							{
 							//rebuild pathsToSave
-							for (k = 0; (k <= folderToDel); k++)
+							for (k = 0; (k <= folderToDel); k++) //extra loop adds the terminator
 							{
 								if (k != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
 								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[i][k]);
@@ -2193,21 +2207,12 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 						{
 							if (((int)GetLastError() == 32) ) //&& (folderToDel == 0) 
 							{
-								lpCmdLine= (char *)calloc(maxPathFolder, sizeof(char));
-								wcstombs (lpCmdLine, findPathW, maxPathFolder);
+								lpCmdLine = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+								//wcstombs (lpCmdLine, findPathW, maxPathFolder);
+								lpCmdLineActive = true;
 								((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
 								Kleenup (hwnd, weareatBoot, lpCmdLine);
 
-								//if (findPathW) free (findPathW);
-								//if (currPathW) free (currPathW);
-
-								//findPathW
-								//Problem when deleting the root dir.
-								//relaunch with command line of string to delete
-								
-
-								//LPTSTR WINAPI GetCommandLine(void);
-								//delete that command line
 
 							}
 							else
