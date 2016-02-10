@@ -24,8 +24,8 @@
 
 //findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 
-LPWSTR lpCmdLine;
-bool lpCmdLineActive = false;
+PWSTR pCmdLine;
+bool pCmdLineActive = false;
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATAA da;
@@ -121,7 +121,7 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 //------------------------------------------------------------------------------------------------------------------
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
-bool Kleenup (HWND hwnd, bool weareatBoot, LPWSTR lpCmdLine);
+bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
@@ -244,7 +244,7 @@ void PopulateList(HWND hwnd, int errorcode)
     {
         	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting.", errorcode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
-			exit (1);
+			exit (1); //EndDialog will process the rest of the code in the fn.
     }
     am64Bit = true;
 	exe64Bit = true;
@@ -255,6 +255,7 @@ void PopulateList(HWND hwnd, int errorcode)
 		{
 			DisplayError (hwnd, L"ENV32BIT: Error: pointer should be 4 bytes. Exiting.", errorcode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
+			ReleaseMutex (hMutex);
 			exit (1);
 		}
     
@@ -277,7 +278,8 @@ void PopulateList(HWND hwnd, int errorcode)
 
 		{
 			DisplayError (hwnd, L"Our own process isn't active!? Must terminate!", 1, 0);
-			exit (1);
+			ReleaseMutex (hMutex);
+			exit (1); //EndDialog will process the rest of the code in the fn.
 		}
 }	
 
@@ -350,14 +352,7 @@ else
 
 	currPath = (char *)calloc(maxPathFolder, sizeof(char));
 	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	if (currPathW == NULL)
-	{
-		/* We were not so display a message */
-		errorcode = -1;
-		DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
-		return;
-	}
-	if (currPath == NULL)
+	if ((currPath == NULL) || (currPathW == NULL))
 	{
 		/* We were not so display a message */
 		errorcode = -1;
@@ -399,9 +394,7 @@ gotoloop: //Wide Char loop
 	{
 		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
 		folderdirCW = 0;
-		//mbstowcs (currPathWW, currPathW,  sizeof(WIN32_FIND_DATA));
-		//strcpy_s (driveIDBaseW, MAX_PATH-3, "\\\\?\\C:\\");
-		//wcscpy_s(driveIDBaseW, maxPathFolder, L"\\\\\?\\C:\\"); //http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
+		//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
 		wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
 
 		wcscat_s(currPathW, maxPathFolder, L"*");
@@ -467,21 +460,6 @@ gotoloop: //Wide Char loop
 				if ((dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM
 					|| dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
 
-					//define FILE_ATTRIBUTE_READONLY              0x00000001
-					//#define FILE_ATTRIBUTE_HIDDEN               0x00000002
-					//#define FILE_ATTRIBUTE_SYSTEM               0x00000004
-					//#define FILE_ATTRIBUTE_DIRECTORY            0x00000010
-					//#define FILE_ATTRIBUTE_ARCHIVE              0x00000020
-					//#define FILE_ATTRIBUTE_DEVICE               0x00000040
-					//#define FILE_ATTRIBUTE_NORMAL               0x00000080
-					//#define FILE_ATTRIBUTE_TEMPORARY            0x00000100
-					//#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200
-					//#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400
-					//#define FILE_ATTRIBUTE_COMPRESSED           0x00000800
-					//#define FILE_ATTRIBUTE_OFFLINE              0x00001000
-					//#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000
-					//#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000
-					//#define FILE_ATTRIBUTE_VIRTUAL              0x00010000
 
 				wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
 				wcscat_s(currPathW, maxPathFolder, dw.cFileName);
@@ -501,7 +479,6 @@ gotoloop: //Wide Char loop
 																																		 //HIWORD is the Upper 16 bits of UINT and LOWORD is the Lower 16 bits of UINT
 																																		 //DWORD is just a typedef for 32-bit integer, whereas WORD is a typedef for a 16-bit integer
 
-
 	}
 
 
@@ -516,12 +493,56 @@ gotoloop: //Wide Char loop
 		goto gotoloop;
 	}
 
+
+
+	//pCmdLine = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	//wcscpy_s (pCmdLine, maxPathFolder, driveIDBaseWNT);
+	//wcscat_s (pCmdLine, maxPathFolder, L"werrwe  erqwere\\werrwe  erqwere\\");
+	//wcscat_s (pCmdLine, maxPathFolder, L"\"");
+	
+	//get leftmost string of findPathW
+	if (pCmdLineActive) 
+	{
+	pCmdLineActive = false;	
+	if (ProcessfileSystem(hwnd, false, true))
+	//Reads entire FS
+		{
+		do
+		{
+		} while (FSDelete (hwnd, findPathW, errorcode));
+		//Write remaining FS								
+		if (!pCmdLineActive) ProcessfileSystem(hwnd, true, false);
+
+		}
+		
+		
+		
+		//(wcsstr (pCmdLine, driveIDBaseWNT))? swprintf_s(hrtext, sizeof(hrtext), L"%ls", pCmdLine) :swprintf_s(hrtext, sizeof(hrtext), L"%ls", L"%ls", pCmdLine, driveIDBaseWNT);
+		//MessageBoxW(NULL, hrtext, L"Display", MB_ICONINFORMATION);
+		//if (!RemoveDirectoryW (pCmdLine)) ErrorExit (L"RemoveDirectoryW: Cannot remove Folder:", 0);
+		//pCmdLineActive = false;
+		//free (pCmdLine);
+		//"fix" for rootdir bug
+	}
+
+
+
+
+
+
 CLEANUP:
 	//http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
-	if (currPath) free(currPath); //We may need these later though
-	if (currPathW) free(currPathW); //Free from the heap We may need these later though
+	if (currPath) free (currPath); //We may need these later though
+	if (currPathW) free (currPathW); //Free from the heap We may need these later though
+	if (findPathW) free (findPathW);
 	//There's an internal index that is reset to 0 each time you call FindFirstFile() and it's incremented each time you call FindNextFile() so unless you do it in a loop, you'll only get the first filename ( a dot ) each time. 	
 	FindClose(ds);
+		if (pCmdLineActive)
+		{
+		free (pCmdLine);
+		ReleaseMutex (hMutex);
+		EndDialog(hwnd, 1);
+		}
 
 
 }
@@ -549,43 +570,66 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		case WM_INITDIALOG:
 			
             {	
-				
-				hMutex = CreateMutex( NULL, TRUE, L"CreateLargeDir64.exe" );
-				if ( GetLastError() == ERROR_ALREADY_EXISTS )
+
+		
+			hMutex = CreateMutex( NULL, TRUE, L"CreateLargeDir64.exe" );
+	   
+			if (hMutex)
+			{
+			DWORD wait_success = WaitForSingleObject (hMutex, 0 );
+			if (wait_success == WAIT_OBJECT_0 || wait_success == WAIT_ABANDONED)
+				{
+				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
+						PopulateList (hwnd, errorcode);
+						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
+						// Subclass the Edit control with ValidateProc
+						g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWL_WNDPROC, (LONG)ValidateProc);
+						switch (errorcode)
+						{
+						case 1:
+						{
+							/* And exit */
+							EndDialog(hwnd, 1);
+							//exit(EXIT_FAILURE); //Not recommended: http://stackoverflow.com/questions/7562335/what-is-the-correct-way-to-programmatically-quit-an-mfc-application
+						}
+						break;
+						case 2:
+						{
+							EndDialog(hwnd, 1);
+						}
+						break;
+						case 3:
+						{
+							EndDialog(hwnd, 1);
+						}
+						break;
+						default:
+						{}
+						break;
+						}
+
+					if (!ReleaseMutex (hMutex)) ErrorExit (L"ReleaseMutex: Handle error. ", 1);;
+	
+				} 
+			else
+			{
+			if  (WAIT_TIMEOUT && !pCmdLineActive)
 				{
 					DisplayError (hwnd, L"One instance is already running!", errorcode, 0);
+					CloseHandle (hMutex);
 					ExitProcess(1);
 				}
-
- 
+			}
+			}
+			else
+			{
+				DisplayError (hwnd, L"Could not create hMutex!", errorcode, 0);
+				CloseHandle (hMutex);
+				ExitProcess(1);
+			}
 				
-				PopulateList (hwnd, errorcode);
-				 HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
-               /// Subclass the Edit control with ValidateProc
-               g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWL_WNDPROC, (LONG)ValidateProc);
-				switch (errorcode)
-				{
-				case 1:
-				{
-					/* And exit */
-					EndDialog(hwnd, 1);
-					//exit(EXIT_FAILURE); //Not recommended: http://stackoverflow.com/questions/7562335/what-is-the-correct-way-to-programmatically-quit-an-mfc-application
-				}
-				break;
-				case 2:
-				{
-					EndDialog(hwnd, 1);
-				}
-				break;
-				case 3:
-				{
-					EndDialog(hwnd, 1);
-				}
-				break;
-				default:
-				{}
-				break;
-				}
+				
+				
             }
 		break;
 
@@ -1234,25 +1278,25 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						if (foundNTDLL)
 						{
-							if (!ProcessfileSystem(hwnd, false, true)) goto RemoveKleenup;
+							if (ProcessfileSystem(hwnd, false, true))
 							//Reads entire FS
-
-							do
 							{
-							} while (FSDelete (hwnd, currPathWtmp, errorcode));
+								do
+								{
+								} while (FSDelete (hwnd, currPathWtmp, errorcode));
 							//Write remaining FS								
-							(lpCmdLineActive)? free (lpCmdLine): ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+							(pCmdLineActive)? free (pCmdLine): ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
 							
 							goto RemoveKleenup;
-
+							}
 						}
 						else
 						{
 							if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", errorcode, 1)) goto RemoveKleenup;
-							
+						}
 
 
-							if (errorcode == 0)
+							if (errorcode == 0) //errorcode thing is almost broken: e.g will never get here unless on ME 2K !!??
 							{
 								if (!DisplayError (hwnd, L"Cannot tell whether directory was created by this program. Continue?", errorcode, 1)) goto RemoveKleenup;
 
@@ -1277,23 +1321,31 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						goto RemoveKleenup;
 						}
 						if (RecurseRemovePath(trackFTA, folderTreeArray)) DisplayError (hwnd, L"Remove failed.", errorcode, 0);
-						}
+
+
+
 					
 						RemoveKleenup:
 						if (findPathW) free (findPathW);
 						if (currPathW) free (currPathW);
 						_CrtDumpMemoryLeaks();
-						if (lpCmdLineActive) exit (0);
+						if (pCmdLineActive)
+						{
+							ReleaseMutex (hMutex);
+							EndDialog(hwnd, 1);
+						}
 						//Clear all the added items
 
-						if (errorcode != 0) //succeeded
+						else 
 						{
-						errorcode = 0; //flag okay now
-						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-						SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-						PopulateList(hwnd, errorcode);
+							if (errorcode != 0) //succeeded
+							{
+							errorcode = 0; //flag okay now
+							listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+							SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+							PopulateList(hwnd, errorcode);
+							}
 						}
-
 
 
 
@@ -1435,7 +1487,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			}
 			
-			if (Kleenup (hwnd, weareatBoot, NULL))
+			if (Kleenup (hwnd, weareatBoot))
 			{
 				EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
 				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), true);
@@ -1604,7 +1656,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		case WM_CLOSE:
 			{
 			//Cleanup
-			if (weareatBoot) Kleenup (hwnd, weareatBoot, NULL);
+			if (weareatBoot) Kleenup (hwnd, weareatBoot);
 			 
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			EndDialog(hwnd, 0);
@@ -1626,17 +1678,49 @@ BOOL DirectoryExists(LPCTSTR szPath) //StackOverflow 6218325
 }
 
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	if (lpCmdLine[0] !=  L'\0') 
-	{
 
-		swprintf_s(hrtext, _countof(hrtext), L"%s", lpCmdLine);
-		MessageBoxW(NULL, hrtext, L"Display", MB_ICONINFORMATION);
-		if (!RemoveDirectoryW (lpCmdLine)) ErrorExit (L"RemoveDirectoryW: Cannot remove Folder:", 0);
-		lpCmdLineActive = false;
-			//"fix" for rootdir bug
+wchar_t **wargv;//wargv is an array of LPWSTR (wide-char string)
+char **argv;
+int argc;
+// we have to convert each arg to a char*
+wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
+// here and then we allocate one more cell to make it a NULL-end array
+argv = (char **)calloc(argc + 1, sizeof(char *));
+for(int i = 0; i < argc; i++)
+{
+size_t origSize = wcslen(wargv[i]) + 1;
+size_t converted = 0;
+argv[i] = (char *)calloc(origSize + 1, sizeof(char));
+// we use the truncate strategy, it won't handle non latin chars correctly
+// but hey we don't even use args, right?
+wcstombs_s(&converted, argv[i], origSize, wargv[i], _TRUNCATE);
+}
+	
+	
+	
+	
+	if (pCmdLine[0] != L'\0') 
+	{
+	//also https://msdn.microsoft.com/en-us/library/windows/desktop/bb776391%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
+	wchar_t buffer[500];
+	for (int i=0; i <__argc; i++)
+	{
+    swprintf_s(buffer, L"arg %ld = %s", i, __argv[i]);
+    MessageBoxW(NULL, buffer, L"cmdline", MB_OK);
 	}
+		
+	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	wcscpy_s (findPathW, maxPathFolder, pCmdLine);
+	pCmdLineActive = true;
+	swprintf_s(hrtext, sizeof(hrtext) / sizeof(wchar_t), L"%ls", pCmdLine);
+	MessageBoxW(NULL, hrtext, L"Display", MB_ICONINFORMATION);
+	}
+	else
+	{MessageBoxW(NULL, L"TESTING", L"Display", MB_ICONINFORMATION);}
+
+	
 	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), NULL, DlgProc);
 }
 
@@ -1738,7 +1822,7 @@ else
 	return 0;
 }
 }
-bool Kleenup (HWND hwnd, bool weareatBoot, LPWSTR lpCmdLine)
+bool Kleenup (HWND hwnd, bool weareatBoot)
 {
 	STARTUPINFOW lpStartupInfo;
 	PROCESS_INFORMATION lpProcessInfo;
@@ -1748,22 +1832,26 @@ bool Kleenup (HWND hwnd, bool weareatBoot, LPWSTR lpCmdLine)
 	thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
 	tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
 
-	if (lpCmdLineActive) //on program restart on remove root directory bug
+	if (pCmdLineActive) //on program restart on remove root directory bug
 	{
 		if (!GetModuleFileNameW(NULL, thisexePath, maxPathFolder) || (wcslen(thisexePath) > maxPathFolder))
 		{
 			DisplayError (hwnd, L"Oops, process path too long or non-existent! Quitting...", 0, 0);
-			free (lpCmdLine);
 			free (tempDest);
 			free (thisexePath);
-			exit (1);
+			return false;
 		}
 		else
 		{
+		wcscpy_s (tempDest, maxPathFolder, L"\"");
+		wcscat_s (tempDest, maxPathFolder, thisexePath);
+		wcscat_s (tempDest, maxPathFolder, L"\" ");
 		wcscat_s (tempDest, maxPathFolder, findPathW);
 		if (!CreateProcessW (thisexePath, tempDest, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"Oops: Something went wrong. Please restart the program...", 0);
 		free (tempDest);
 		free (thisexePath);
+		CloseHandle(lpProcessInfo.hProcess);
+		CloseHandle(lpProcessInfo.hThread);
 		}
 	}
 	else
@@ -1910,7 +1998,7 @@ NTDLLptr DynamicLoader (bool progInit)
 
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 {
-	
+	bool newFile = false;
 	int  result;
 	int  i,j,k, jLim;
 	wint_t ch = 0, chOld = 0;
@@ -1929,7 +2017,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 		{
 			if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort...", 0, 1))
 			{
-				writeAppend = false;
+				newFile = true;
 				stream = _wfopen(fsName, L"w+b");
 				if (stream == NULL) 
 				{
@@ -1960,7 +2048,9 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 	}
 	else //load FS when deleting
 	{
+	newFile = true; //BOM must be rewritten as it is wiped
 	stream = _wfopen(fsName, L"w+b");
+
 	}
 	
 	//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
@@ -1979,7 +2069,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 
 		_setmode(_fileno(stdout), _O_U16TEXT);
 		//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
-	if (!writeAppend)
+	if (newFile)
 	{
 		if(fputwc(BOM, stream) == EOF)
 		//if (fwrite("\xFEFF", 2, 2, stream) < 0)
@@ -2207,11 +2297,14 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 						{
 							if (((int)GetLastError() == 32) ) //&& (folderToDel == 0) 
 							{
-								lpCmdLine = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-								//wcstombs (lpCmdLine, findPathW, maxPathFolder);
-								lpCmdLineActive = true;
+								pCmdLine = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+								//wcstombs (pCmdLine, findPathW, maxPathFolder);
+								pCmdLineActive = true;
+								wcscpy_s(findPathW, maxPathFolder, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
+								wcscat_s(findPathW, maxPathFolder, rootDir);
+								//wcscat_s(findPathW, maxPathFolder, L"\"");
 								((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
-								Kleenup (hwnd, weareatBoot, lpCmdLine);
+								Kleenup (hwnd, weareatBoot);
 
 
 							}
@@ -2236,16 +2329,6 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found
 {
 	
-		//(folderTreeArray[treeLevel][j] == NULL) is ALWAYS true
-
-		//Now check remaining trackFTA minus j trees 
-		//If no more i.e. (folderTreeArray[treeLevel][j + 1] doesn't exist
-
-		
-		//if (folderTreeArray[treeLevel][j+1] == NULL)
-		//The last directory in the branch
-
-
 
 	if (trackFTA [treeLevel][1] > 0) //Have we done a search on this level yet? if yes then here
 	{
