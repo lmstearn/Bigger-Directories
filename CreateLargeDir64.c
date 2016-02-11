@@ -24,7 +24,7 @@
 
 //findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 
-PWSTR pCmdLine;
+wchar_t lpCmdLine [MAX_PATH-3];
 bool pCmdLineActive = false;
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
@@ -135,7 +135,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//*hrtext  (pointee) is value pointed to by hrtext. Can be replaced by hrtext[0]
 		//hrtext[0] = (wchar_t)LocalAlloc(LPTR, 256*sizeof(wchar_t)); This dynamic allocation NOT required- see below
 		//if (hrtext[0] == NULL) ErrorExit("LocalAlloc");
-		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough nut not req'd
+		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough but not req'd
 
 		if (errorcode ==0){
 		swprintf_s(hrtext, _countof(hrtext), L"%s.", messageText);
@@ -503,26 +503,18 @@ gotoloop: //Wide Char loop
 	//get leftmost string of findPathW
 	if (pCmdLineActive) 
 	{
-	pCmdLineActive = false;	
+	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	pCmdLineActive = false;
 	if (ProcessfileSystem(hwnd, false, true))
 	//Reads entire FS
 		{
 		do
 		{
-		} while (FSDelete (hwnd, findPathW, errorcode));
-		//Write remaining FS								
+ 		} while (FSDelete (hwnd, lpCmdLine, errorcode));
+		//Write remaining FS
 		if (!pCmdLineActive) ProcessfileSystem(hwnd, true, false);
-
 		}
-		
-		
-		
-		//(wcsstr (pCmdLine, driveIDBaseWNT))? swprintf_s(hrtext, sizeof(hrtext), L"%ls", pCmdLine) :swprintf_s(hrtext, sizeof(hrtext), L"%ls", L"%ls", pCmdLine, driveIDBaseWNT);
-		//MessageBoxW(NULL, hrtext, L"Display", MB_ICONINFORMATION);
-		//if (!RemoveDirectoryW (pCmdLine)) ErrorExit (L"RemoveDirectoryW: Cannot remove Folder:", 0);
-		//pCmdLineActive = false;
-		//free (pCmdLine);
-		//"fix" for rootdir bug
+	
 	}
 
 
@@ -539,11 +531,18 @@ CLEANUP:
 	FindClose(ds);
 		if (pCmdLineActive)
 		{
-		free (pCmdLine);
 		ReleaseMutex (hMutex);
 		EndDialog(hwnd, 1);
 		}
-
+		else
+		{
+			if (lpCmdLine[0] != L'\0') 
+			{
+				lpCmdLine[0] = L'\0';
+				SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+				PopulateList(hwnd, errorcode);
+			}
+		}
 
 }
 
@@ -570,13 +569,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		case WM_INITDIALOG:
 			
             {	
-
+				
 		
 			hMutex = CreateMutex( NULL, TRUE, L"CreateLargeDir64.exe" );
 	   
 			if (hMutex)
 			{
-			DWORD wait_success = WaitForSingleObject (hMutex, 0 );
+			DWORD wait_success = WaitForSingleObject (hMutex, 15 );
 			if (wait_success == WAIT_OBJECT_0 || wait_success == WAIT_ABANDONED)
 				{
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
@@ -608,18 +607,18 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 						}
 
-					if (!ReleaseMutex (hMutex)) ErrorExit (L"ReleaseMutex: Handle error. ", 1);;
+					if (!ReleaseMutex (hMutex)) ErrorExit (L"ReleaseMutex: Handle error. ", 1);
 	
 				} 
-			else
-			{
-			if  (WAIT_TIMEOUT && !pCmdLineActive)
+				else
 				{
-					DisplayError (hwnd, L"One instance is already running!", errorcode, 0);
-					CloseHandle (hMutex);
-					ExitProcess(1);
+				if  (WAIT_TIMEOUT && !pCmdLineActive)
+					{
+						DisplayError (hwnd, L"One instance is already running!", errorcode, 0);
+						CloseHandle (hMutex);
+						ExitProcess(1);
+					}
 				}
-			}
 			}
 			else
 			{
@@ -1285,7 +1284,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								{
 								} while (FSDelete (hwnd, currPathWtmp, errorcode));
 							//Write remaining FS								
-							(pCmdLineActive)? free (pCmdLine): ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+							if (!pCmdLineActive) ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
 							
 							goto RemoveKleenup;
 							}
@@ -1669,56 +1668,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 	return TRUE;
 }
 
-BOOL DirectoryExists(LPCTSTR szPath) //StackOverflow 6218325
-{
-  DWORD dwAttrib = GetFileAttributes(szPath);
-
-  return (dwAttrib != INVALID_FILE_ATTRIBUTES && 
-         (dwAttrib & FILE_ATTRIBUTE_DIRECTORY));
-}
-
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-
-wchar_t **wargv;//wargv is an array of LPWSTR (wide-char string)
-char **argv;
-int argc;
-// we have to convert each arg to a char*
-wargv = CommandLineToArgvW(GetCommandLineW(), &argc);
-// here and then we allocate one more cell to make it a NULL-end array
-argv = (char **)calloc(argc + 1, sizeof(char *));
-for(int i = 0; i < argc; i++)
-{
-size_t origSize = wcslen(wargv[i]) + 1;
-size_t converted = 0;
-argv[i] = (char *)calloc(origSize + 1, sizeof(char));
-// we use the truncate strategy, it won't handle non latin chars correctly
-// but hey we don't even use args, right?
-wcstombs_s(&converted, argv[i], origSize, wargv[i], _TRUNCATE);
-}
-	
-	
 	
 	
 	if (pCmdLine[0] != L'\0') 
 	{
 	//also https://msdn.microsoft.com/en-us/library/windows/desktop/bb776391%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
-	wchar_t buffer[500];
-	for (int i=0; i <__argc; i++)
-	{
-    swprintf_s(buffer, L"arg %ld = %s", i, __argv[i]);
-    MessageBoxW(NULL, buffer, L"cmdline", MB_OK);
-	}
-		
-	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	wcscpy_s (findPathW, maxPathFolder, pCmdLine);
+	memset(lpCmdLine, L'\0', sizeof(lpCmdLine));
+	wcscpy_s (lpCmdLine, maxPathFolder, (wchar_t *) pCmdLine);
 	pCmdLineActive = true;
-	swprintf_s(hrtext, sizeof(hrtext) / sizeof(wchar_t), L"%ls", pCmdLine);
-	MessageBoxW(NULL, hrtext, L"Display", MB_ICONINFORMATION);
 	}
-	else
-	{MessageBoxW(NULL, L"TESTING", L"Display", MB_ICONINFORMATION);}
+	//else
+	
+	
 
 	
 	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), NULL, DlgProc);
@@ -2297,7 +2261,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 						{
 							if (((int)GetLastError() == 32) ) //&& (folderToDel == 0) 
 							{
-								pCmdLine = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+								memset(lpCmdLine, L'\0', sizeof(lpCmdLine));
 								//wcstombs (pCmdLine, findPathW, maxPathFolder);
 								pCmdLineActive = true;
 								wcscpy_s(findPathW, maxPathFolder, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
