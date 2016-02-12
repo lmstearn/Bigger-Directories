@@ -511,7 +511,7 @@ gotoloop: //Wide Char loop
 		do
 		{
  		} while (FSDelete (hwnd, lpCmdLine, errorcode));
-		//Write remaining FS
+		//this can bug out if the user edits or deletes the FS in the intervening milliseconds.
 		if (!pCmdLineActive) ProcessfileSystem(hwnd, true, false);
 		}
 	
@@ -1236,8 +1236,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				case IDC_REMOVE:
 				{
-					// When the user clicks the Remove button, we first get the number
-					// of selected items
+					//When the user clicks the Remove button, we first get the number of selected items
 
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					long long count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
@@ -1272,22 +1271,31 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						currPathW[0] = L'\0';
 						wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
 						wchar_t * currPathWtmp;
-						currPathWtmp = currPathW + 6;
+						currPathWtmp = currPathW + 7;
 						findPathW[0] = L'\0';
 
 						if (foundNTDLL)
 						{
 							if (ProcessfileSystem(hwnd, false, true))
 							//Reads entire FS
+
+
+
+
 							{
 								do
 								{
 								} while (FSDelete (hwnd, currPathWtmp, errorcode));
-							//Write remaining FS								
-							if (!pCmdLineActive) ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+							//Write remaining FS
+								if (!errorcode) //errorcode is still -4 if no match!
+								{
+								if (!pCmdLineActive) ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
 							
-							goto RemoveKleenup;
+								goto RemoveKleenup;
+								}
 							}
+
+							if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", errorcode, 1)) goto RemoveKleenup;
 						}
 						else
 						{
@@ -1295,11 +1303,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 
 
-							if (errorcode == 0) //errorcode thing is almost broken: e.g will never get here unless on ME 2K !!??
-							{
-								if (!DisplayError (hwnd, L"Cannot tell whether directory was created by this program. Continue?", errorcode, 1)) goto RemoveKleenup;
 
-							}
 
 						wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 						wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
@@ -2211,9 +2215,10 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 	{
 	//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [j][1] 
 	
-	if (wcsncmp(rootDir, pathsToSave[i], wcslen (rootDir)))
+	if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
 	{
-			for (j = 0; (j  <= branchTotal); j++)
+			errorcode = 0;
+			for (j = 0; (j <= branchTotal); j++)
 			{
 			if (trackFTA [j][1] = trackFTA [i][0])
 			{
