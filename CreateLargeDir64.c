@@ -2160,7 +2160,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 
 
 	WEOFFOUND:
-	if (branchTotal = -1) branchTotal = i - 1; //when removing folders
+	if (branchTotal == -1) branchTotal = i - 1; //when removing folders
 
 	// Close stream if it is not NULL 
 
@@ -2184,7 +2184,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 
 bool FSDelete (HWND hwnd, wchar_t *rootDir)
 {	
-	int foldersToDel = 0;
+	int foldersDelEnd = 0, folderDelStart = 0;
 	bool moreToDelete = true;
 	//deletes the last or bottom level of directories with root rootdir.
 		for (i = 0; (i  <= branchTotal); i++)
@@ -2223,12 +2223,11 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 
 				wcscpy_s(findPathW, maxPathFolder, driveIDBaseWNT);
 				wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
-				for (k = 0; ((k <= treeLevelLimit) && (folderTreeArray[j][k][0] != L'\0')); k++)
-				{
-				foldersToDel = k;
-				}
 
-				for (k = foldersToDel; (k >= ((i < branchTotal)? (trackFTA [i][1] - trackFTA [i + 1][1]): 0)); k--)
+				folderDelStart = trackFTA [i][1]; 
+				foldersDelEnd = trackFTA [i + 1][1];
+
+				for (k = folderDelStart; (k >= ((i < branchTotal)? foldersDelEnd: 0)); k--)
 				{
 				//do not iterate below trackFTA [i + 1][1]
 
@@ -2241,7 +2240,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 							//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
 							
 
-							folderTreeArray[j][k][0] = L'\0';
+							folderTreeArray[j][k-1][0] = L'\0';
 
 							trackFTA [i][1] -=1;
 							trackFTA [j][0] -=1;
@@ -2255,7 +2254,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 							else
 							{
 							//rebuild pathsToSave
-							for (int l = 0; (l <= k); l++) //extra loop adds the terminator
+							for (int l = 0; (l < k - 1); l++) //extra loop adds the terminator
 							{
 								if (l != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
 								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[j][l]);
@@ -2272,7 +2271,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 						}
 				else
 						{
-							if (((int)GetLastError() == 32) ) //&& (foldersToDel == 0) 
+							if (((int)GetLastError() == 32) ) //&& (foldersDelEnd == 0) 
 							{
 								memset(lpCmdLine, L'\0', sizeof(lpCmdLine));
 								//wcstombs (pCmdLine, findPathW, maxPathFolder);
