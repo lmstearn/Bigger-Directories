@@ -46,7 +46,7 @@ wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folder
 
 
 int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI;
-int i,j,k;
+int i,j,k, errorCode;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
 long long index; //variable for listbox items
@@ -120,13 +120,13 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
-int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode);
+int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorCode);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend);
-bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode);
+bool FSDelete (HWND hwnd, wchar_t *rootDir);
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 
 
@@ -142,7 +142,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		}
 		else //LT 0 my defined error, GT error should be GET_LAST_ERROR
 		{
-		swprintf_s(hrtext, _countof(hrtext), L"%s. Error Code:  %d", messageText, errorcode);
+		swprintf_s(hrtext, _countof(hrtext), L"%s. Error Code:  %d", messageText, errorCode);
 		}
 		//change countof sizeof otherwise possible buffer overflow: here index and folderdirCS gets set to -16843010!
 		if (yesNo)
@@ -219,13 +219,13 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 }
 
 
-void PopulateList(HWND hwnd, int errorcode)
+void PopulateList(HWND hwnd)
 {
 	TCHAR* pszTxt = TEXT("My large nested directory");
 	TCHAR pszDest[arraysize];
 	BOOL findhandle;
 	int gotolooper = 0;
-	errorcode = 0;
+	errorCode = 0;
 
 
 	size_t cbDest = arraysize * sizeof(TCHAR); //the use of size_t implies C++ compile.
@@ -235,14 +235,14 @@ void PopulateList(HWND hwnd, int errorcode)
 	
 	//if (foundNTDLL) we can use the better function
 
-	if (!DynamicLoader (true)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions...", errorcode, 0);
+	if (!DynamicLoader (true)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions...", errorCode, 0);
 
 	
 	#if defined(ENV64BIT) //#if is a directive: see header file
 	{
     if (sizeof(void*) != 8)
     {
-        	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting.", errorcode, 0);
+        	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting.", errorCode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			exit (1); //EndDialog will process the rest of the code in the fn.
     }
@@ -253,7 +253,7 @@ void PopulateList(HWND hwnd, int errorcode)
 	{
 		if (sizeof(void*) != 4)
 		{
-			DisplayError (hwnd, L"ENV32BIT: Error: pointer should be 4 bytes. Exiting.", errorcode, 0);
+			DisplayError (hwnd, L"ENV32BIT: Error: pointer should be 4 bytes. Exiting.", errorCode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			ReleaseMutex (hMutex);
 			exit (1);
@@ -299,7 +299,7 @@ else
 	{
 	if (!FindProcessId (hwnd, L"userinit.exe", exeHandle) == NULL)
 	{
-	DisplayError (hwnd, L"Userinit should have ended. Try rebooting before running this (or any other) program!", errorcode, 0);
+	DisplayError (hwnd, L"Userinit should have ended. Try rebooting before running this (or any other) program!", errorCode, 0);
 	}
 	//Now to check if I am 64 bit
 
@@ -355,8 +355,8 @@ else
 	if ((currPath == NULL) || (currPathW == NULL))
 	{
 		/* We were not so display a message */
-		errorcode = -1;
-		DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+		errorCode = -1;
+		DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
 		return;
 	}
 
@@ -411,8 +411,8 @@ gotoloop: //Wide Char loop
 	if (ds == INVALID_HANDLE_VALUE && (gotolooper == 0))
 	{
 		//StringCchPrintf (pszDest, cbDest, TEXT("No directories found."));
-		errorcode = -3;
-		DisplayError (hwnd, L"No directories found", errorcode, 0);
+		errorCode = -3;
+		DisplayError (hwnd, L"No directories found", errorCode, 0);
 		goto CLEANUP;
 	}
 
@@ -495,11 +495,8 @@ gotoloop: //Wide Char loop
 
 
 
-	//pCmdLine = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	//wcscpy_s (pCmdLine, maxPathFolder, driveIDBaseWNT);
-	//wcscat_s (pCmdLine, maxPathFolder, L"werrwe  erqwere\\werrwe  erqwere\\");
-	//wcscat_s (pCmdLine, maxPathFolder, L"\"");
-	
+MessageBoxW (NULL, L"", L"if (pCmdLineActive)", MB_OK);
+
 	//get leftmost string of findPathW
 	if (pCmdLineActive) 
 	{
@@ -510,9 +507,9 @@ gotoloop: //Wide Char loop
 		{
 		do
 		{
- 		} while (FSDelete (hwnd, lpCmdLine, errorcode));
+ 		} while (FSDelete (hwnd, lpCmdLine));
 		//this can bug out if the user edits or deletes the FS in the intervening milliseconds.
-		if (!pCmdLineActive) ProcessfileSystem(hwnd, true, false);
+		if (!pCmdLineActive) ProcessfileSystem(hwnd, true, false); //pCmdLineActive remains false on success
 		}
 	
 	}
@@ -540,7 +537,7 @@ CLEANUP:
 			{
 				lpCmdLine[0] = L'\0';
 				SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-				PopulateList(hwnd, errorcode);
+				PopulateList(hwnd);
 			}
 		}
 
@@ -563,7 +560,7 @@ LRESULT CALLBACK ValidateProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
 
 INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
-	int errorcode = 0;
+	errorCode = 0;
 	switch(Msg)
 	{
 		case WM_INITDIALOG:
@@ -572,18 +569,18 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				
 		
 			hMutex = CreateMutex( NULL, TRUE, L"CreateLargeDir64.exe" );
-	   
+			MessageBoxW (NULL, L"hmutex", L"", MB_OK);
 			if (hMutex)
 			{
 			DWORD wait_success = WaitForSingleObject (hMutex, 15 );
 			if (wait_success == WAIT_OBJECT_0 || wait_success == WAIT_ABANDONED)
 				{
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
-						PopulateList (hwnd, errorcode);
+						PopulateList (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
 						// Subclass the Edit control with ValidateProc
 						g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWL_WNDPROC, (LONG)ValidateProc);
-						switch (errorcode)
+						switch (errorCode)
 						{
 						case 1:
 						{
@@ -614,7 +611,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 				if  (WAIT_TIMEOUT && !pCmdLineActive)
 					{
-						DisplayError (hwnd, L"One instance is already running!", errorcode, 0);
+						DisplayError (hwnd, L"One instance is already running!", errorCode, 0);
 						CloseHandle (hMutex);
 						ExitProcess(1);
 					}
@@ -622,7 +619,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				DisplayError (hwnd, L"Could not create hMutex!", errorcode, 0);
+				DisplayError (hwnd, L"Could not create hMutex!", errorCode, 0);
 				CloseHandle (hMutex);
 				ExitProcess(1);
 			}
@@ -665,8 +662,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (currPathW == NULL)
 					{
 						/* We were not so display a message */
-					errorcode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+					errorCode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
 					goto NoAddSuccess;
 					}
 
@@ -747,15 +744,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						else 
 						{
-							errorcode = 0;
-							DisplayError (hwnd, L"You didn't enter anything!", errorcode, 0);
+							errorCode = 0;
+							DisplayError (hwnd, L"You didn't enter anything!", errorCode, 0);
 							goto NoAddSuccess;
 						}
 					}
 					else 
 					{
-						errorcode = 0;
-						DisplayError (hwnd, L"Couldn't translate that number :(", errorcode, 0);
+						errorCode = 0;
+						DisplayError (hwnd, L"Couldn't translate that number :(", errorCode, 0);
 						goto NoAddSuccess;
 					}
 
@@ -771,7 +768,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						else
 						{
-						DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore!", errorcode, 0);
+						DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore!", errorCode, 0);
 						goto NoAddSuccess;
 						}
 
@@ -798,7 +795,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 							else
 							{
-							DisplayError (hwnd, L"Limit of number of nested directories reached. Cannot create anymore!", errorcode, 0);
+							DisplayError (hwnd, L"Limit of number of nested directories reached. Cannot create anymore!", errorCode, 0);
 							goto NoAddSuccess;
 							}
 						}
@@ -961,16 +958,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (currPathW == NULL)
 					{
 						/* We were not so display a message */
-					errorcode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+					errorCode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
 					goto EndCreate;
 					}
 				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 					if (tempDest == NULL)
 					{
 						/* We were not so display a message */
-					errorcode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+					errorCode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
 					goto EndCreate;
 					}
 					
@@ -978,8 +975,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//if (cumPath == NULL)
 				//{
 				/* We were not so display a message */
-				//	errorcode = -1;
-				//	DisplayError (hwnd, L"Could not allocate required memory", errorcode, 0);
+				//	errorCode = -1;
+				//	DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
 				//return;
 				//}
 					
@@ -993,7 +990,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				if (!SetCurrentDirectoryW(driveIDBaseW))
 					{
-					errorcode = 1;
+					errorCode = 1;
 					ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 					goto EndCreate;
 					}
@@ -1097,7 +1094,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							{
 								
 								ErrorExit (L"NtCreateFile: ", Status);
-								errorcode = 1;
+								errorCode = 1;
 								goto EndCreate;
 							}
 						break;
@@ -1109,7 +1106,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						else
 						{
-							errorcode = 1;
+							errorCode = 1;
 							ErrorExit (L"DynamicLoader failed: Cannot create. ", 1);
 							goto EndCreate;
 						}
@@ -1142,17 +1139,17 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							{
 							if (CreateDirectoryW(currPathW, NULL)) 
 								{
-									errorcode = 0;
+									errorCode = 0;
 									if (!SetCurrentDirectoryW(currPathW))
 									{
-									errorcode = 1;
+									errorCode = 1;
 									ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 									goto EndCreate;
 									}
 								}
 							else
 								{
-									errorcode = 1;
+									errorCode = 1;
 									ErrorExit (L"CreateDirectoryW: ", 0);
 									break;
 								}
@@ -1163,24 +1160,24 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								{
 									if (CreateDirectoryW(currPathW, NULL)) 
 									{
-									errorcode = 0;
+									errorCode = 0;
 										if (!SetCurrentDirectoryW(currPathW))
 										{
-										errorcode = 1;
+										errorCode = 1;
 										ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 										goto EndCreate;
 										}
 									}
 								else
 									{
-									errorcode = 1;
+									errorCode = 1;
 									ErrorExit (L"CreateDirectoryW: ", 0);
 									break;
 									}
 								}
 								if (!Wow64RevertWow64FsRedirection(&OldValue))
 								{
-								DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
+								DisplayError (hwnd, L"Problems with redirection...", errorCode, 0);
 								break;
 								}
 
@@ -1196,7 +1193,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 
 				//There is a default string size limit for paths of 248 characters
-				//errorcode = CreateDirectoryW(cumPath, NULL);
+				//errorCode = CreateDirectoryW(cumPath, NULL);
 
 				//wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
 				//\a  audible bell
@@ -1219,16 +1216,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					ntStatus = NULL;
 				}
 				//free(cumPath);
-				if (errorcode == 0) //succeeded
+				if (errorCode == 0) //succeeded
 				{
 				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-				PopulateList(hwnd, errorcode);
+				PopulateList(hwnd);
 				removeButtonEnabled = true;
 				EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
 				}
 				else
 				{
-				errorcode = 0;
+				errorCode = 0;
 				}
 				}
 				break;
@@ -1255,7 +1252,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 							currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 							//SHFileOperationW(_Inout_ LPSHFILEOPSTRUCT lpFileOp);
-							errorcode = 0;
+							errorCode = 0;
 							for (i = 0; i < folderdirCS; i++)
 							{
 
@@ -1263,8 +1260,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								//cumPath = dacfoldersW[i] + 4; // ////?// prefix away: 4 cuts out the //?/
 								if (wcscmp(dacfoldersW[index-folderdirCW] + 4, dacfoldersWtmp[i]) == 0)
 								{
-								if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Continue?", errorcode, 1)) goto RemoveKleenup;
-								errorcode = -4;
+								if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Continue?", errorCode, 1)) goto RemoveKleenup;
+								errorCode = -4;
 								}
 							}
 
@@ -1279,27 +1276,24 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							if (ProcessfileSystem(hwnd, false, true))
 							//Reads entire FS
 
-
-
-
 							{
 								do
 								{
-								} while (FSDelete (hwnd, currPathWtmp, errorcode));
+								} while (FSDelete (hwnd, currPathWtmp));
 							//Write remaining FS
-								if (!errorcode) //errorcode is still -4 if no match!
+								if (!errorCode) //errorCode is still -4 if no match!
 								{
-								if (!pCmdLineActive) ((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+								if (!pCmdLineActive) ((ProcessfileSystem(hwnd, true, false))? errorCode = 1: errorCode = 0);
 							
 								goto RemoveKleenup;
 								}
 							}
 
-							if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", errorcode, 1)) goto RemoveKleenup;
+							if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", errorCode, 1)) goto RemoveKleenup;
 						}
 						else
 						{
-							if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", errorcode, 1)) goto RemoveKleenup;
+							if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", errorCode, 1)) goto RemoveKleenup;
 						}
 
 
@@ -1323,7 +1317,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 						goto RemoveKleenup;
 						}
-						if (RecurseRemovePath(trackFTA, folderTreeArray)) DisplayError (hwnd, L"Remove failed.", errorcode, 0);
+						if (RecurseRemovePath(trackFTA, folderTreeArray)) DisplayError (hwnd, L"Remove failed.", errorCode, 0);
 
 
 
@@ -1341,12 +1335,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						else 
 						{
-							if (errorcode != 0) //succeeded
+							if (errorCode != 0) //"succeeded"
 							{
-							errorcode = 0; //flag okay now
+							errorCode = 0; //flag okay now
 							listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 							SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-							PopulateList(hwnd, errorcode);
+							PopulateList(hwnd);
 							}
 						}
 
@@ -1418,22 +1412,22 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 							else
 							{
-								errorcode = 0;
-								DisplayError (hwnd, L"No items selected...", errorcode, 0);
+								errorCode = 0;
+								DisplayError (hwnd, L"No items selected...", errorCode, 0);
 							}
 						}
 					}
 					else
 					{
-						errorcode = 0;
-						DisplayError (hwnd, L"Error counting items...", errorcode, 0);
+						errorCode = 0;
+						DisplayError (hwnd, L"Error counting items...", errorCode, 0);
 					}
 			}
 			break;
 			case IDC_CLEAR:
 				{
 				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-				PopulateList(hwnd, errorcode);
+				PopulateList(hwnd);
 				}
 			break;
 
@@ -1444,7 +1438,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
 					ExpandEnvironmentStringsW(L"%systemroot%", tempDest, maxPathFolder);
 					wcscat_s(tempDest,  maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
-					if (GetCreateLargeDirPath (hwnd, thisexePath, errorcode) == 1)
+					if (GetCreateLargeDirPath (hwnd, thisexePath, errorCode) == 1)
 					{
 							ErrorExit (L"GetCreateLargeDirPath: Problem with program copy.", 0);
 							break;
@@ -1483,7 +1477,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
 			if (setforDeletion==TRUE)
 			{
-			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no and check they key's value if unsure whether another program besides this one has marked another file for deletion at reboot.", errorcode, 1)) break;
+			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no and check they key's value if unsure whether another program besides this one has marked another file for deletion at reboot.", errorCode, 1)) break;
 			
 			//delete the key ExistRegValue
 			system ("REG DELETE \"HKLM\\System\\CurrentControlSet\\Control\\Session Manager\" /v PendingFileRenameOperations /f");
@@ -1588,8 +1582,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 								else 
 								{
-									errorcode = 0;
-									DisplayError (hwnd, L"Error getting selected item :(", errorcode, 0);
+									errorCode = 0;
+									DisplayError (hwnd, L"Error getting selected item :(", errorCode, 0);
 								}
 							}
 							else 
@@ -1647,8 +1641,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						else
 						{
-							errorcode = 0;
-							DisplayError (hwnd, L"Error counting items :(", errorcode, 0);
+							errorCode = 0;
+							DisplayError (hwnd, L"Error counting items :(", errorCode, 0);
 						}
 					}
 					break;
@@ -1692,7 +1686,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), NULL, DlgProc);
 }
 
-int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorcode)
+int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errorCode)
 {
 DWORD result;
 
@@ -1704,7 +1698,7 @@ DWORD result;
 if (exe64Bit)
 {
 		result  = GetModuleFileNameW(NULL, exePath, MAX_PATH-4);
-	    errorcode = (int)GetLastError();
+	    errorCode = (int)GetLastError();
 
 }
 else
@@ -1712,16 +1706,16 @@ else
 	if( Wow64DisableWow64FsRedirection(&OldValue) ) 
     {
 	result  = GetModuleFileNameW(NULL, exePath, MAX_PATH-4);
-    errorcode = (int)GetLastError();
+    errorCode = (int)GetLastError();
 	}
 	else
 	{
-		DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
+		DisplayError (hwnd, L"Problems with redirection...", errorCode, 0);
 		return 1;
 	}
     if (!Wow64RevertWow64FsRedirection(&OldValue) ) 
 	{
-		DisplayError (hwnd, L"Problems with redirection...", errorcode, 0);
+		DisplayError (hwnd, L"Problems with redirection...", errorCode, 0);
 		return 1;
 	}
 }
@@ -1734,7 +1728,7 @@ else
     else if (result == (int)MAX_PATH-4)
     {
         /* May need to also check for ERROR_SUCCESS here if XP/2K */
-        if (ERROR_INSUFFICIENT_BUFFER != errorcode)
+        if (ERROR_INSUFFICIENT_BUFFER != errorCode)
         {
             return 1;
         }
@@ -1743,44 +1737,44 @@ else
 
 if (!exePath)
 {
-    switch (errorcode)
+    switch (errorCode)
 	{
 		case 2:
-			DisplayError (hwnd, L"Problems: FILE_NOT_FOUND", errorcode, 0);
+			DisplayError (hwnd, L"Problems: FILE_NOT_FOUND", errorCode, 0);
 		break;
 		case 50:
-			DisplayError (hwnd, L"Problems: NOT_SUPPORTED", errorcode, 0);
+			DisplayError (hwnd, L"Problems: NOT_SUPPORTED", errorCode, 0);
 		break;
 		case 110:
-			DisplayError (hwnd, L"Problems: OPEN_FAILED", errorcode, 0);
+			DisplayError (hwnd, L"Problems: OPEN_FAILED", errorCode, 0);
 		break;
 		case 113:
-			DisplayError (hwnd, L"Problems: NO_MORE_SEARCH_HANDLES", errorcode, 0);
+			DisplayError (hwnd, L"Problems: NO_MORE_SEARCH_HANDLES", errorCode, 0);
 		break;
 		case 114:
-			DisplayError (hwnd, L"Problems: INVALID_TARGET_HANDLE", errorcode, 0);
+			DisplayError (hwnd, L"Problems: INVALID_TARGET_HANDLE", errorCode, 0);
 		break;
 		case 123:
-			DisplayError (hwnd, L"Problems: INVALID_NAME", errorcode, 0);
+			DisplayError (hwnd, L"Problems: INVALID_NAME", errorCode, 0);
 		break;
 		case 126:
-			DisplayError (hwnd, L"Problems: MODULE_NOT_FOUND", errorcode, 0);
+			DisplayError (hwnd, L"Problems: MODULE_NOT_FOUND", errorCode, 0);
 		break;
 		case 259:
-			DisplayError (hwnd, L"Problems: NO_MORE_ITEMS", errorcode, 0);
+			DisplayError (hwnd, L"Problems: NO_MORE_ITEMS", errorCode, 0);
 		break;
 		case 303:
-			DisplayError (hwnd, L"Problems: DELETE_PENDING", errorcode, 0);
+			DisplayError (hwnd, L"Problems: DELETE_PENDING", errorCode, 0);
 		break;
 		case 310:
-			DisplayError (hwnd, L"Problems: INVALID_EXCEPTION_HANDLER", errorcode, 0);
+			DisplayError (hwnd, L"Problems: INVALID_EXCEPTION_HANDLER", errorCode, 0);
 		break;
 		case 335:
-			DisplayError (hwnd, L"Problems: Cannot run this out of an archive: COMPRESSED_FILE_NOT_SUPPORTED", errorcode, 0);
+			DisplayError (hwnd, L"Problems: Cannot run this out of an archive: COMPRESSED_FILE_NOT_SUPPORTED", errorCode, 0);
 		break;
 		default:
 			{
-			DisplayError (hwnd, L"Unknown error has occurred.", errorcode, 0);
+			DisplayError (hwnd, L"Unknown error has occurred.", errorCode, 0);
 			}
 	}
 	return 1;
@@ -2189,7 +2183,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 	}
 
 
-bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
+bool FSDelete (HWND hwnd, wchar_t *rootDir)
 {	
 	int folderToDel = 0;
 	bool moreToDelete = false;
@@ -2200,7 +2194,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 	}
 
 
-		for (i = 0; (i  <= branchTotal); i++)
+		for (i = 0; (i <= branchTotal); i++)
 	{
 		int tmp = trackFTA [i][1]; //insertion sort
 		for (j = i; (j  >= 1 && tmp > trackFTA [j-1][1]); j--)
@@ -2211,16 +2205,16 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 		trackFTA [j][1] = tmp;
 	}
 
-	for (i = 0; (i  <= branchTotal); i++)
+	for (i = 0; (i <= branchTotal); i++)
 	{
 	//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [j][1] 
 	
 	if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
 	{
-			errorcode = 0;
+			errorCode = 0;
 			for (j = 0; (j <= branchTotal); j++)
 			{
-			if (trackFTA [j][1] = trackFTA [i][0])
+			if (trackFTA [j][1] == trackFTA [i][0] && (trackFTA [j][1] != 0))
 			{
 				findPathW[0] = L'\0'; // driveIDBaseWNT L"C:\\"
 
@@ -2245,7 +2239,6 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 							if (trackFTA [j][1] == 0)
 							{
 							pathsToSave[j][0] = L'\0';
-							folderTreeArray[i][j][0] = L'\0';
 							moreToDelete = false;
 							}
 							else
@@ -2254,7 +2247,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 							for (k = 0; (k <= folderToDel); k++) //extra loop adds the terminator
 							{
 								if (k != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
-								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[i][k]);
+								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[j][k]);
 
 							}
 							moreToDelete = true;
@@ -2271,18 +2264,33 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir, int errorcode)
 								pCmdLineActive = true;
 								wcscpy_s(findPathW, maxPathFolder, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
 								wcscat_s(findPathW, maxPathFolder, rootDir);
-								//wcscat_s(findPathW, maxPathFolder, L"\"");
-								((ProcessfileSystem(hwnd, true, false))? errorcode = 1: errorcode = 0);
+								((ProcessfileSystem(hwnd, true, false))? errorCode = 0: errorCode = 1);
 								Kleenup (hwnd, weareatBoot);
-
+								moreToDelete = false;
 
 							}
 							else
 							{
-							ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
-							return false; //Rollback?
+								if (((int)GetLastError() == 2) || ((int)GetLastError() == 3)) //cannot find file or path specified
+								{
+								//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
+								pathsToSave[j][0] = L'\0';
+								
+								folderTreeArray[j][folderToDel][0] = L'\0';
+
+								trackFTA [j][1] = 0;
+								trackFTA [j][0] = 0;
+
+								moreToDelete = true;
+								}
+								else
+								{
+								moreToDelete = false;
+								ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+								}
+
 							}
-							
+							return moreToDelete; //No rollback
 
 						}
 			}
