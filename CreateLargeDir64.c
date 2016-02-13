@@ -2241,7 +2241,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 							//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
 							
 
-							folderTreeArray[j][foldersToDel][0] = L'\0';
+							folderTreeArray[j][k][0] = L'\0';
 
 							trackFTA [i][1] -=1;
 							trackFTA [j][0] -=1;
@@ -2255,7 +2255,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 							else
 							{
 							//rebuild pathsToSave
-							for (int l = 0; (l <= foldersToDel); l++) //extra loop adds the terminator
+							for (int l = 0; (l <= k); l++) //extra loop adds the terminator
 							{
 								if (l != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
 								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[j][l]);
@@ -2291,7 +2291,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 								//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
 								pathsToSave[j][0] = L'\0';
 								
-								folderTreeArray[j][foldersToDel][0] = L'\0';
+								folderTreeArray[j][0][0] = L'\0';
 
 								trackFTA [j][1] = 0;
 								trackFTA [j][0] = 0;
