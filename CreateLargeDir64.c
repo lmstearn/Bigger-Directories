@@ -569,7 +569,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				
 		
 			hMutex = CreateMutex( NULL, TRUE, L"CreateLargeDir64.exe" );
-			MessageBoxW (NULL, L"hmutex", L"", MB_OK);
 			if (hMutex)
 			{
 			DWORD wait_success = WaitForSingleObject (hMutex, 15 );
@@ -779,8 +778,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 						wcscpy_s(currPathW, maxPathFolder, L"");
 						branchLevel = 0;
-						branchSaveI = 0;
-											//check on bounds
+
+						//check on bounds
 
 						for (i = folderdirCS + folderdirCW + branchLevelCum; i < listTotal; i++)
 
@@ -2185,8 +2184,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 
 bool FSDelete (HWND hwnd, wchar_t *rootDir)
 {	
-	int folderToDel = 0;
-	bool moreToDelete = false;
+	int foldersToDel = 0;
+	bool moreToDelete = true;
 	//deletes the last or bottom level of directories with root rootdir.
 		for (i = 0; (i  <= branchTotal); i++)
 	{
@@ -2207,23 +2206,33 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 
 	for (i = 0; (i <= branchTotal); i++)
 	{
-	//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [j][1] 
+	//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [i][1] 
 	
 	if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
 	{
 			errorCode = 0;
 			for (j = 0; (j <= branchTotal); j++)
 			{
-			if (trackFTA [j][1] == trackFTA [i][0] && (trackFTA [j][1] != 0))
+
+			if (trackFTA [i][1] == trackFTA [j][0] && (trackFTA [j][0] != 0))
 			{
+
+
+
 				findPathW[0] = L'\0'; // driveIDBaseWNT L"C:\\"
 
 				wcscpy_s(findPathW, maxPathFolder, driveIDBaseWNT);
 				wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
 				for (k = 0; ((k <= treeLevelLimit) && (folderTreeArray[j][k][0] != L'\0')); k++)
 				{
-				folderToDel = k;
+				foldersToDel = k;
 				}
+
+				for (k = foldersToDel; (k >= ((i < branchTotal)? (trackFTA [i][1] - trackFTA [i + 1][1]): 0)); k--)
+				{
+				//do not iterate below trackFTA [i + 1][1]
+
+
 
 				if (RemoveDirectoryW (findPathW))
 						{
@@ -2232,24 +2241,30 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 							//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
 							
 
-							folderTreeArray[j][folderToDel][0] = L'\0';
+							folderTreeArray[j][foldersToDel][0] = L'\0';
 
-							trackFTA [j][1] -=1;
+							trackFTA [i][1] -=1;
 							trackFTA [j][0] -=1;
-							if (trackFTA [j][1] == 0)
+
+
+							if (trackFTA [i][1] == 0)
 							{
 							pathsToSave[j][0] = L'\0';
-							moreToDelete = false;
+							(i == branchTotal)? moreToDelete = false: moreToDelete = true;
 							}
 							else
 							{
 							//rebuild pathsToSave
-							for (k = 0; (k <= folderToDel); k++) //extra loop adds the terminator
+							for (int l = 0; (l <= foldersToDel); l++) //extra loop adds the terminator
 							{
-								if (k != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
-								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[j][k]);
+								if (l != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
+								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[j][l]);
 
 							}
+							findPathW[0] = L'\0'; // driveIDBaseWNT L"C:\\"
+
+							wcscpy_s(findPathW, maxPathFolder, driveIDBaseWNT);
+							wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
 							moreToDelete = true;
 							}
 							
@@ -2257,7 +2272,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 						}
 				else
 						{
-							if (((int)GetLastError() == 32) ) //&& (folderToDel == 0) 
+							if (((int)GetLastError() == 32) ) //&& (foldersToDel == 0) 
 							{
 								memset(lpCmdLine, L'\0', sizeof(lpCmdLine));
 								//wcstombs (pCmdLine, findPathW, maxPathFolder);
@@ -2276,7 +2291,7 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 								//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
 								pathsToSave[j][0] = L'\0';
 								
-								folderTreeArray[j][folderToDel][0] = L'\0';
+								folderTreeArray[j][foldersToDel][0] = L'\0';
 
 								trackFTA [j][1] = 0;
 								trackFTA [j][0] = 0;
@@ -2293,6 +2308,12 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 							return moreToDelete; //No rollback
 
 						}
+
+				}
+				//k loop
+
+				return moreToDelete;
+
 			}
 			}
 	}
