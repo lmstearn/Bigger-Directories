@@ -24,7 +24,7 @@
 
 //findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 
-wchar_t lpCmdLine [MAX_PATH-3];
+
 bool pCmdLineActive = false;
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
@@ -38,14 +38,16 @@ wchar_t const *lpref = L"\\\\?\\";
 wchar_t const *driveIDBaseW = L"\\\\?\\C:\\";
 wchar_t const *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
 char const *driveIDBase = "C:\\";
+wchar_t rootDir [maxPathFolder];
 wchar_t *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // directory pointers. cannot be initialised as a pointer
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
 char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
 wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit][pathLength];
+wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[maxPathFolder];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalDel;
 int i,j,k, errorCode;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
@@ -126,7 +128,8 @@ int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend);
-bool FSDelete (HWND hwnd, wchar_t *rootDir);
+bool FSDelete (HWND hwnd);
+bool fsDelsub (int i, int j, HWND hwnd);
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 
 
@@ -507,7 +510,7 @@ MessageBoxW (NULL, L"", L"if (pCmdLineActive)", MB_OK);
 		{
 		do
 		{
- 		} while (FSDelete (hwnd, lpCmdLine));
+ 		} while (FSDelete (hwnd));
 		//this can bug out if the user edits or deletes the FS in the intervening milliseconds.
 		if (!pCmdLineActive) ProcessfileSystem(hwnd, true, false); //pCmdLineActive remains false on success
 		}
@@ -533,9 +536,9 @@ CLEANUP:
 		}
 		else
 		{
-			if (lpCmdLine[0] != L'\0') 
+			if (rootDir[0] != L'\0') 
 			{
-				lpCmdLine[0] = L'\0';
+				rootDir[0] = L'\0';
 				SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 				PopulateList(hwnd);
 			}
@@ -1268,6 +1271,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
 						wchar_t * currPathWtmp;
 						currPathWtmp = currPathW + 7;
+						wcscpy_s(rootDir, maxPathFolder, currPathWtmp);
+						
 						findPathW[0] = L'\0';
 
 						if (foundNTDLL)
@@ -1275,10 +1280,61 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							if (ProcessfileSystem(hwnd, false, true))
 							//Reads entire FS
 
+
+
+							//zero all trackFTA for anything that isn't rootDir
+							//reorg DB so rootdir is first.
+							j = 0;
+							int tmp;
+							memset(reorgTmpWFS, L'\0', sizeof(reorgTmpWFS));
+							memset(reorgTmpW, L'\0', sizeof(reorgTmpW));
+							for (i = 0; (i <= branchTotal); i++)
+							{
+
+								if (wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
+								{
+									if (i > j)
+									{
+									wcscpy_s(reorgTmpW, maxPathFolder, pathsToSave[j]);
+									wcscpy_s(pathsToSave[j], maxPathFolder, pathsToSave[i]);
+									wcscpy_s(pathsToSave[i], maxPathFolder, reorgTmpW);
+
+									for (k = 0; (k < trackFTA [j][0]); j++)
+									{
+									wcscpy_s(reorgTmpWFS[k], maxPathFolder, folderTreeArray[j][k]);
+									}
+									for (k = 0; (k < trackFTA [i][0]); j++)
+									{
+									wcscpy_s(folderTreeArray[j][k], maxPathFolder, folderTreeArray[i][k]);
+									}
+									folderTreeArray[j][trackFTA [i][0]][0] = L'\0';
+
+									for (k = 0; (k < trackFTA [j][0]); j++)
+									{
+									wcscpy_s(folderTreeArray[i][k], maxPathFolder, reorgTmpWFS[k]);
+									}
+									folderTreeArray[i][trackFTA [j][0]][0] = L'\0';
+
+									tmp = trackFTA [j][0];
+									trackFTA [j][0] = trackFTA [i][0];
+									trackFTA [i][0] = tmp;
+									j += 1;
+									}
+
+								}
+							}
+							branchTotalDel = j - 1 ;
+							if (!branchTotalDel)
+							{
+							DisplayError (hwnd, L"No folders to delete?!! Quitting... ", errorCode, 0);
+							goto RemoveKleenup;
+							}
+
+
 							{
 								do
 								{
-								} while (FSDelete (hwnd, currPathWtmp));
+								} while (FSDelete (hwnd));
 							//Write remaining FS
 								if (!errorCode) //errorCode is still -4 if no match!
 								{
@@ -1673,8 +1729,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	if (pCmdLine[0] != L'\0') 
 	{
 	//also https://msdn.microsoft.com/en-us/library/windows/desktop/bb776391%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
-	memset(lpCmdLine, L'\0', sizeof(lpCmdLine));
-	wcscpy_s (lpCmdLine, maxPathFolder, (wchar_t *) pCmdLine);
+	memset(rootDir, L'\0', sizeof(rootDir));
+	wcscpy_s (rootDir, maxPathFolder, (wchar_t *) pCmdLine);
 	pCmdLineActive = true;
 	}
 	//else
@@ -2182,19 +2238,20 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 	}
 
 
-bool FSDelete (HWND hwnd, wchar_t *rootDir)
+bool FSDelete (HWND hwnd)
 {	
-	int foldersDelEnd = 0, folderDelStart = 0;
-	bool moreToDelete = true;
+int lastDelete = 0;
+bool rootDirMatch = false;
+
 	//deletes the last or bottom level of directories with root rootdir.
-		for (i = 0; (i  <= branchTotal); i++)
+		for (i = 0; (i  <= branchTotalDel); i++)
 	{
 		trackFTA [i][1] = trackFTA [i][0];
 	}
 
 
-		for (i = 0; (i <= branchTotal); i++)
-	{
+		for (i = 0; (i <= branchTotalDel); i++)
+	{ 
 		int tmp = trackFTA [i][1]; //insertion sort
 		for (j = i; (j  >= 1 && tmp > trackFTA [j-1][1]); j--)
 		{
@@ -2204,122 +2261,168 @@ bool FSDelete (HWND hwnd, wchar_t *rootDir)
 		trackFTA [j][1] = tmp;
 	}
 
-	for (i = 0; (i <= branchTotal); i++)
+
+
+
+
+
+
+	for (i = 0; (i <= branchTotalDel); i++)
 	{
 	//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [i][1] 
 	
-	if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
+
+		if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
+		{
+			rootDirMatch = true;
+			if (trackFTA [i][0] == 0) //cruft
+			{
+				lastDelete +=1;
+				if (lastDelete == branchTotalDel - 1)
+				{
+			
+					for (j = 0; (j <= branchTotalDel); j++)
+					{
+						if (trackFTA [j][1])
+						{
+							fsDelsub (i, j, hwnd);
+							return false;
+						}
+					}
+
+				}
+			}
+			else
+			{
+
+				{
+					for (j = 0; (j <= branchTotalDel); j++)
+					{
+						if (trackFTA [i][1] == trackFTA [j][0]) return (fsDelsub (i, j, hwnd));
+					}
+				}
+	
+			}
+		}
+
+
+	}
+return rootDirMatch;
+
+}
+bool fsDelsub (int i, int j, HWND hwnd)
+{
+
+errorCode = 0;
+		
+
+	findPathW[0] = L'\0'; // driveIDBaseWNT L"C:\\"
+
+	wcscpy_s(findPathW, maxPathFolder, driveIDBaseWNT);
+	wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
+
+
+	for (k = trackFTA [i][1]; (k >= ((i < branchTotalDel)? trackFTA [i + 1][1]: 0)); k--)
 	{
-			errorCode = 0;
-			for (j = 0; (j <= branchTotal); j++)
+	//do not iterate below trackFTA [i + 1][1]
+
+
+
+	if (RemoveDirectoryW (findPathW))
 			{
+				//clear everything
+				pathsToSave[j][0] = L'\0';
+				//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
+							
 
-			if (trackFTA [i][1] == trackFTA [j][0] && (trackFTA [j][0] != 0))
-			{
+				folderTreeArray[j][k-1][0] = L'\0';
+
+				trackFTA [i][1] -=1;
+				trackFTA [j][0] -=1;
 
 
+				if (trackFTA [i][1] != 0)
+				{
+				//rebuild pathsToSave
+				for (int l = 0; (l < k - 1); l++) //extra loop adds the terminator
+				{
+					if (l != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
+					wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[j][l]);
 
+				}
 				findPathW[0] = L'\0'; // driveIDBaseWNT L"C:\\"
 
 				wcscpy_s(findPathW, maxPathFolder, driveIDBaseWNT);
 				wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
-
-				folderDelStart = trackFTA [i][1]; 
-				foldersDelEnd = trackFTA [i + 1][1];
-
-				for (k = folderDelStart; (k >= ((i < branchTotal)? foldersDelEnd: 0)); k--)
-				{
-				//do not iterate below trackFTA [i + 1][1]
-
-
-
-				if (RemoveDirectoryW (findPathW))
-						{
-							//clear everything
-							pathsToSave[j][0] = L'\0';
-							//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
-							
-
-							folderTreeArray[j][k-1][0] = L'\0';
-
-							trackFTA [i][1] -=1;
-							trackFTA [j][0] -=1;
-
-
-							if (trackFTA [i][1] == 0)
-							{
-							pathsToSave[j][0] = L'\0';
-							(i == branchTotal)? moreToDelete = false: moreToDelete = true;
-							}
-							else
-							{
-							//rebuild pathsToSave
-							for (int l = 0; (l < k - 1); l++) //extra loop adds the terminator
-							{
-								if (l != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
-								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[j][l]);
-
-							}
-							findPathW[0] = L'\0'; // driveIDBaseWNT L"C:\\"
-
-							wcscpy_s(findPathW, maxPathFolder, driveIDBaseWNT);
-							wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
-							moreToDelete = true;
-							}
-							
-			
-						}
+				return true;
+				}
 				else
-						{
-							if (((int)GetLastError() == 32) ) //&& (foldersDelEnd == 0) 
-							{
-								memset(lpCmdLine, L'\0', sizeof(lpCmdLine));
-								//wcstombs (pCmdLine, findPathW, maxPathFolder);
-								pCmdLineActive = true;
-								wcscpy_s(findPathW, maxPathFolder, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
-								wcscat_s(findPathW, maxPathFolder, rootDir);
-								((ProcessfileSystem(hwnd, true, false))? errorCode = 0: errorCode = 1);
-								Kleenup (hwnd, weareatBoot);
-								moreToDelete = false;
-
-							}
-							else
-							{
-								if (((int)GetLastError() == 2) || ((int)GetLastError() == 3)) //cannot find file or path specified
-								{
-								//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
-								pathsToSave[j][0] = L'\0';
-								
-								folderTreeArray[j][0][0] = L'\0';
-
-								trackFTA [j][1] = 0;
-								trackFTA [j][0] = 0;
-
-								moreToDelete = true;
-								}
-								else
-								{
-								moreToDelete = false;
-								ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
-								}
-
-							}
-							return moreToDelete; //No rollback
-
-						}
+				{
+				goto FSReorg;
+				}
+				
+			
+			}
+	else
+			{
+				if (((int)GetLastError() == 32) ) //used by another provess error 
+				{
+					memset(rootDir, L'\0', sizeof(rootDir));
+					//wcstombs (pCmdLine, findPathW, maxPathFolder);
+					pCmdLineActive = true;
+					wcscpy_s(findPathW, maxPathFolder, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
+					wcscat_s(findPathW, maxPathFolder, rootDir);
+					((ProcessfileSystem(hwnd, true, false))? errorCode = 0: errorCode = 1);
+					Kleenup (hwnd, weareatBoot);
+					return false;
 
 				}
-				//k loop
+				else
+				{
+					if (((int)GetLastError() == 2) || ((int)GetLastError() == 3)) //cannot find file or path specified
+					{
+					//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
+					pathsToSave[j][0] = L'\0';
+								
+					folderTreeArray[j][0][0] = L'\0';
 
-				return moreToDelete;
+					trackFTA [i][1] = 0;
+					trackFTA [j][0] = 0;
+					goto FSReorg;
+					}
+					else
+					{
+								
+					ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+					return false;
+					}
+
+				}
+				//No rollback
 
 			}
-			}
-	}
 
 	}
+	//k loop
 
-return moreToDelete;
+return true;
+
+FSReorg:
+if (j == branchTotalDel) return true;
+//Move everything down to fill slot
+for (k = j + 1; (k <= branchTotalDel); k++)
+{
+	for (int l = 0; (l < trackFTA [k][0]); l++)
+		{
+		wcscpy_s(folderTreeArray[k-1][l], maxPathFolder, folderTreeArray[k][l]); 
+		}	
+
+	trackFTA [k-1][0] = trackFTA [k][0];
+	wcscpy_s(pathsToSave[k-1], maxPathFolder, pathsToSave[k]); 
+}
+
+branchTotalDel -= 1;
+return true;
 }
 int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
