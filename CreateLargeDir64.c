@@ -47,7 +47,7 @@ wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folder
 wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[maxPathFolder];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalDel;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalDel, branchTotalDelBak;
 int i,j,k, errorCode;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
@@ -1318,12 +1318,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									tmp = trackFTA [j][0];
 									trackFTA [j][0] = trackFTA [i][0];
 									trackFTA [i][0] = tmp;
-									j += 1;
 									}
-
+									j += 1;
 								}
 							}
 							branchTotalDel = j - 1 ;
+							branchTotalDelBak = branchTotalDel;
 							if (!branchTotalDel)
 							{
 							DisplayError (hwnd, L"No folders to delete?!! Quitting... ", errorCode, 0);
@@ -2107,7 +2107,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 			
 			(writeAppend)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
 			
-			for (j = 0; (j <= jLim) && (folderTreeArray[i][0][0] != L'\0'); j++)
+			
+			for (j = ((writeAppend)? 0: branchTotalDelBak + 1); (j <= jLim) && (folderTreeArray[i][0][0] != L'\0'); j++)
 			{
 				k = 0;
 
@@ -2360,12 +2361,11 @@ errorCode = 0;
 				{
 				goto FSReorg;
 				}
-				
 			
 			}
-	else
+		else
 			{
-				if (((int)GetLastError() == 32) ) //used by another provess error 
+				if (((int)GetLastError() == 32) ) //"used by another process" error
 				{
 					memset(rootDir, L'\0', sizeof(rootDir));
 					//wcstombs (pCmdLine, findPathW, maxPathFolder);
@@ -2380,21 +2380,20 @@ errorCode = 0;
 				else
 				{
 					if (((int)GetLastError() == 2) || ((int)GetLastError() == 3)) //cannot find file or path specified
-					{
-					//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
-					pathsToSave[j][0] = L'\0';
+						{
+						//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
+						pathsToSave[j][0] = L'\0';
 								
-					folderTreeArray[j][0][0] = L'\0';
+						folderTreeArray[j][0][0] = L'\0';
 
-					trackFTA [i][1] = 0;
-					trackFTA [j][0] = 0;
-					goto FSReorg;
-					}
+						trackFTA [i][1] = 0;
+						trackFTA [j][0] = 0;
+						goto FSReorg;
+						}
 					else
-					{
-								
-					ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
-					return false;
+						{
+						ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+						return false;
 					}
 
 				}
