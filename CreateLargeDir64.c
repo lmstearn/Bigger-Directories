@@ -1291,7 +1291,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							for (i = 0; (i <= branchTotal); i++)
 							{
 
-								if (wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
+								if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
 								{
 									if (i > j)
 									{
@@ -1322,9 +1322,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									j += 1;
 								}
 							}
-							branchTotalDel = j - 1 ;
+							branchTotalDel = j - 1;
 							branchTotalDelBak = branchTotalDel;
-							if (!branchTotalDel)
+							if (branchTotalDel < 0)
 							{
 							DisplayError (hwnd, L"No folders to delete?!! Quitting... ", errorCode, 0);
 							goto RemoveKleenup;
