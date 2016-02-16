@@ -47,7 +47,7 @@ wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folder
 wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[maxPathFolder];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalDel, branchTotalDelBak;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalDel;
 int i,j,k, errorCode;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
@@ -1284,16 +1284,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							//zero all trackFTA for anything that isn't rootDir
 							//reorg DB so rootdir is first.
-							j = 0;
+							j = branchTotal;
 							int tmp;
 							memset(reorgTmpWFS, L'\0', sizeof(reorgTmpWFS));
 							memset(reorgTmpW, L'\0', sizeof(reorgTmpW));
-							for (i = 0; (i <= branchTotal); i++)
+							for (i = branchTotal; (i >= 0); i--) //paths to delete at end of FS
 							{
 
 								if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
 								{
-									if (i > j)
+									if (i < j)
 									{
 									wcscpy_s(reorgTmpW, maxPathFolder, pathsToSave[j]);
 									wcscpy_s(pathsToSave[j], maxPathFolder, pathsToSave[i]);
@@ -1319,30 +1319,35 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									trackFTA [j][0] = trackFTA [i][0];
 									trackFTA [i][0] = tmp;
 									}
-									j += 1;
+									j -= 1;
 								}
 							}
-							branchTotalDel = j - 1;
-							branchTotalDelBak = branchTotalDel;
-							if (branchTotalDel < 0)
+
+							if (branchTotal)
 							{
-							DisplayError (hwnd, L"No folders to delete?!! Quitting... ", 0, 0);
-							goto RemoveKleenup;
+								branchTotalDel = j + 1;
+								if (branchTotal == branchTotalDel)
+								{
+									DisplayError (hwnd, L"No folders to delete?!! Quitting... ", 0, 0);
+									goto RemoveKleenup;
+								}
+							}
+							else
+							{
+								branchTotalDel = 0;
 							}
 
 
-							{
 								do
 								{
 								} while (FSDelete (hwnd));
-							//Write remaining FS
+								//Write remaining FS
 								if (!errorCode) //errorCode is still -4 if no match!
 								{
 								if (!pCmdLineActive) ((ProcessfileSystem(hwnd, true, false))? errorCode = 1: errorCode = 0);
 							
 								goto RemoveKleenup;
 								}
-							}
 
 							}
 							if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", 0, 1)) goto RemoveKleenup;
@@ -2097,10 +2102,10 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 		}
 	}	
 		
-		//copy to whole string first: no sorting for write
+		//copy to whole string first: no sorting for write: create: append, Remove: write
 
 
-		for (i = ((writeAppend)? 0: branchTotalDelBak + 1); (i <= branchTotal); i++)
+		for (i = 0; (i <= (writeAppend)? branchTotal: branchTotal - branchTotalDel); i++)
 		{
 			
 			(writeAppend)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
@@ -2241,18 +2246,18 @@ bool FSDelete (HWND hwnd)
 {	
 int lastDelete = 0;
 
-for (i = 0; (i <= branchTotalDel); i++) if (trackFTA [i][0] == 0) lastDelete +=1;
+for (i = branchTotal - branchTotalDel; (i <= branchTotal); i++) if (trackFTA [i][0] == 0) lastDelete +=1;
 
 if (lastDelete == branchTotalDel + 1) return false;
 
 
-		for (i = 0; (i  <= branchTotalDel); i++)
+		for (i = branchTotal - branchTotalDel; (i <= branchTotal); i++)
 	{
 		trackFTA [i][1] = trackFTA [i][0];
 	}
 
 
-		for (i = 0; (i <= branchTotalDel); i++)
+		for (i = branchTotal - branchTotalDel; (i <= branchTotal); i++)
 	{ 
 		int tmp = trackFTA [i][1]; //insertion sort
 		for (j = i; (j  >= 1 && tmp > trackFTA [j-1][1]); j--)
@@ -2265,22 +2270,23 @@ if (lastDelete == branchTotalDel + 1) return false;
 
 
 
-	for (i = 0; (i <= branchTotalDel); i++)
+	for (i = branchTotal - branchTotalDel; (i <= branchTotal); i++)
 	{
 		//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [i][1] 
 			{
-				for (j = 0; (j <= branchTotalDel); j++)
+				for (j = branchTotal - branchTotalDel; (j <= branchTotal); j++)
 				{
 					if (trackFTA [i][1] == trackFTA [j][0]) return (fsDelsub (i, j, hwnd));
 				}
 			}
 	}
 
+return true; //shouldn't get here though
 }
 bool fsDelsub (int i, int j, HWND hwnd)
 {
 
-	for (k = trackFTA [i][1]; (k >= ((i < branchTotalDel)? trackFTA [i + 1][1]: 0)); k--)
+	for (k = trackFTA [i][1]; (k >= ((i < branchTotal)? trackFTA [i + 1][1]: 0)); k--)
 	{
 	//do not iterate below trackFTA [i + 1][1]
 
@@ -2327,12 +2333,6 @@ bool fsDelsub (int i, int j, HWND hwnd)
 					pCmdLineActive = true;
 					wcscpy_s(findPathW, maxPathFolder, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
 					wcscat_s(findPathW, maxPathFolder, pathsToSave[j]);
-					//move offending file up to branchTotalDelBak
-					branchTotalDelBak -=1;
-					for (int l = 0; (l < trackFTA [k][0]); l++)
-					{
-					wcscpy_s(folderTreeArray[branchTotalDelBak][l], maxPathFolder, folderTreeArray[k][l]); 
-					}	
 
 					((ProcessfileSystem(hwnd, true, false))? errorCode = 0: errorCode = 1);
 					Kleenup (hwnd, weareatBoot);
@@ -2371,9 +2371,9 @@ return true;
 
 FSReorg:
 errorCode = 0;
-if (j == branchTotalDel) return true;
+if (j == branchTotal) return true;
 //Move everything down to fill slot
-	for (k = j + 1; (k <= branchTotalDel); k++)
+	for (k = j + 1; (k <= branchTotal); k++)
 	{
 		for (int l = 0; (l < trackFTA [k][0]); l++)
 			{
@@ -2383,7 +2383,7 @@ if (j == branchTotalDel) return true;
 		trackFTA [k-1][0] = trackFTA [k][0];
 		wcscpy_s(pathsToSave[k-1], maxPathFolder, pathsToSave[k]); 
 	}
-
+branchTotal -=1;
 branchTotalDel -= 1;
 return true;
 }
