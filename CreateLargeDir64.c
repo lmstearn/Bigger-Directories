@@ -47,11 +47,12 @@ wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folder
 wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[maxPathFolder];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalDel;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld;
 int i,j,k, errorCode;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
 long long index; //variable for listbox items
+BOOL createFail = FALSE;
 BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
 BOOL removeButtonEnabled = true;
@@ -329,11 +330,14 @@ else
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  '\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
 	//http://stackoverflow.com/questions/15610506/can-the-null-character-be-used-to-represent-the-zero-character  NO
+
 	branchLevelClickOld = 0;
 	branchLevelClick = 0;
 	branchLevelCum = 0;
 	branchTotalSaveFile = -1;
 	branchTotal = -1;
+	branchTotalCum = 0;
+	branchTotalCumOld = 0;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
 	memset(dacfoldersW, L'\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
@@ -770,7 +774,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 						HWND hList = GetDlgItem(hwnd, IDC_LIST);
 						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-						wcscpy_s(currPathW, maxPathFolder, L"");
+						currPathW[0] = L'\0';
 						branchLevel = 0;
 
 						//check on bounds
@@ -820,7 +824,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						branchLevelCum += branchLevel; //number of items added to list
 					}
-
+					else
+					{
+					DisplayError (hwnd, L"NTDLL not found: Only one nested path is made with CREATE.", errorCode, 0);
+					EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+					EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+					}
 				
 				removeButtonEnabled = false;
 				EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
@@ -948,30 +957,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				NTSTATUS ntStatus;
 				
 				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					if (currPathW == NULL)
-					{
-						/* We were not so display a message */
-					errorCode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
-					goto EndCreate;
-					}
 				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					if (tempDest == NULL)
+				if (currPathW == NULL || tempDest == NULL)
 					{
-						/* We were not so display a message */
+					/* We were not so display a message */
 					errorCode = -1;
 					DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
 					goto EndCreate;
 					}
-					
-				//cumPath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-				//if (cumPath == NULL)
-				//{
-				/* We were not so display a message */
-				//	errorCode = -1;
-				//	DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
-				//return;
-				//}
 					
 				HWND hList = GetDlgItem(hwnd, IDC_LIST);
 				//get total for loop
@@ -994,7 +987,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 
 						//convert to single folder items: -previously created folders done
-						for (i = branchTotalSaveFile + 1; i <= branchTotal; i++)
+						for (i = branchTotalSaveFile + 1  + (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{
 
 							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); i++)
@@ -1009,11 +1002,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//compare all folderTreeArray items that have the same trackFTA
 						for (i = 0; i < branchTotal; i++)
 						{
-							for (j = 0; j <= maxBranchLevelReached; j++) //do items in save file as well
-								{
+							for (j = 0; j <= maxBranchLevelReached; j++)								{
 								for (k = 0; k > j; k++)
 									{
-									if (trackFTA [j][0] + trackFTA [j][1]== j)
+									if (trackFTA [j][0] + trackFTA [j][1] == j)
 
 									{
 									if (0 == wcscmp(pathsToSave[j], pathsToSave[k]))
@@ -1037,8 +1029,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 						
-
-						for (i = (branchTotalSaveFile + 1); i <= branchTotal; i++)
+						for (i = (branchTotalSaveFile + 1) + (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{//new loop required						
 						
 						wcscpy_s(tempDest, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
@@ -1085,9 +1076,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 						case 3://NT_ERROR
 							{
-								
-								ErrorExit (L"NtCreateFile: ", Status);
 								errorCode = 1;
+								createFail = true;
+								ErrorExit (L"NtCreateFile: ", Status);
 								goto EndCreate;
 							}
 						break;
@@ -1100,17 +1091,22 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						else
 						{
 							errorCode = 1;
+							createFail = true;
 							ErrorExit (L"DynamicLoader failed: Cannot create. ", 1);
 							goto EndCreate;
 						}
 					} //trackFTA condition
 					}
+						branchTotalCum +=1; // for rollback
 					}
 
 					//sort all and write to file
 
-					if (!ProcessfileSystem(hwnd, true, true)) goto EndCreate;
-
+					if (!ProcessfileSystem(hwnd, true, true))
+						{
+							DisplayError (hwnd, L"There was an error writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errorCode, 0);
+							goto EndCreate;
+						}
 				} //foundNtdll
 
 				else
@@ -1136,6 +1132,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (!SetCurrentDirectoryW(currPathW))
 									{
 									errorCode = 1;
+									createFail = true;
 									ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 									goto EndCreate;
 									}
@@ -1143,8 +1140,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							else
 								{
 									errorCode = 1;
+									createFail = true;
 									ErrorExit (L"CreateDirectoryW: ", 0);
-									break;
+									goto EndCreate;
 								}
 							}
 							else
@@ -1157,6 +1155,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										if (!SetCurrentDirectoryW(currPathW))
 										{
 										errorCode = 1;
+										createFail = true;
 										ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 										goto EndCreate;
 										}
@@ -1164,14 +1163,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								else
 									{
 									errorCode = 1;
+									createFail = true;
 									ErrorExit (L"CreateDirectoryW: ", 0);
-									break;
+									goto EndCreate;
 									}
 								}
 								if (!Wow64RevertWow64FsRedirection(&OldValue))
 								{
 								DisplayError (hwnd, L"Problems with redirection...", errorCode, 0);
-								break;
+								goto EndCreate;
 								}
 
 							}
@@ -1198,6 +1198,38 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//longPathName
 				//Clear all the added items
 				EndCreate:
+				if (createFail)
+				{
+					//Write the first successful block, but if second error do not want to write same stuff again
+					
+					if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errorCode, 0);
+					
+					j = 0;
+					wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
+					wcscat_s(currPathW, maxPathFolder, folderTreeArray[i][0]);
+					SendMessageW(hList, LB_INSERTSTRING, folderdirCS + folderdirCW, (LPARAM)currPathW);
+
+
+					for (i = (branchTotalSaveFile + 1); i < branchTotalCum; i++)
+					{
+						if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 )) //0 match
+						{
+						j += 1;
+
+						currPathW[0] = L'\0';
+						wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
+						wcscat_s(currPathW, maxPathFolder, folderTreeArray[i + 1][0]);
+						SendMessageW(hList, LB_INSERTSTRING, folderdirCS + folderdirCW + j, (LPARAM)currPathW);
+						}
+					}
+					branchTotalCumOld += branchTotalCum; //for next possible iteration of Create/fail
+
+				}
+				else
+				{
+					branchTotalCum = 0;
+				}
+
 				free(currPathW);
 				free(tempDest);
 				if (foundNTDLL)
@@ -1939,7 +1971,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 		//copy to whole string first: no sorting for write: create: append, Remove: write
 
 
-		for (i = 0; (i <= ((writeAppend)? branchTotal: branchTotal - branchTotalDel)); i++)
+		for (i = (createFail)? branchTotalCumOld + 1: 0; (i <= ((writeAppend)? branchTotal: branchTotalCum)); i++) //For deletion write the strings NOT deleted, creation the strings that succeeded
 		{
 			
 			(writeAppend)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
@@ -2080,8 +2112,17 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	memset(dacfoldersWtmp, L'\0', sizeof(dacfoldersWtmp)); //sizeof(dacfoldersW) ok
 	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+	errorCode = -4;
+	if (findPathW == NULL || currPathW == NULL || pathToDeleteW == NULL)
+	{
+	/* We were not so display a message */
+	DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
+	goto RemoveKleenup;
+	}
+
 	//SHFileOperationW(_Inout_ LPSHFILEOPSTRUCT lpFileOp);
-	errorCode = 0;
+
 		for (i = 0; i < folderdirCS; i++)
 		{
 			mbstowcs(dacfoldersWtmp[i], dacfolders[i], maxPathFolder);
@@ -2089,7 +2130,6 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 			if (wcscmp(dacfoldersW[index-folderdirCW] + 4, dacfoldersWtmp[i]) == 0)
 			{
 			if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Continue?", errorCode, 1)) goto RemoveKleenup;
-			errorCode = -4;
 			}
 		}
 
@@ -2105,12 +2145,10 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	{
 		if (ProcessfileSystem(hwnd, false, true)) //Reads entire FS
 		{
-
 		//zero all trackFTA for anything that isn't rootDir
 		//reorg DB so rootdir is first.
 		j = branchTotal;
 		int tmp;
-		pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 		memset(reorgTmpWFS, L'\0', sizeof(reorgTmpWFS));
 		memset(reorgTmpW, L'\0', sizeof(reorgTmpW));
 		for (i = branchTotal; (i >= 0); i--) //paths to delete at end of FS
@@ -2150,8 +2188,8 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 
 		if (branchTotal)
 		{
-			branchTotalDel = j + 1;
-			if (branchTotal == branchTotalDel)
+			branchTotalCum = j + 1;
+			if (branchTotal == branchTotalCum)
 			{
 				DisplayError (hwnd, L"No folders to delete?!! Quitting... ", 0, 0);
 				free(pathToDeleteW);
@@ -2160,7 +2198,7 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 		}
 		else
 		{
-			branchTotalDel = 0;
+			branchTotalCum = 0;
 		}
 
 
@@ -2234,28 +2272,28 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 			PopulateList(hwnd);
 			}
 		}
-
+return;
 }
 
 bool FSDelete (HWND hwnd)
 {	
 
-if (branchTotal == branchTotalDel - 1)
+if (branchTotal == branchTotalCum - 1)
 	{
-		branchTotal = branchTotalDel; // required for FS Write
+		branchTotal = branchTotalCum; // required for FS Write
 		return false;
 	}
 
 
 
 
-	for (i = branchTotalDel; (i <= branchTotal); i++)
+	for (i = branchTotalCum; (i <= branchTotal); i++)
 	{
 		trackFTA [i][1] = trackFTA [i][0];
 	}
 
 
-	for (i = branchTotalDel; (i <= branchTotal); i++)
+	for (i = branchTotalCum; (i <= branchTotal); i++)
 		{ 
 		int tmp = trackFTA [i][1]; //insertion sort
 			for (j = i; (j  >= 1 && tmp > trackFTA [j-1][1]); j--)
@@ -2268,11 +2306,11 @@ if (branchTotal == branchTotalDel - 1)
 
 
 
-	for (i = branchTotalDel; (i <= branchTotal); i++)
+	for (i = branchTotalCum; (i <= branchTotal); i++)
 	{
 		//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [i][1] 
 			{
-				for (j = branchTotalDel; (j <= branchTotal); j++)
+				for (j = branchTotalCum; (j <= branchTotal); j++)
 				{
 					if (trackFTA [i][1] == trackFTA [j][0]) return (fsDelsub (i, j, hwnd));
 				}
