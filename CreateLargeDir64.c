@@ -44,7 +44,7 @@ char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
 char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
 wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL }, pathsToSave [branchLimit][pathLength];
-wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[maxPathFolder];
+wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[pathLength];
 
 
 int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld;
@@ -2152,7 +2152,7 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 		}
 		else
 		{
-		errorCode > -4;
+		errorCode = -4;
 		}
 		//zero all trackFTA for anything that isn't rootDir
 		//reorg DB so rootdir is first.
@@ -2167,21 +2167,21 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 			{
 				if (i < j)
 				{
-				wcscpy_s(reorgTmpW, maxPathFolder, pathsToSave[j]);
-				wcscpy_s(pathsToSave[j], maxPathFolder, pathsToSave[i]);
-				wcscpy_s(pathsToSave[i], maxPathFolder, reorgTmpW);
+				wcscpy_s(reorgTmpW, pathLength, pathsToSave[j]);
+				wcscpy_s(pathsToSave[j], pathLength, pathsToSave[i]);
+				wcscpy_s(pathsToSave[i], pathLength, reorgTmpW);
 
-				for (k = 0; (k < trackFTA [j][0]); j++)
+				for (k = 0; (k < trackFTA [j][0]); k++)
 				{
 				wcscpy_s(reorgTmpWFS[k], maxPathFolder, folderTreeArray[j][k]);
 				}
-				for (k = 0; (k < trackFTA [i][0]); j++)
+				for (k = 0; (k < trackFTA [i][0]); k++)
 				{
 				wcscpy_s(folderTreeArray[j][k], maxPathFolder, folderTreeArray[i][k]);
 				}
 				folderTreeArray[j][trackFTA [i][0]][0] = L'\0';
 
-				for (k = 0; (k < trackFTA [j][0]); j++)
+				for (k = 0; (k < trackFTA [j][0]); k++)
 				{
 				wcscpy_s(folderTreeArray[i][k], maxPathFolder, reorgTmpWFS[k]);
 				}
@@ -2202,8 +2202,8 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 				DisplayError (hwnd, L"No folders to delete?!! Quitting... ", 0, 0);
 				free(pathToDeleteW);
 				goto RemoveKleenup;
-				branchTotalCum = j + 1;
 			}
+			branchTotalCum = j + 1;
 		}
 		else
 		{
@@ -2304,10 +2304,10 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 	}
 
 
-	for (i = branchTotalCum; (i <= branchTotal); i++)
+	for (i = branchTotalCum + 1; (i <= branchTotal); i++)
 		{ 
 		int tmp = trackFTA [i][1]; //insertion sort
-			for (j = i; (j  >= 1 && tmp > trackFTA [j-1][1]); j--)
+			for (j = i; ((j > branchTotalCum) && (tmp < trackFTA [j-1][1])); j--)
 			{
 				trackFTA [j][1] = trackFTA [j-1][1];
 			
@@ -2317,11 +2317,11 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 
 
 
-	for (i = branchTotalCum; (i <= branchTotal); i++)
+	for (i = branchTotal; (i >= branchTotalCum); i--)
 	{
 		//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [i][1] 
 			{
-				for (j = branchTotalCum; (j <= branchTotal); j++)
+				for (j = branchTotal; (j >= branchTotalCum); j--)
 				{
 					if (trackFTA [i][1] == trackFTA [j][0]) return (fsDelsub (i, j, hwnd));
 				}
@@ -2333,7 +2333,7 @@ return true; //shouldn't get here though
 bool fsDelsub (int i, int j, HWND hwnd)
 {
 
-	for (k = trackFTA [i][1]; (k >= ((i < branchTotal)? trackFTA [i + 1][1]: 0)); k--)
+	for (k = (trackFTA [i][1]); (k >= ((i > branchTotalCum)? trackFTA [i - 1][1]: 0)); k--)
 	{
 	//do not iterate below trackFTA [i + 1][1]
 
