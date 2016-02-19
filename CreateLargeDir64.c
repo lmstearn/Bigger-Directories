@@ -1222,6 +1222,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						SendMessageW(hList, LB_INSERTSTRING, folderdirCS + folderdirCW + j, (LPARAM)currPathW);
 						}
 					}
+					folderdirCW +=j;
 					branchTotalCumOld += branchTotalCum; //for next possible iteration of Create/fail
 
 				}
@@ -1890,8 +1891,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 	wint_t ch = 0, chOld = 0;
 	FILE *stream = NULL;
 
-
-	//buffer = (char*) malloc (sizeof(char) * (maxPathFolder + 1) )
+		//buffer = (char*) malloc (sizeof(char) * (maxPathFolder + 1) )
 	wchar_t *fsName= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
 	wcscat_s(fsName, maxPathFolder, L"\\Temp\\CreateLargeFileSystem.txt");
@@ -1977,7 +1977,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 			(writeAppend)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
 			
 			
-			for (j = 0; (j <= jLim) && (folderTreeArray[i][0][0] != L'\0'); j++)
+			for (j = 0; (folderTreeArray[i][0][0] != L'\0') && (j <= jLim) ; j++)
 			{
 				k = 0;
 
@@ -2113,7 +2113,7 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-	errorCode = -4;
+	if (errorCode >= -100) errorCode = -4;
 	if (findPathW == NULL || currPathW == NULL || pathToDeleteW == NULL)
 	{
 	/* We were not so display a message */
@@ -2143,8 +2143,17 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 
 	if (foundNTDLL)
 	{
-		if (ProcessfileSystem(hwnd, false, true)) //Reads entire FS
+		if (errorCode > -100) 
 		{
+			if (!ProcessfileSystem(hwnd, false, true)) //Reads entire FS
+			{
+			if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", 0, 1)) goto RemoveKleenup;
+			}
+		}
+		else
+		{
+		errorCode > -4;
+		}
 		//zero all trackFTA for anything that isn't rootDir
 		//reorg DB so rootdir is first.
 		j = branchTotal;
@@ -2188,12 +2197,12 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 
 		if (branchTotal)
 		{
-			branchTotalCum = j + 1;
 			if (branchTotal == branchTotalCum)
 			{
 				DisplayError (hwnd, L"No folders to delete?!! Quitting... ", 0, 0);
 				free(pathToDeleteW);
 				goto RemoveKleenup;
+				branchTotalCum = j + 1;
 			}
 		}
 		else
@@ -2214,8 +2223,6 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 			goto RemoveKleenup;
 			}
 
-		}
-		if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", 0, 1)) goto RemoveKleenup;
 	}
 	else
 	{
@@ -2271,6 +2278,10 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 			SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 			PopulateList(hwnd);
 			}
+			else 
+			{
+			errorCode = -100;
+			}
 		}
 return;
 }
@@ -2278,7 +2289,7 @@ return;
 bool FSDelete (HWND hwnd)
 {	
 
-if (branchTotal == branchTotalCum - 1)
+if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not branchTotalCum
 	{
 		branchTotal = branchTotalCum; // required for FS Write
 		return false;
