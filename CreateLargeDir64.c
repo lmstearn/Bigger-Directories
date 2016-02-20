@@ -38,7 +38,7 @@ wchar_t const *lpref = L"\\\\?\\";
 wchar_t const *driveIDBaseW = L"\\\\?\\C:\\";
 wchar_t const *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
 char const *driveIDBase = "C:\\";
-wchar_t rootDir [maxPathFolder];
+wchar_t rootDir [pathLength]; //maxPathFolder unless delete fails
 wchar_t *pathToDeleteW, *currPathW, *findPathW, *tempDest, *thisexePath, *createlargedirVAR; // directory pointers. cannot be initialised as a pointer
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
@@ -503,20 +503,6 @@ gotoloop: //Wide Char loop
 
 
 
-MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK);
-
-	//get leftmost string of findPathW
-	if (pCmdLineActive) 
-	{
-	pCmdLineActive = false;
-	FSDeleteInit (hwnd, NULL);
-	}
-
-
-
-
-
-
 CLEANUP:
 	//http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
 	if (currPath) free (currPath); //We may need these later though
@@ -524,20 +510,7 @@ CLEANUP:
 	if (findPathW) free (findPathW);
 	//There's an internal index that is reset to 0 each time you call FindFirstFile() and it's incremented each time you call FindNextFile() so unless you do it in a loop, you'll only get the first filename ( a dot ) each time. 	
 	FindClose(ds);
-		if (pCmdLineActive)
-		{
-		ReleaseMutex (hMutex);
-		EndDialog(hwnd, 1);
-		}
-		else
-		{
-			if (rootDir[0] != L'\0') 
-			{
-				rootDir[0] = L'\0';
-				SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-				PopulateList(hwnd);
-			}
-		}
+	//get leftmost string of findPathW
 
 }
 
@@ -573,6 +546,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			if (wait_success == WAIT_OBJECT_0 || wait_success == WAIT_ABANDONED)
 				{
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
+						if (pCmdLineActive) 
+							{
+								//MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK); for debugging
+								PopulateList (hwnd);
+								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+								FSDeleteInit (hwnd, NULL);
+								if (rootDir[0] != L'\0') rootDir[0] = L'\0';
+								
+							}
+
 						PopulateList (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
 						// Subclass the Edit control with ValidateProc
@@ -1359,10 +1342,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				case IDC_LOGON:
 				{
 
-					thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
-					tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
+					thisexePath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+					tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 					ExpandEnvironmentStringsW(L"%systemroot%", tempDest, maxPathFolder);
-					wcscat_s(tempDest,  maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
+					wcscat_s(tempDest,  pathLength, L"\\Temp\\CreateLargeDir64.exe");
 					if (GetCreateLargeDirPath (hwnd, thisexePath, errorCode) == 1)
 					{
 							ErrorExit (L"GetCreateLargeDirPath: Problem with program copy.", 0);
@@ -1596,11 +1579,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 {
 	
 	
-	if (pCmdLine[0] != L'\0') 
+	if (pCmdLine[0] != L'\0')
 	{
 	//also https://msdn.microsoft.com/en-us/library/windows/desktop/bb776391%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 	memset(rootDir, L'\0', sizeof(rootDir));
-	wcscpy_s (rootDir, maxPathFolder, (wchar_t *) pCmdLine);
+	wcscpy_s (rootDir, pathLength, (wchar_t *) pCmdLine);
 	pCmdLineActive = true;
 	}
 	//else
@@ -1716,24 +1699,24 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 
 	ZeroMemory(&lpStartupInfo, sizeof(lpStartupInfo));
 	ZeroMemory (&lpStartupInfo, sizeof(lpStartupInfo));
-	thisexePath = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
-	tempDest = (wchar_t *)calloc( maxPathFolder, sizeof(wchar_t));
+	thisexePath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+	tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 
 	if (pCmdLineActive) //on program restart on remove root directory bug
 	{
-		if (!GetModuleFileNameW(NULL, thisexePath, maxPathFolder) || (wcslen(thisexePath) > maxPathFolder))
+		if (!GetModuleFileNameW(NULL, thisexePath, pathLength) || (wcslen(thisexePath) > maxPathFolder))
 		{
-			DisplayError (hwnd, L"Oops, process path too long or non-existent! Quitting...", 0, 0);
+			DisplayError (hwnd, L"Oops, process path too long!? or non-existent! Quitting...", 0, 0);
 			free (tempDest);
 			free (thisexePath);
 			return false;
 		}
 		else
 		{
-		wcscpy_s (tempDest, maxPathFolder, L"\"");
-		wcscat_s (tempDest, maxPathFolder, thisexePath);
-		wcscat_s (tempDest, maxPathFolder, L"\" ");
-		wcscat_s (tempDest, maxPathFolder, findPathW);
+		wcscpy_s (tempDest, pathLength, L"\"");
+		wcscat_s (tempDest, pathLength, thisexePath);
+		wcscat_s (tempDest, pathLength, L"\" ");
+		wcscat_s (tempDest, pathLength, pathToDeleteW);
 		if (!CreateProcessW (thisexePath, tempDest, NULL, NULL, FALSE, NULL, NULL, NULL, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"Oops: Something went wrong. Please restart the program...", 0);
 		free (tempDest);
 		free (thisexePath);
@@ -1747,13 +1730,13 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 			system ("CD\\ & PUSHD %SystemRoot%\\Temp & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & SET \"Userinitreg=\" & (IF EXIST Userinitreg.txt CALL SET \"Userinitreg=TRUE\") & (IF DEFINED Userinitreg (FOR /F \"usebackq tokens=1,2* delims=,\" %G IN (\"Userinitreg.txt\") DO SET \"REGVALUE=%G\" & (IF DEFINED OSB (CALL SET \"REGVALUE=%REGVALUE%,\" & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f /reg:64) ELSE (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f))) ELSE (CALL ECHO Backup reg record does not exist & PAUSE >NUL)) & (IF EXIST Userinitregerror.txt (DEL \"Userinitregerror.txt\")) & DEL \"Userinitreg.txt\" & POPD");
 			
 			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
-			wcscpy_s(thisexePath, maxPathFolder, tempDest); //Small hole in logic here
-			wcscat_s(tempDest, maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
+			wcscpy_s(thisexePath, pathLength, tempDest); //Small hole in logic here
+			wcscat_s(tempDest, pathLength, L"\\Temp\\CreateLargeDir64.exe");
 
 			if (weareatBoot)
 				{
 				//reset to vanilla
-				wcscat_s(thisexePath, maxPathFolder, L"\\system32\\userinit.exe");
+				wcscat_s(thisexePath, pathLength, L"\\system32\\userinit.exe");
 				//Create process userinit.exe
 
 
@@ -1971,7 +1954,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 		//copy to whole string first: no sorting for write: create: append, Remove: write
 
 
-		for (i = (createFail)? branchTotalCumOld + 1: 0; (i <= ((writeAppend)? branchTotal: branchTotalCum)); i++) //For deletion write the strings NOT deleted, creation the strings that succeeded
+		for (i = (createFail)? branchTotalCumOld + 1: 0; (i <= ((createFail)? branchTotalCum: branchTotal)); i++) //For deletion write the strings NOT deleted, creation the strings that succeeded
 		{
 			
 			(writeAppend)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
@@ -2109,8 +2092,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 
 void FSDeleteInit (HWND hwnd, HWND hList)
 {
-	memset(dacfoldersWtmp, L'\0', sizeof(dacfoldersWtmp)); //sizeof(dacfoldersW) ok
-	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+
+	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t)); // only required for the old RecurseRemovePath
 	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 	if (errorCode >= -100) errorCode = -4;
@@ -2118,9 +2101,31 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	{
 	/* We were not so display a message */
 	DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
+	if (pathToDeleteW) free(pathToDeleteW);
 	goto RemoveKleenup;
 	}
+if (pCmdLineActive)
+{
+	wchar_t * rootDirPtr = wcschr (rootDir, '\\');
+	if (rootDirPtr)
+	{
+		
+		for (i = 0; i < (int)(rootDirPtr - rootDir); i++) rootDirPtr[i] = rootDir[i];
+		rootDirPtr[i] = L'\0';
+		wcscpy_s(rootDir, pathLength, rootDirPtr);
+		pCmdLineActive = false;
+	}
+	else
+	{
+	DisplayError (hwnd, L"Oops! CmdLine not there!", errorCode, 0);
+	free(pathToDeleteW);
+	goto RemoveKleenup;
+	}
+}
 
+else
+{
+	memset(dacfoldersWtmp, L'\0', sizeof(dacfoldersWtmp)); //sizeof(dacfoldersW) ok
 	//SHFileOperationW(_Inout_ LPSHFILEOPSTRUCT lpFileOp);
 
 		for (i = 0; i < folderdirCS; i++)
@@ -2129,7 +2134,11 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 			//cumPath = dacfoldersW[i] + 4; // ////?// prefix away: 4 cuts out the //?/
 			if (wcscmp(dacfoldersW[index-folderdirCW] + 4, dacfoldersWtmp[i]) == 0)
 			{
-			if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Continue?", errorCode, 1)) goto RemoveKleenup;
+			if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Continue?", errorCode, 1))
+				{
+					free(pathToDeleteW);
+					goto RemoveKleenup;
+				}
 			}
 		}
 
@@ -2140,6 +2149,8 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	wcscpy_s(rootDir, maxPathFolder, currPathWtmp);
 						
 	findPathW[0] = L'\0';
+}
+
 
 	if (foundNTDLL)
 	{
@@ -2147,7 +2158,11 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 		{
 			if (!ProcessfileSystem(hwnd, false, true)) //Reads entire FS
 			{
-			if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", 0, 1)) goto RemoveKleenup;
+			if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", 0, 1))
+				{
+					free(pathToDeleteW);
+					goto RemoveKleenup;
+				}
 			}
 		}
 		else
@@ -2226,7 +2241,11 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	}
 	else
 	{
-		if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", 0, 1)) goto RemoveKleenup;
+		if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", 0, 1))
+			{
+				free(pathToDeleteW);
+				goto RemoveKleenup;
+			}
 	}
 
 
@@ -2376,7 +2395,6 @@ bool fsDelsub (int i, int j, HWND hwnd)
 				if (((int)GetLastError() == 32) ) //"used by another process" error
 				{
 					memset(rootDir, L'\0', sizeof(rootDir));
-					//wcstombs (pCmdLine, findPathW, maxPathFolder);
 					pCmdLineActive = true;
 					wcscpy_s(pathToDeleteW, pathLength, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
 					wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
@@ -2468,7 +2486,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 						}
 						wchar_t * currPathWtmp;
 						currPathWtmp = currPathW + 4;
-						//GetCurrentDirectoryW(maxPathFolder, findPathW);
+
 						if (RemoveDirectoryW (currPathWtmp))
 						{
 							return 0;
@@ -2489,7 +2507,7 @@ int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArra
 							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 							return 1;
 						}
-						//if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
+
 						if (RemoveDirectoryW (currPathW))
 						{
 
