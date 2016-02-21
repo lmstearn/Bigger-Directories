@@ -128,7 +128,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit);
-bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend);
+bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
 void FSDeleteInit (HWND hwnd, HWND hList);
 bool FSDelete (HWND hwnd);
 bool fsDelsub (int i, int j, HWND hwnd);
@@ -968,39 +968,40 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					if (foundNTDLL)
 					{
+						//Load FS into branchTotalSaveFile + 1 (appendMode true
+						ProcessfileSystem(hwnd, false, true);
 
 						//convert to single folder items: -previously created folders done
-						for (i = branchTotalSaveFile + 1  + (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
+						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{
 
-							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); i++)
+							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); j++)
 							{
-								if (j != 0) wcscat_s(pathsToSave[j], maxPathFolder, &separatorFTA);
-								wcscat_s(pathsToSave[j], maxPathFolder, folderTreeArray[i][j]);
+								if (j != 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA);
+								wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][j]);
 							}
 
 						}
 
 						//Validation check for dups
 						//compare all folderTreeArray items that have the same trackFTA
-						for (i = 0; i < branchTotal; i++)
+						for (i = 0; i <= branchTotalSaveFile; i++)
 						{
-							for (j = 0; j <= maxBranchLevelReached; j++)								{
-								for (k = 0; k > j; k++)
-									{
-									if (trackFTA [j][0] + trackFTA [j][1] == j)
 
+							for (j = 0; j <= maxBranchLevelReached; j++)	
+							{
+								if (trackFTA [i][0] + trackFTA [i][1] == j)
 									{
-									if (0 == wcscmp(pathsToSave[j], pathsToSave[k]))
-									{
-										wcscpy_s(pathsToSave[j], 1, L'\0');
-										for (int l = 0; l < treeLevelLimit; l++)
+										for (k = 0; k < i; k++)
 										{
-										folderTreeArray[l][j][0] = L'\0';
+											if (0 == wcscmp(pathsToSave[i], pathsToSave[k]))
+											{
+												pathsToSave[k][0] = L'\0';
+												trackFTA [k][0] = 0;
+												trackFTA [k][1] = 0;
+												for (int l = 0; l < treeLevelLimit; l++) folderTreeArray[k][l][0] = L'\0';
+											} 
 										}
-
-									} 
-									}
 
 									}
 							}
@@ -1012,7 +1013,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 						
-						for (i = (branchTotalSaveFile + 1) + (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
+						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{//new loop required						
 						
 						wcscpy_s(tempDest, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
@@ -1188,8 +1189,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errorCode, 0);
 					
 					j = 0;
-					wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
-					wcscat_s(currPathW, maxPathFolder, folderTreeArray[i][0]);
+					wcscpy_s(currPathW, pathLength, driveIDBaseW);
+					wcscat_s(currPathW, pathLength, folderTreeArray[i][0]);
 					SendMessageW(hList, LB_INSERTSTRING, folderdirCS + folderdirCW, (LPARAM)currPathW);
 
 
@@ -1200,8 +1201,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						j += 1;
 
 						currPathW[0] = L'\0';
-						wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
-						wcscat_s(currPathW, maxPathFolder, folderTreeArray[i + 1][0]);
+						wcscpy_s(currPathW, pathLength, driveIDBaseW);
+						wcscat_s(currPathW, pathLength, folderTreeArray[i + 1][0]);
 						SendMessageW(hList, LB_INSERTSTRING, folderdirCS + folderdirCW + j, (LPARAM)currPathW);
 						}
 					}
@@ -1344,8 +1345,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					thisexePath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 					tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					ExpandEnvironmentStringsW(L"%systemroot%", tempDest, maxPathFolder);
-					wcscat_s(tempDest,  pathLength, L"\\Temp\\CreateLargeDir64.exe");
+					ExpandEnvironmentStringsW(L"%systemroot%", tempDest, pathLength);
+					wcscat_s(tempDest, pathLength, L"\\Temp\\CreateLargeDir64.exe");
 					if (GetCreateLargeDirPath (hwnd, thisexePath, errorCode) == 1)
 					{
 							ErrorExit (L"GetCreateLargeDirPath: Problem with program copy.", 0);
@@ -1704,9 +1705,9 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 
 	if (pCmdLineActive) //on program restart on remove root directory bug
 	{
-		if (!GetModuleFileNameW(NULL, thisexePath, pathLength) || (wcslen(thisexePath) > maxPathFolder))
+		if (!GetModuleFileNameW(NULL, thisexePath, pathLength) || (wcslen(thisexePath) > pathLength))
 		{
-			DisplayError (hwnd, L"Oops, process path too long!? or non-existent! Quitting...", 0, 0);
+			DisplayError (hwnd, L"Oops, process path too long!? or non-existent?! Quitting...", 0, 0);
 			free (tempDest);
 			free (thisexePath);
 			return false;
@@ -1729,7 +1730,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 
 			system ("CD\\ & PUSHD %SystemRoot%\\Temp & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & SET \"Userinitreg=\" & (IF EXIST Userinitreg.txt CALL SET \"Userinitreg=TRUE\") & (IF DEFINED Userinitreg (FOR /F \"usebackq tokens=1,2* delims=,\" %G IN (\"Userinitreg.txt\") DO SET \"REGVALUE=%G\" & (IF DEFINED OSB (CALL SET \"REGVALUE=%REGVALUE%,\" & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f /reg:64) ELSE (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f))) ELSE (CALL ECHO Backup reg record does not exist & PAUSE >NUL)) & (IF EXIST Userinitregerror.txt (DEL \"Userinitregerror.txt\")) & DEL \"Userinitreg.txt\" & POPD");
 			
-			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
+			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
 			wcscpy_s(thisexePath, pathLength, tempDest); //Small hole in logic here
 			wcscat_s(tempDest, pathLength, L"\\Temp\\CreateLargeDir64.exe");
 
@@ -1866,7 +1867,7 @@ NTDLLptr DynamicLoader (bool progInit)
 
 }
 
-bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
+bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 {
 	bool newFile = false;
 	int  result;
@@ -1874,11 +1875,11 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 	wint_t ch = 0, chOld = 0;
 	FILE *stream = NULL;
 
-		//buffer = (char*) malloc (sizeof(char) * (maxPathFolder + 1) )
-	wchar_t *fsName= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
-	wcscat_s(fsName, maxPathFolder, L"\\Temp\\CreateLargeFileSystem.txt");
-	stream = _wfopen(fsName, L"rb");
+
+	wchar_t *fsName= (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
+	wcscat_s(fsName, pathLength, L"\\Temp\\CreateLargeFileSystem.txt");
+	stream = _wfopen(fsName, L"r+b");
 	//If the file already exists and is opened for reading or appending, the Byte Order Mark (BOM), if it present in the file, determines the encoding.
 	if (!stream) //returns NULL Pointer
 	{
@@ -1911,14 +1912,14 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 	else //file exists
 	{
 	
-	if (writeAppend)
+	if (appendMode)
 	{
 	stream = _wfopen(fsName, L"a+b");
 	}
 	else //load FS when deleting
 	{
 	newFile = true; //BOM must be rewritten as it is wiped
-	stream = _wfopen(fsName, L"w+b");
+	(falseReadtrueWrite)? stream = _wfopen(fsName, L"w+b"): stream = _wfopen(fsName, L"rb");
 
 	}
 	
@@ -1957,7 +1958,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 		for (i = (createFail)? branchTotalCumOld + 1: 0; (i <= ((createFail)? branchTotalCum: branchTotal)); i++) //For deletion write the strings NOT deleted, creation the strings that succeeded
 		{
 			
-			(writeAppend)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
+			(appendMode)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
 			
 			
 			for (j = 0; (folderTreeArray[i][0][0] != L'\0') && (j <= jLim) ; j++)
@@ -2030,7 +2031,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 			{
 			if (chOld == separatorFTA) chOld = 1;
 			//populate folderTreeArray- using getline method (or "template function") might be more efficent
-			for (k = 0; ((k  < (maxPathFolder - 1)) && (chOld != separatorFTA) && (ch != WEOF) ); k++) //screwy lofic
+			for (k = 0; ((k  < (maxPathFolder - 1)) && (chOld != separatorFTA) && (ch != WEOF) ); k++) //screwy logic?
 
 			{
 
@@ -2059,8 +2060,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool writeAppend)
 
 			trackFTA [i][0] = j; //track the nesting level for validation
 			if (ch == eolFTA) break;
-			if (j != 0) wcscat_s(pathsToSave[i], maxPathFolder, &separatorFTA); //tacking them back on: what a waste doing it this way
-			wcscat_s(pathsToSave[i], maxPathFolder, folderTreeArray[i][j]);
+			if (j != 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA); //tacking them back on: what a waste doing it this way
+			wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][j]);
 
  			}
 		}
@@ -2146,7 +2147,7 @@ else
 	wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-folderdirCW]);
 	wchar_t * currPathWtmp;
 	currPathWtmp = currPathW + 7;
-	wcscpy_s(rootDir, maxPathFolder, currPathWtmp);
+	wcscpy_s(rootDir, pathLength, currPathWtmp);
 						
 	findPathW[0] = L'\0';
 }
@@ -2156,12 +2157,17 @@ else
 	{
 		if (errorCode > -100) 
 		{
-			if (!ProcessfileSystem(hwnd, false, true)) //Reads entire FS
+			if (!ProcessfileSystem(hwnd, false, false)) //Reads entire FS
 			{
-			if (!DisplayError (hwnd, L"No entry in FS. Cannot tell whether directory was created by this program. Continue to delete?", 0, 1))
+			if (!DisplayError (hwnd, L"No FS file! Cannot tell whether directory was created by this program. Try alternate delete?", 0, 1))
 				{
 					free(pathToDeleteW);
 					goto RemoveKleenup;
+				}
+			else
+				{
+					free(pathToDeleteW);
+					goto OldDelete;
 				}
 			}
 		}
@@ -2175,6 +2181,8 @@ else
 		int tmp;
 		memset(reorgTmpWFS, L'\0', sizeof(reorgTmpWFS));
 		memset(reorgTmpW, L'\0', sizeof(reorgTmpW));
+
+
 		for (i = branchTotal; (i >= 0); i--) //paths to delete at end of FS
 		{
 
@@ -2208,15 +2216,24 @@ else
 				}
 				j -= 1;
 			}
+
 		}
 
 		if (branchTotal)
 		{
-			if (branchTotal == branchTotalCum)
+			if (branchTotal == j)
 			{
-				DisplayError (hwnd, L"No folders to delete?!! Quitting... ", 0, 0);
-				free(pathToDeleteW);
-				goto RemoveKleenup;
+				if (DisplayError (hwnd, L"The selected folder is not found in the FS. Try alternate delete?", 0, 1))
+				{
+					free(pathToDeleteW);
+					goto OldDelete;
+				}
+				else
+				{
+					free(pathToDeleteW);
+					goto RemoveKleenup;
+
+				}
 			}
 			branchTotalCum = j + 1;
 		}
@@ -2249,7 +2266,7 @@ else
 	}
 
 
-
+OldDelete:
 
 	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 	wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
@@ -2273,6 +2290,10 @@ else
 		{
 			errorCode = 0;
 			DisplayError (hwnd, L"Remove failed.", 0, 0);
+		}
+	else
+		{
+			errorCode = 1;
 		}
 
 
@@ -2448,7 +2469,7 @@ if (j != branchTotal)
 			}	
 
 		trackFTA [k-1][0] = trackFTA [k][0];
-		wcscpy_s(pathsToSave[k-1], maxPathFolder, pathsToSave[k]); 
+		wcscpy_s(pathsToSave[k-1], pathLength, pathsToSave[k]); 
 	}
 	}	
 pathsToSave [branchTotal][0] = L'\0';
