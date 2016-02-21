@@ -968,11 +968,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					if (foundNTDLL)
 					{
-						//Load FS into branchTotalSaveFile + 1 (appendMode true
+						branchTotalCum = 0;
+						//Load FS into branchTotalSaveFile + 1 (appendMode true so FS loaded after)
 						ProcessfileSystem(hwnd, false, true);
 
 						//convert to single folder items: -previously created folders done
-						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
+						for (i = (createFail)? branchTotalCumOld: 0; i <= branchTotal; i++)
 						{
 
 							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); j++)
@@ -1013,9 +1014,18 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 						
-						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
+						for (i = (createFail)? branchTotalCumOld: 0; i <= branchTotal; i++)
 						{//new loop required						
 						
+
+							//TESTING 
+							if (i == 1)
+								{errorCode = 1;
+								createFail = true;
+								ErrorExit (L"NtCreateFile: ", 0);
+								goto EndCreate;}
+
+
 						wcscpy_s(tempDest, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
 
 						for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != L'\0'); j++)
@@ -1088,7 +1098,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					if (!ProcessfileSystem(hwnd, true, true))
 						{
-							DisplayError (hwnd, L"There was an error writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errorCode, 0);
+							DisplayError (hwnd, L"There was an error writing data to file. This program may not be able to delete directories just created. If their deletion is required in the future, run 7-zip and shift-del.", errorCode, 0);
 							goto EndCreate;
 						}
 				} //foundNtdll
@@ -1194,7 +1204,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					SendMessageW(hList, LB_INSERTSTRING, folderdirCS + folderdirCW, (LPARAM)currPathW);
 
 
-					for (i = (branchTotalSaveFile + 1); i < branchTotalCum; i++)
+					for (i = (branchTotalCumOld); i < branchTotalCum; i++)
 					{
 						if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 )) //0 match
 						{
