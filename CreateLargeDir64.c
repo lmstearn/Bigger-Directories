@@ -213,11 +213,10 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	
 	
 	StringCchPrintf((LPTSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), TEXT("%s failed with error %lu: %s"), lpszFunction, dww, lpMsgBuf);
-	printf("\a");  //audible bell
+	wprintf(L"\a");  //audible bell
 	MessageBoxW(nullptr, (LPCTSTR)lpDisplayBuf, L"Error", MB_OK);
-	LocalFree(lpDisplayBuf);
-	
 
+	LocalFree(lpDisplayBuf);
 	LocalFree(lpMsgBuf);
 	
 	//ExitProcess(dw);
@@ -330,7 +329,7 @@ else
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  '\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
 	//http://stackoverflow.com/questions/15610506/can-the-null-character-be-used-to-represent-the-zero-character  NO
-
+	createFail = false;
 	branchLevelClickOld = 0;
 	branchLevelClick = 0;
 	branchLevelCum = 0;
@@ -548,7 +547,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
 						if (pCmdLineActive) 
 							{
-								//MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK); for debugging
+								//MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK); //for debugging
 								PopulateList (hwnd);
 								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 								//MessageBoxW(NULL, NULL, L"Warning", NULL);
@@ -939,6 +938,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			case IDC_CREATE:
 				{
 				NTSTATUS ntStatus;
+				int jMax = 0;
 				
 				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -971,10 +971,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 						branchTotalCum = 0;
 						//Load FS into branchTotalSaveFile + 1 (appendMode true so FS loaded after)
-						ProcessfileSystem (hwnd, false, true);
+						if (!ProcessfileSystem (hwnd, false, true))
+						{
+							if (!DisplayError (hwnd, L"Problem with FS file! Try alternate Create?", 0, 1))
+							{
+								goto AltCreate;
+							}
+							else
+							{
+								errorCode = 1;
+								goto EndCreate;
+							}
+						}
 
 						//convert to single folder items: -previously created folders done
-						for (i = (createFail)? branchTotalCumOld: 0; i <= branchTotal; i++)
+						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{
 
 							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); j++)
@@ -989,10 +1000,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//compare all folderTreeArray items that have the same trackFTA
 						for (i = 0; i <= branchTotalSaveFile; i++)
 						{
-
-							for (j = 0; j <= maxBranchLevelReached; j++)	
+							jMax = trackFTA [i][0] + trackFTA [i][1];
+							for (j = 0; j <= jMax; j++)	
 							{
-								if (trackFTA [i][0] + trackFTA [i][1] == j)
+								if (jMax == j)
 									{
 										for (k = 0; k < i; k++)
 										{
@@ -1015,15 +1026,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 						
-						for (i = (createFail)? branchTotalCumOld: 0; i <= branchTotal; i++)
-						{//new loop required						
-						
+						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
+						{
 
 							//TESTING 
 							if (i == 1)
-								{errorCode = 1;
+								{
+								errorCode = 1;
 								createFail = true;
 								ErrorExit (L"NtCreateFile: ", 0);
+								errorCode = i;
 								goto EndCreate;}
 
 
@@ -1074,6 +1086,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								errorCode = 1;
 								createFail = true;
 								ErrorExit (L"NtCreateFile: ", Status);
+								errorCode = i;
 								goto EndCreate;
 							}
 						break;
@@ -1092,7 +1105,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 					} //trackFTA condition
 					}
-						branchTotalCum +=1; // for rollback
+						if (folderTreeArray[i][0][0] != L'\0') branchTotalCum +=1; // for rollback
 					}
 
 					//sort all and write to file
@@ -1103,27 +1116,49 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							goto EndCreate;
 						}
 				} //foundNtdll
+				goto EndCreate;
 
-				else
-				{
-
+				AltCreate:
 
 				//Another loop & variables for recursive create here
 				for (i = folderdirCS + folderdirCW; i < listTotal; i++)
-					{
-					SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
-					//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
+				{
+				SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+				//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
 
 
-					// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
-					//wcscat_s(cumPath, pathLength, currPathW);
+				// cannot use cumPath: http://stackoverflow.com/questions/33018732/could-not-find-path-specified-createdirectoryw/33050214#33050214
+				//wcscat_s(cumPath, pathLength, currPathW);
 						
-							wcscat_s(currPathW, maxPathFolder, &separatorFTA);
-							if (exe64Bit)
+						wcscat_s(currPathW, maxPathFolder, &separatorFTA);
+						if (exe64Bit)
+						{
+						if (CreateDirectoryW(currPathW, nullptr)) 
 							{
-							if (CreateDirectoryW(currPathW, nullptr)) 
+								errorCode = 0;
+								if (!SetCurrentDirectoryW(currPathW))
 								{
-									errorCode = 0;
+								errorCode = 1;
+								createFail = true;
+								ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+								goto EndCreate;
+								}
+							}
+						else
+							{
+								errorCode = 1;
+								createFail = true;
+								ErrorExit (L"CreateDirectoryW: ", 0);
+								goto EndCreate;
+							}
+						}
+						else
+						{
+							if (Wow64DisableWow64FsRedirection(&OldValue))
+							{
+								if (CreateDirectoryW(currPathW, nullptr)) 
+								{
+								errorCode = 0;
 									if (!SetCurrentDirectoryW(currPathW))
 									{
 									errorCode = 1;
@@ -1134,51 +1169,23 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 							else
 								{
-									errorCode = 1;
-									createFail = true;
-									ErrorExit (L"CreateDirectoryW: ", 0);
-									goto EndCreate;
-								}
-							}
-							else
-							{
-								if (Wow64DisableWow64FsRedirection(&OldValue))
-								{
-									if (CreateDirectoryW(currPathW, nullptr)) 
-									{
-									errorCode = 0;
-										if (!SetCurrentDirectoryW(currPathW))
-										{
-										errorCode = 1;
-										createFail = true;
-										ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
-										goto EndCreate;
-										}
-									}
-								else
-									{
-									errorCode = 1;
-									createFail = true;
-									ErrorExit (L"CreateDirectoryW: ", 0);
-									goto EndCreate;
-									}
-								}
-								if (!Wow64RevertWow64FsRedirection(&OldValue))
-								{
-								DisplayError (hwnd, L"Problems with redirection...", errorCode, 0);
+								errorCode = 1;
+								createFail = true;
+								ErrorExit (L"CreateDirectoryW: ", 0);
 								goto EndCreate;
 								}
-
+							}
+							if (!Wow64RevertWow64FsRedirection(&OldValue))
+							{
+							DisplayError (hwnd, L"Problems with redirection...", errorCode, 0);
+							goto EndCreate;
 							}
 
-
-
-						//AFTER each directory created successfully save to folderTreeArray
-						//folderTreeArray[j][i] initialized every refresh, trackFTA[branchLimit][2];
+						}
 
 
 					}
-				}
+
 
 				//There is a default string size limit for paths of 248 characters
 				//errorCode = CreateDirectoryW(cumPath, NULL);
@@ -1187,7 +1194,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//\a  audible bell
 
 				//LB_GETTEXTLEN  https://msdn.microsoft.com/en-us/library/windows/desktop/bb761315(v=vs.85).aspx
-					
 					
 
 				//longPathName
@@ -1201,20 +1207,34 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					
 					j = 0;
 
-					for (i = (branchTotalCumOld); i < branchTotalCum; i++)
+					if (branchTotalCumOld + 1 == branchTotalCum)
 					{
-						if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 )) //0 match
-						{
-						j += 1;
+						currPathW[0] = L'\0';
+						wcscpy_s(currPathW, pathLength, driveIDBaseW);
+						wcscat_s(currPathW, pathLength, folderTreeArray[branchTotalCum][0]);
+						SendMessageW(hList, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)currPathW);
+						j = 1;
+					}
 
+					else
+					{
+
+					for (i = (branchTotalCumOld + 1 ); i < branchTotalCum; i++)
+					{
+						
+
+						if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 ) && (folderTreeArray[i][0][0] != L'\0')) //0 match
+						{
 						currPathW[0] = L'\0';
 						wcscpy_s(currPathW, pathLength, driveIDBaseW);
 						wcscat_s(currPathW, pathLength, folderTreeArray[i + 1][0]);
 						SendMessageW(hList, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)currPathW);
+						j += 1;
 						}
 					}
+					}
 					folderdirCW +=j;
-					branchTotalCumOld += branchTotalCum; //for next possible iteration of Create/fail
+					branchTotalCumOld += (branchTotalCum - 1); //for next possible iteration of Create/fail
 
 				}
 				else
@@ -1737,7 +1757,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 
 			system ("CD\\ & PUSHD %SystemRoot%\\Temp & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & SET \"Userinitreg=\" & (IF EXIST Userinitreg.txt CALL SET \"Userinitreg=TRUE\") & (IF DEFINED Userinitreg (FOR /F \"usebackq tokens=1,2* delims=,\" %G IN (\"Userinitreg.txt\") DO SET \"REGVALUE=%G\" & (IF DEFINED OSB (CALL SET \"REGVALUE=%REGVALUE%,\" & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f /reg:64) ELSE (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f))) ELSE (CALL ECHO Backup reg record does not exist & PAUSE >NUL)) & (IF EXIST Userinitregerror.txt (DEL \"Userinitregerror.txt\")) & DEL \"Userinitreg.txt\" & POPD");
 			
-			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
+			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed.", 0);
 			wcscpy_s(thisexePath, pathLength, tempDest); //Small hole in logic here
 			wcscat_s(tempDest, pathLength, L"\\Temp\\CreateLargeDir64.exe");
 
@@ -1963,7 +1983,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 		//copy to whole string first: no sorting for write: create: append, Remove: write
 
 
-		for (i = (createFail)? branchTotalCumOld + 1: 0; (i <= ((createFail)? branchTotalCum: branchTotal)); i++) //For deletion write the strings NOT deleted, creation the strings that succeeded
+		for (i = (createFail)? branchTotalCumOld: 0; (i <= ((createFail)? branchTotalCum - 1: branchTotal)); i++) //For deletion write the strings NOT deleted, creation the strings that succeeded
 		{
 			
 			(appendMode)? jLim = trackFTA[i][0] + trackFTA[i][1] - 1: jLim = trackFTA[i][0] - 1;
@@ -2173,7 +2193,7 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t)); // only required for the old RecurseRemovePath
 	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-	if (errorCode >= -100) errorCode = -4;
+	if (errorCode != -100) errorCode = -4;
 	if (findPathW == nullptr || currPathW == nullptr || pathToDeleteW == nullptr)
 	{
 	/* We were not so display a message */
@@ -2198,6 +2218,14 @@ if (pCmdLineActive)
 	free(pathToDeleteW);
 	goto RemoveKleenup;
 	}
+
+	currPathW[0] = L'\0';
+	wcscpy_s(currPathW, maxPathFolder, rootDir); //Dangerous!!! 
+	wchar_t * currPathWtmp;
+	currPathWtmp = currPathW + 7;
+	wcscpy_s(rootDir, pathLength, currPathWtmp);
+	findPathW[0] = L'\0';
+
 }
 
 else
@@ -2224,7 +2252,6 @@ else
 	wchar_t * currPathWtmp;
 	currPathWtmp = currPathW + 7;
 	wcscpy_s(rootDir, pathLength, currPathWtmp);
-						
 	findPathW[0] = L'\0';
 }
 
