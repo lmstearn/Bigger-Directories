@@ -1202,40 +1202,48 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				if (createFail)
 				{
 					//Write the first successful block, but if second error don't write same stuff again
+					if (!(branchTotalCumOld == branchTotalCum)) //Else no folders created last pass so do nothing
+					{
+
+						if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errorCode, 0);
 					
-					if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errorCode, 0);
-					
-					j = 0;
+						k = 0;
 
-					if (branchTotalCumOld + 1 == branchTotalCum)
-					{
-						currPathW[0] = L'\0';
-						wcscpy_s(currPathW, pathLength, driveIDBaseW);
-						wcscat_s(currPathW, pathLength, folderTreeArray[branchTotalCum][0]);
-						SendMessageW(hList, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)currPathW);
-						j = 1;
-					}
 
-					else
-					{
-
-					for (i = (branchTotalCumOld + 1 ); i < branchTotalCum; i++)
-					{
-						
-
-						if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 ) && (folderTreeArray[i][0][0] != L'\0')) //0 match
+						for (i = (branchTotalCumOld + 1 ); i < branchTotalCum; i++)
 						{
-						currPathW[0] = L'\0';
-						wcscpy_s(currPathW, pathLength, driveIDBaseW);
-						wcscat_s(currPathW, pathLength, folderTreeArray[i + 1][0]);
-						SendMessageW(hList, LB_INSERTSTRING, (WPARAM)-1, (LPARAM)currPathW);
-						j += 1;
-						}
-					}
-					}
-					folderdirCW +=j;
-					branchTotalCumOld += (branchTotalCum - 1); //for next possible iteration of Create/fail
+						
+							//first delete LB items up to cum
+							for (j = folderdirCS + folderdirCW; j <= trackFTA [i][0] + trackFTA [i][1]; j++) SendMessageW(hList, LB_DELETESTRING, (WPARAM)j, NULL);
 
+							if (branchTotalCumOld + 1 != branchTotalCum)
+							{
+								if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 ) && (folderTreeArray[i][0][0] != L'\0')) //0 match
+								{
+								currPathW[0] = L'\0';
+								wcscpy_s(currPathW, pathLength, driveIDBaseW);
+								wcscat_s(currPathW, pathLength, folderTreeArray[i + 1][0]);
+								SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW + k), (LPARAM)currPathW);
+								k += 1;
+								}
+
+							}
+							else
+							{
+								wcscpy_s(currPathW, pathLength, driveIDBaseW);
+								wcscat_s(currPathW, pathLength, folderTreeArray[branchTotalCum][0]);
+								SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW + 1), (LPARAM)currPathW);
+								k = 1;
+							}
+
+						}
+
+
+						//check other controls disabled until resolved.
+						folderdirCW +=k;
+						branchTotalCumOld += (branchTotalCum - 1); //for next possible iteration of Create/fail
+
+					}
 				}
 				else
 				{
