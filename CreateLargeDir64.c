@@ -47,7 +47,7 @@ wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folder
 wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[pathLength];
 
 
-int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, maxBranchLevelReached, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld;
+int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld;
 int i,j,k, errorCode;
 long long listTotal = 0;
 long long idata, treeLevel, trackFTA[branchLimit][2];
@@ -790,9 +790,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						trackFTA [branchTotal][0] = branchLevelClick;
 						trackFTA [branchTotal][1] = branchLevel; //the sum of these is total no of backslashes for validation
 						
-						if (branchLevel + branchLevelClick > maxBranchLevelReached) maxBranchLevelReached = branchLevelClick  + branchLevel;
-						
-						
 
 						
 						branchLevelClickOld = branchLevelClick;
@@ -988,7 +985,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{
 
-							for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != '\0'); j++)
+							for (j = 0; (j < trackFTA [i][0] + trackFTA [i][1]) && (folderTreeArray[i][j][0] != '\0'); j++)
 							{
 								if (j != 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA);
 								wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][j]);
@@ -1041,7 +1038,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						wcscpy_s(tempDest, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
 
-						for (j = 0; (j < maxBranchLevelReached) && (folderTreeArray[i][j][0] != L'\0'); j++)
+						for (j = 0; (j <  trackFTA [i][0] + trackFTA [i][1]) && (folderTreeArray[i][j][0] != L'\0'); j++)
 						//cannot create the entire nested path at once or get a "status_wait_3" see KeWaitForMultipleObjects routine
 						{
 						
@@ -2197,6 +2194,7 @@ if (foundNTDLL && !appendMode && !falseReadtrueWrite) //cleanup
 
 void FSDeleteInit (HWND hwnd, HWND hList)
 {
+	bool cmdlineParmtooLong = false;
 	tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 	findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t)); // only required for the old RecurseRemovePath
 	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
@@ -2205,8 +2203,7 @@ void FSDeleteInit (HWND hwnd, HWND hList)
 	if (findPathW == nullptr || currPathW == nullptr || pathToDeleteW == nullptr)
 	{
 	/* We were not so display a message */
-	DisplayError (hwnd, L"Could not allocate required memory", errorCode, 0);
-	if (pathToDeleteW) free(pathToDeleteW);
+	DisplayError (hwnd, L"Bad: Could not allocate required memory. ", errorCode, 0);
 	goto RemoveKleenup;
 	}
 if (pCmdLineActive)
@@ -2228,9 +2225,11 @@ if (pCmdLineActive)
 	}
 
 	currPathW[0] = L'\0';
-	wcscpy_s(currPathW, maxPathFolder, rootDir); //Dangerous!!! 
+	wcscpy_s(pathToDeleteW, pathLength, rootDir);
+	wcscpy_s(currPathW, maxPathFolder, rootDir);
+	if (sizeof(pathToDeleteW) > maxPathFolder) cmdlineParmtooLong = true;
 	wchar_t * currPathWtmp;
-	currPathWtmp = currPathW + 7;
+	currPathWtmp = pathToDeleteW + 7;
 	wcscpy_s(rootDir, pathLength, currPathWtmp);
 	findPathW[0] = L'\0';
 
@@ -2383,6 +2382,13 @@ else
 
 OldDelete:
 
+	
+if (cmdlineParmtooLong)
+	{
+		errorCode = 0;
+		DisplayError (hwnd, L"Oops, command line too long! Delete won't work. Quit and try again should work.", 0, 0);
+		goto RemoveKleenup;
+	}
 	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 	wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
 
@@ -2461,7 +2467,7 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 
 	for (i = branchTotalCum + 1; (i <= branchTotal); i++)
 		{ 
-		int tmp = trackFTA [i][1]; //insertion sort
+		long long tmp = trackFTA [i][1]; //insertion sort
 			for (j = i; ((j > branchTotalCum) && (tmp < trackFTA [j-1][1])); j--)
 			{
 				trackFTA [j][1] = trackFTA [j-1][1];
