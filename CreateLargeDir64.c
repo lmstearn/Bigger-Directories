@@ -49,9 +49,8 @@ wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder];	wchar_t reorgTmpW[pathLength
 
 int folderdirCS, folderdirCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld;
 int i,j,k, errCode;
-long long listTotal = 0;
-long long idata, treeLevel, trackFTA[branchLimit][2];
-long long index; //variable for listbox items
+int idata, index, listTotal = 0, sendMessageErr = 0;
+int treeLevel, trackFTA[branchLimit][2];
 BOOL createFail = FALSE;
 BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
@@ -123,7 +122,7 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
-int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errCode);
+int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
@@ -132,7 +131,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
 void FSDeleteInit (HWND hwnd, HWND hList);
 bool FSDelete (HWND hwnd);
 bool fsDelsub (int i, int j, HWND hwnd);
-int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
+int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
@@ -457,7 +456,7 @@ gotoloop: //Wide Char loop
 					strcat_s(dacfolders[folderdirCS], maxPathFolder, currPath);
 					folderdirCS += 1;
 
-					SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)folderdirCS + folderdirCW, (LPARAM)currPath); // wparam cannot exceed 32,767 
+					SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(folderdirCS + folderdirCW), (LPARAM)currPath); // wparam cannot exceed 32,767 
 					
 				}
 				findhandle = FindNextFileA(ds, &da);
@@ -475,13 +474,13 @@ gotoloop: //Wide Char loop
 				//compare with dacfolders[folderdirC] to check for dups
 				wcscat_s(dacfoldersW[folderdirCW], maxPathFolder, currPathW);
 				folderdirCW += 1;
-				SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)folderdirCS + folderdirCW, (LPARAM)currPathW); // wparam cannot exceed 32,767 
+				sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(folderdirCS + folderdirCW), (LPARAM)currPathW); // wparam cannot exceed 32,767 
 				
 				}
 				findhandle = FindNextFileW(ds, &dw);
 
 		}
-			SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)folderdirCS + folderdirCW, (LPARAM)(folderdirCS + folderdirCW)); //(lparam)folderdirC required for getitemdata
+			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)(folderdirCS + folderdirCW), (LPARAM)(folderdirCS + folderdirCW)); //(lparam)folderdirC required for getitemdata
 																																		 //The Notification Code is passed as the HIWORD of wParam, the other half of the parameter that gave us the index of the control identifier in the first place. 
 																																		 //HIWORD is the Upper 16 bits of UINT and LOWORD is the Lower 16 bits of UINT
 																																		 //DWORD is just a typedef for 32-bit integer, whereas WORD is a typedef for a 16-bit integer
@@ -547,7 +546,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
 						if (pCmdLineActive) 
 							{
-								MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK); //for debugging
+								//MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK); //for debugging
 								PopulateList (hwnd);
 								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 								//MessageBoxW(NULL, NULL, L"Warning", NULL);
@@ -712,13 +711,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							for(i = 0 ; i < nTimes; i++)
 							{
-								index = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)buf);
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)buf);
 
 								// Here we are associating the value nTimes with the item 
 								// just for the heck of it, we'll use it to display later.
 								// Normally you would put some more useful data here, such
 								// as a pointer.
-								SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)index, (LPARAM)nTimes);
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)index, (LPARAM)nTimes);
 							}
 
 							// free the memory!
@@ -772,7 +771,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							if (branchLevelClick + branchLevel < treeLevelLimit)
 							{
 							
-							SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+							sendMessageErr = SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
 							wcscpy_s(folderTreeArray[branchTotal][branchLevelClick + branchLevel], maxPathFolder, (wchar_t *) currPathW); //branchLevelClickOld can be neg?
 							branchLevel += 1;
 							}
@@ -834,46 +833,40 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					branchLevelClick +=1;
 					branchLevelIncCum = 0;
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
-					if (branchLevelClick == branchLevel + branchLevelClickOld )
+					EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
+					if (branchLevelClick == branchLevel + branchLevelClickOld ) EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+
+
+					for (i = branchTotal; i >= (createFail)? branchTotalCumOld + 1: 0; i--)
 					{
-						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
-						EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+					branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
+						if (branchLevelClick == trackFTA [i][0] + 1) //always satisfied on new branch
+						{
+							branchSaveI = i;
+							branchLevelInc = 0;
+							branchLevelIncCum = branchLevelCum - branchLevelIncCum; //start before last nesting here
+							break;
+						}
+						else
+						{
+							if ((branchLevelClick > trackFTA [i][0] + 1) && (branchSaveI == i))
+							{
+							branchLevelInc += 1; //always 1 less than item
+							branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
+							break;
+							}
+						}
+
 					}
-					else 
-						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
-
-							{
-							for (i = branchTotal; i >= 0; i--)
-							{
-							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
-								if (branchLevelClick == trackFTA [i][0] + 1) //always satisfied on new branch
-								{
-									branchSaveI = i;
-									branchLevelInc = 0;
-									branchLevelIncCum = branchLevelCum - branchLevelIncCum; //start before last nesting here
-									break;
-								}
-								else
-								{
-									if ((branchLevelClick > trackFTA [i][0] + 1) && (branchSaveI == i))
-									{
-									branchLevelInc += 1; //always 1 less than item
-									branchLevelIncCum = branchLevelCum - (branchLevelIncCum - branchLevelInc);
-									break;
-									}
-								}
-
-							}
 
 
-							}
 
 					if (branchLevelClick > 0)
 					{
 						(branchSaveI == branchTotal) ? EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true): EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
-						SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
-						SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelIncCum));
+						sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+						sendMessageErr = SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
+						sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelIncCum));
 						//SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(folderdirCS + folderdirCW + branchLevelCum - (branchLevel - branchLevelClick))); //DOES NOT WORK!
 					}
 
@@ -890,16 +883,15 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (branchLevelClick == 0 )
 					{
 						branchLevelInc -= 1;
-						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+						sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 						EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 					}
 					else 
 						{
 
-							{
 
-							for (i = branchTotal; i >= 0; i--)
+							for (i = branchTotal; i >= (createFail)? branchTotalCumOld + 1: 0; i--)
 							{
 							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
 								if (branchLevelClick == trackFTA [i][0]) //always satisfied on new branch
@@ -919,14 +911,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									}
 								}
 
-							}
+
 							}
 
 						(branchSaveI == branchTotal) ? EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true): EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
-						SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
-						SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
-						SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelIncCum));
+						sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+						sendMessageErr = SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
+						sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)(folderdirCS + folderdirCW + branchLevelIncCum));
 						}
 
 				}
@@ -939,8 +931,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 				NTSTATUS ntStatus;
 				int jMax = 0;
-
-					
 				HWND hList = GetDlgItem(hwnd, IDC_LIST);
 				//get total for loop
 				listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
@@ -1034,8 +1024,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								errCode = 1;
 								createFail = true;
 								//ErrorExit (L"NtCreateFile: ", 0);
-								errCode = i;
-								goto EndCreate;}
+								//errCode = i;
+								goto EndCreate;
+								}
 
 
 						wcscpy_s(currPathW, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
@@ -1092,7 +1083,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								errCode = i;
 								goto EndCreate;
 							}
-						break;
 						}
 						//SetCurrentDirectory Often fails here at root node with error 32 "used by another process"
 
@@ -1137,7 +1127,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//Another loop & variables for recursive create here
 				for (i = folderdirCS + folderdirCW; i < listTotal; i++)
 				{
-				SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+				sendMessageErr = SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
 				//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
 
 
@@ -1213,6 +1203,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//longPathName
 				//Clear all the added items
 				EndCreate:
+
 				if (createFail)
 				{
 					//Write the first successful block, but if second error don't write same stuff again
@@ -1224,16 +1215,35 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						k = 0;
 						int l = folderdirCS + folderdirCW;
 
+
 						for (i = branchTotalCumOld; i < branchTotalCum; i++)
 						{
-						
+
+
+							listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+
 							//first delete LB items up to cum
 							
-							for (j = l; j <= l + trackFTA [i][1] - 1; j++)
+							for (j = l; (j < l + trackFTA [i][1]); j++)
 							{
-								SendMessageW(hList, LB_DELETESTRING, (WPARAM)j, NULL);
+								sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)j);
 							}
+							int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
+							int *buf = (int*)GlobalAlloc(GPTR, sizeof(int) * count + 1);
+
+
+							sendMessageErr = SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
+							for (j = count - 1; j >= 0; j--)
+							{
+								//Many hours of pain attest to the fact that using j instead of buf[j] works, but the function goes viral and starts zeroing random variables (that was using long long instead of int btw)!
+								sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)buf[j], 0);
+								branchLevelCum -=1;
+							}
+							
+							errCode = 1;
+							if (sendMessageErr == LB_ERR) l += trackFTA [i][1];
 							l += trackFTA [i][1];
+							GlobalFree(buf);
 							currPathW[0] = L'\0';
 							wcscpy_s(currPathW, pathLength, driveIDBaseW);
 							
@@ -1242,7 +1252,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 ) && (folderTreeArray[i][0][0] != L'\0')) //0 match
 								{
 								wcscat_s(currPathW, pathLength, folderTreeArray[i + 1][0]);
-								SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW + k), (LPARAM)currPathW);
+								sendMessageErr = SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW + k), (LPARAM)currPathW);
 								k += 1;
 								}
 
@@ -1250,7 +1260,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							else
 							{
 								wcscat_s(currPathW, pathLength, folderTreeArray[branchTotalCum][0]);
-								SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW + 1), (LPARAM)currPathW);
+								sendMessageErr = SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW), (LPARAM)currPathW);
 								k = 1;
 							}
 
@@ -1260,9 +1270,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//check other controls disabled until resolved.
 						folderdirCW +=k;
 						branchTotal = branchTotalCum;
-						branchLevelClickOld = 0;
-						branchLevelClick = 0;
+						//branchLevelClickOld = 0;
+						//branchLevelClick = 0;
 						branchTotalCumOld += (branchTotalCum - 1); //for next possible iteration of Create/fail
+						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 						//???????branchLevelCum += branchLevel;
 
 					}
@@ -1287,7 +1298,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//free(cumPath);
 				if (errCode == 0) //succeeded
 				{
-				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+				sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 				PopulateList(hwnd);
 				removeButtonEnabled = true;
 				EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
@@ -1305,12 +1316,12 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					//When the user clicks the Remove button, we first get the number of selected items
 
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
-					long long count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
+					int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
 					listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 					if (count != LB_ERR)
 					{
 						
-						long long err = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
+						sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 
 						//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
 						if (count == 1 && (index < (folderdirCS + folderdirCW)))
@@ -1328,18 +1339,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								// And then allocate room to store the list of selected items.
 
 
-								long long i;
-								long long *buf = (long long*)GlobalAlloc(GPTR, sizeof(long long) * count);
-								SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
+								int *buf = (int*)GlobalAlloc(GPTR, sizeof(int) * count);
+								sendMessageErr = SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
 								//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L) + 1; //+ 1 ???
-								// Now we loop through the list and remove each item that was
-								// selected.  
-
-								// We loop backwards, because if we removed items from top to bottom, it would change the indexes of the other items!!!
+								// Now we loop through the list and remove each item that was selected, looping backwards, because if we removed items from top to bottom, it would change the indexes of the other items!!!
 
 								for (i = count - 1; i >= 0; i--)
 								{
-									SendMessageW(hList, LB_DELETESTRING, (WPARAM)buf[i], 0);
+									sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)buf[i], 0);
 								}
 
 								GlobalFree(buf);
@@ -1371,8 +1378,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 										EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
 									}
-								SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
-								SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
+								sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+								sendMessageErr = SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((folderdirCS + folderdirCW + branchLevelIncCum)), 0);
 								listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 								
 
@@ -1394,7 +1401,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			case IDC_CLEAR:
 				{
-				SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+				sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 				PopulateList(hwnd);
 				}
 			break;
@@ -1406,7 +1413,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 					ExpandEnvironmentStringsW(L"%systemroot%", tempDest, pathLength);
 					wcscat_s(tempDest, pathLength, L"\\Temp\\CreateLargeDir64.exe");
-					if (GetCreateLargeDirPath (hwnd, thisexePath, errCode) == 1)
+					if (GetCreateLargeDirPath (hwnd, thisexePath) == 1)
 					{
 							ErrorExit (L"GetCreateLargeDirPath: Problem with program copy.", 0);
 							break;
@@ -1495,7 +1502,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 									
-								long long err = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
+								sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 									
 								index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
 								
@@ -1531,7 +1538,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 
-								if(err != LB_ERR)
+								if(sendMessageErr != LB_ERR)
 								{
 									// Get the data we associated with the item above
 									// (the number of times it was added)
@@ -1559,9 +1566,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								// No items selected, or more than one
 								// Either way, we aren't going to process this.
 									
-								index = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
-								int selItems[10000]; //what's the max?
-								SendMessage(hwnd, LB_GETSELITEMS, count, (LPARAM)selItems);
+								sendMessageErr = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
+								int selItems[32767];
+								sendMessageErr = SendMessage(hwnd, LB_GETSELITEMS, count, (LPARAM)selItems);
 
 								if (listTotal > folderdirCS + folderdirCW)
 								{
@@ -1654,7 +1661,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), nullptr, DlgProc);
 }
 
-int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath, int errCode)
+int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath)
 {
 DWORD result;
 
@@ -2465,7 +2472,7 @@ if (cmdlineParmtooLong)
 			{
 			errCode = 0; //flag okay now
 			listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-			SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 			PopulateList(hwnd);
 			}
 			else 
@@ -2496,7 +2503,7 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 
 	for (i = branchTotalCum + 1; (i <= branchTotal); i++)
 		{ 
-		long long tmp = trackFTA [i][1]; //insertion sort
+		int tmp = trackFTA [i][1]; //insertion sort
 			for (j = i; ((j > branchTotalCum) && (tmp < trackFTA [j-1][1])); j--)
 			{
 				trackFTA [j][1] = trackFTA [j-1][1];
@@ -2626,7 +2633,7 @@ pathsToSave [branchTotal][0] = L'\0';
 branchTotal -=1;
 return true;
 }
-int RecurseRemovePath(long long trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
+int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found
 {
