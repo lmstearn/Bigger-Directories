@@ -880,7 +880,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					branchLevelClick -=1;
 					branchLevelIncCum = 0;
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
-					if (branchLevelClick == 0 )
+					if (branchLevelClick == ((createFail)? trackFTA [branchTotalCumOld + 1][0]: 0) )
 					{
 						branchLevelInc -= 1;
 						sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
@@ -1017,16 +1017,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						
 						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{
-
-							//TESTING 
-							if (i == 1)
-								{
-								errCode = 1;
-								createFail = true;
-								//ErrorExit (L"NtCreateFile: ", 0);
-								//errCode = i;
-								goto EndCreate;
-								}
 
 
 						wcscpy_s(currPathW, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
@@ -1267,19 +1257,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 
 
-						//check other controls disabled until resolved.
+						//A bugfree Rollback for the current setup is_a_major_drama. A little wonky for the time being.
 						folderdirCW +=k;
 						branchTotal = branchTotalCum;
-						//branchLevelClickOld = 0;
-						//branchLevelClick = 0;
+
 						branchTotalCumOld += (branchTotalCum - 1); //for next possible iteration of Create/fail
 						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-						//???????branchLevelCum += branchLevel;
+
 
 					}
-					else //No folders created last pass so do nothing
-					{
-					}
+					// Else no folders created last pass so do nothing
 				}
 				else
 				{
@@ -2603,7 +2590,6 @@ bool fsDelsub (int i, int j, HWND hwnd)
 					}
 
 				}
-				//No rollback
 
 			}
 
