@@ -837,7 +837,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (branchLevelClick == branchLevel + branchLevelClickOld ) EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 
 
-					for (i = branchTotal; i >= (createFail)? branchTotalCumOld + 1: 0; i--)
+					for (i = branchTotal; i >= ((createFail)? branchTotalCumOld + 1: 0); i--)
 					{
 					branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
 						if (branchLevelClick == trackFTA [i][0] + 1) //always satisfied on new branch
@@ -891,7 +891,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 
 
-							for (i = branchTotal; i >= (createFail)? branchTotalCumOld + 1: 0; i--)
+							for (i = branchTotal; i >= ((createFail)? branchTotalCumOld + 1: 0); i--)
 							{
 							branchLevelIncCum = branchLevelIncCum + trackFTA [i][1];
 								if (branchLevelClick == trackFTA [i][0]) //always satisfied on new branch
@@ -958,7 +958,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							goto EndCreate;
 							}
 						
-						branchTotalCum = 0;
+						(!branchTotal && createFail)? branchTotalCum = -1: branchTotalCum = 0;
 						//Load FS into branchTotalSaveFile + 1 (appendMode true so FS loaded after)
 						if (!ProcessfileSystem (hwnd, false, true))
 						{
@@ -1015,7 +1015,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 						
-						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
+						for (i = ((createFail)? branchTotalCumOld + 1: 0); i <= branchTotal; i++)
 						{
 
 
@@ -1067,10 +1067,17 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 						case 3://NT_ERROR
 							{
-								errCode = 1;
+								
+								if ((Status == 87) && (createFail == true))
+								{
+									DisplayError (hwnd, L"There was another error prior to this on directory create. The create function is not available. Try again after deleting a line or clearing the list.", Status, 0);
+								}
+								else
+								{
+									ErrorExit (L"NtCreateFile: ", Status);
+								}
 								createFail = true;
-								ErrorExit (L"NtCreateFile: ", Status);
-								errCode = i;
+								errCode = 1;
 								goto EndCreate;
 							}
 						}
@@ -1193,11 +1200,19 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//longPathName
 				//Clear all the added items
 				EndCreate:
+				if (foundNTDLL)
+				{
+					if (hdlNTOut) CloseHandle (hdlNTOut);
+					memset(&ioStatus, 0, sizeof(ioStatus));
+					memset(&fileObject, 0, sizeof(fileObject));
+					FreeLibrary ((HMODULE)hdlNtCreateFile);
+					ntStatus = NULL;
+				}
 
 				if (createFail)
 				{
 					//Write the first successful block, but if second error don't write same stuff again
-					if (!(branchTotalCumOld == branchTotalCum))
+					if (branchTotalCum > 0)
 					{
 
 						if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errCode, 0);
@@ -1212,49 +1227,54 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 
-							//first delete LB items up to cum
+							//set delete LB sel items up to cum
 							
 							for (j = l; (j < l + trackFTA [i][1]); j++)
 							{
 								sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)TRUE, (LPARAM)j);
 							}
-							int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
-							int *buf = (int*)GlobalAlloc(GPTR, sizeof(int) * count + 1);
 
 
-							sendMessageErr = SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
-							for (j = count - 1; j >= 0; j--)
+							if ((sendMessageErr != LB_ERR) && (trackFTA [i][1] > 0))
 							{
-								//Many hours of pain attest to the fact that using j instead of buf[j] works, but the function goes viral and starts zeroing random variables (that was using long long instead of int btw)!
-								sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)buf[j], 0);
-								branchLevelCum -=1;
-							}
+								l += trackFTA [i][1];
+
+								currPathW[0] = L'\0';
+								wcscpy_s(currPathW, pathLength, driveIDBaseW);
 							
-							errCode = 1;
-							if (sendMessageErr == LB_ERR) l += trackFTA [i][1];
-							l += trackFTA [i][1];
-							GlobalFree(buf);
-							currPathW[0] = L'\0';
-							wcscpy_s(currPathW, pathLength, driveIDBaseW);
-							
-							if (branchTotalCumOld + 1 != branchTotalCum)
-							{
-								if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 ) && (folderTreeArray[i][0][0] != L'\0')) //0 match
+								if (branchTotalCumOld + 1 != branchTotalCum)
 								{
-								wcscat_s(currPathW, pathLength, folderTreeArray[i + 1][0]);
-								sendMessageErr = SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW + k), (LPARAM)currPathW);
-								k += 1;
+									if (!wcsncmp(folderTreeArray[i][0], folderTreeArray[i + 1][0], 1 ) && (folderTreeArray[i][0][0] != L'\0')) //0 match
+									{
+									wcscat_s(currPathW, pathLength, folderTreeArray[i + 1][0]);
+									sendMessageErr = SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW + k), (LPARAM)currPathW);
+									k += 1;
+									}
+
 								}
-
+								else
+								{
+									wcscat_s(currPathW, pathLength, folderTreeArray[branchTotalCum][0]);
+									sendMessageErr = SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW), (LPARAM)currPathW);
+									k = 1;
+								}
 							}
-							else
-							{
-								wcscat_s(currPathW, pathLength, folderTreeArray[branchTotalCum][0]);
-								sendMessageErr = SendMessageW(hList, LB_INSERTSTRING, (WPARAM)(folderdirCS + folderdirCW), (LPARAM)currPathW);
-								k = 1;
-							}
-
 						}
+
+						//now the deletion
+						int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
+						int *buf = (int*)GlobalAlloc(GPTR, sizeof(int) * count);
+
+						sendMessageErr = SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
+						for (i = count - 1; i >= 0; i--)
+						{
+							//Some corruption in the memory (wouldn't be compiler?) causing errCode to reset to zero when the following function is invoked. No idea what it is.
+							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)buf[i], 0);
+							branchLevelCum -=1;
+						}
+						GlobalFree(buf);
+
+						errCode = 1; //reset errCode: what's going on here?
 
 
 						//A bugfree Rollback for the current setup is_a_major_drama. A little wonky for the time being.
@@ -1266,7 +1286,11 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 					}
-					// Else no folders created last pass so do nothing
+					//No folders created last pass so do nothing
+					else
+					{
+						if (!branchTotalCumOld) branchTotalCumOld = -1;
+					}
 				}
 				else
 				{
@@ -1274,14 +1298,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 
 				free(currPathW);
-				if (foundNTDLL)
-				{
-					if (hdlNTOut) CloseHandle (hdlNTOut);
-					memset(&ioStatus, 0, sizeof(ioStatus));
-					memset(&fileObject, 0, sizeof(fileObject));
-					FreeLibrary ((HMODULE)hdlNtCreateFile);
-					ntStatus = NULL;
-				}
 				//free(cumPath);
 				if (errCode == 0) //succeeded
 				{
@@ -1483,16 +1499,23 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							if(count == 1)
 							{
-								// Since we know ahead of time we're only getting one
-								// index, there's no need to allocate an array.
-									
 
-
-									
-								sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
-									
+								//place string into text box
 								index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
-								
+								currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+								if ((currPathW == nullptr) || (index == LB_ERR))
+								{
+									DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
+									return 0;
+								}
+								sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)currPathW);
+								SetDlgItemTextW(hwnd, IDC_TEXT, currPathW);
+								free (currPathW);
+
+								// Since we know ahead of time we're only getting one index, there's no need to allocate an array.
+									
+								//sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
+									
 
 								if (index >= folderdirCS + folderdirCW)
 								{
@@ -1527,8 +1550,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 								if(sendMessageErr != LB_ERR)
 								{
-									// Get the data we associated with the item above
-									// (the number of times it was added)
+									// Get the data we associated with the item above (the number of times it was added)
 
 									idata = SendMessageW(hList, LB_GETITEMDATA, (WPARAM)index, 0); //lparam not used, but return value IS value of lparam in setitemdata
 									//SO idata becomes ntimes when items are added
@@ -1550,8 +1572,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 							else 
 							{
-								// No items selected, or more than one
-								// Either way, we aren't going to process this.
+								// No items selected, or more than one.Either way, we aren't going to process this.
 									
 								sendMessageErr = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
 								int selItems[32767];
@@ -1607,7 +1628,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							DisplayError (hwnd, L"Error counting items :(", errCode, 0);
 						}
 					}
-					break;
+					break; //This break for consistency
 				}
 			break;
 			} //end WM_COMMAND
