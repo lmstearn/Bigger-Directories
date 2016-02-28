@@ -15,10 +15,13 @@
 #define IDC_REMOVE                      1008
 #define IDC_LOGON                       1009
 #define IDC_NOLOGON                     1010
-#define IDC_SHOWCOUNT                   1011
-#define IDC_LIST2                       1012
-#define IDC_STATIC_ONE                  1013
-#define IDC_STATIC_TWO                  1014
+#define IDC_HELP                        1011
+#define IDC_SHOWCOUNT                   1012
+#define IDC_LIST2                       1013
+#define IDC_STATIC_ONE                  1014
+#define IDC_STATIC_TWO                  1015
+#define IDC_SYSLINK1                    1016
+#define IDI_APP_ICON                    1017
 #define IDC_STATIC                      -1
 
 //check properties/c++/preprocessor defs are _Win64
@@ -37,7 +40,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        102
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1015
+#define _APS_NEXT_CONTROL_VALUE         1017
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
