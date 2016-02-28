@@ -651,7 +651,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is repeated");
 
-					SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times");
+					SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times.");
 
 
 
@@ -1560,7 +1560,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (idata)
 									{
 										SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is repeated");
-										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times");
+										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times.");
 										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
 									}
 									
@@ -1568,7 +1568,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									{
 										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, index, FALSE);
 										SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is ranked");
-										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"on the list");
+										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"on the list.");
 									}
 									//This function performs like:
 									//TCHAR buf[16];
