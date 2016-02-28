@@ -682,25 +682,25 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						//validation for terminating space & period
 			
-						for(i = len-1; i >= 0; i--)
-						{
-
-							if (!(wcsncmp(&buf1[i], L" ", 1 )) || !(wcsncmp(&buf1[i], L".", 1)) )
+							for(i = len-1; i >= 0; i--)
 							{
-								wcscpy_s(&buf1[i], i, L"\0");
-								SetDlgItemTextW(hwnd, IDC_TEXT, (wchar_t*)(buf1));
-							}
 
-							else
+								if (!(wcsncmp(&buf1[i], L" ", 1 )) || !(wcsncmp(&buf1[i], L".", 1)) )
+								{
+									wcscpy_s(&buf1[i], i, L"\0");
+									SetDlgItemTextW(hwnd, IDC_TEXT, (wchar_t*)(buf1));
+								}
 
-							{
-							break; //all good
+								else
+
+								{
+								break; //all good
+								}
 							}
-						}
 						free(buf1);
-					}
+						}
 
-						int len = 2 * (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT)) +1); //wchar again
+						int len = 2 * (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT)) + 1); //wchar again
 						if(len > 0)
 						{
 						buf = (wchar_t*)GlobalAlloc(GPTR, len );
@@ -717,11 +717,13 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								// just for the heck of it, we'll use it to display later.
 								// Normally you would put some more useful data here, such
 								// as a pointer.
-								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)index, (LPARAM)nTimes);
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)sendMessageErr, (LPARAM)nTimes);
 							}
 
 							// free the memory!
 							GlobalFree((HANDLE)buf);
+							sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
+							SetDlgItemInt(hwnd, IDC_SHOWCOUNT, nTimes, FALSE);
 
 						}
 						else 
@@ -1479,8 +1481,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			}
 			break;
-
-
+			case IDC_HELP:
+			{
+			}
+			break;
 			case IDC_LIST:
 
 				switch(HIWORD(wParam))
@@ -1547,15 +1551,25 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 
 
-
-								if(sendMessageErr != LB_ERR)
+								if (sendMessageErr != LB_ERR)
 								{
 									// Get the data we associated with the item above (the number of times it was added)
-
 									idata = SendMessageW(hList, LB_GETITEMDATA, (WPARAM)index, 0); //lparam not used, but return value IS value of lparam in setitemdata
-									//SO idata becomes ntimes when items are added
+									//SO idata becomes ntimes when items are added, but not reliable! http://stackoverflow.com/questions/25337801/why-is-lb-getitemdata-returning-0
 
-									SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
+									if (idata)
+									{
+										SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is repeated");
+										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times");
+										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
+									}
+									
+									else
+									{
+										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, index, FALSE);
+										SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is ranked");
+										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"on the list");
+									}
 									//This function performs like:
 									//TCHAR buf[16];
 									//wnsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
