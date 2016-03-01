@@ -24,7 +24,7 @@
 
 //findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 
-
+bool foundResolution = false;
 bool pCmdLineActive = false;
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
@@ -1481,7 +1481,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			}
 			break;
-			case IDC_HELP:
+			case IDC_HALP: //HALP used because tlhelp32 produces a c4005 macro redefinition warning for HELP
 			{
 			}
 			break;
@@ -1676,11 +1676,24 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	pCmdLineActive = true;
 	}
 	//else
-	
+	LPCDLGTEMPLATE lpTemplate = (LPCDLGTEMPLATE)IDD_768P;
+	if (foundResolution)
+	{
+		return DialogBoxW(hInstance, MAKEINTRESOURCEW(lpTemplate), nullptr, DlgProc);
+	}
+	else 
+	{
+		return DialogBoxW(hInstance, MAKEINTRESOURCEW(lpTemplate), nullptr, DlgProc);
+	}
+
+	LPCDLGTEMPLATE lpTemplate = DoSystemParametersInfoStuff();
 	
 
-	
-	return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_MAIN), nullptr, DlgProc);
+}
+
+LPCDLGTEMPLATE DoSystemParametersInfoStuff(HWND hwnd)
+{
+	HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
 }
 
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath)
