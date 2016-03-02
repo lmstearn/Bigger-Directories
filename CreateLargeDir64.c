@@ -56,6 +56,7 @@ BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
 BOOL removeButtonEnabled = true;
 BOOL am64Bit, exe64Bit; 
+LPCDLGTEMPLATE lpTemplate; //resolution
 PVOID OldValue = nullptr; //Redirection
 WNDPROC g_pOldProc;
 HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
@@ -107,7 +108,7 @@ NTSTATUS status;
 const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
-
+const wchar_t CLASS_NAME[]  = L"Sample Window Class";
 //A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
 //The long directory name with 255 char "\" separator
@@ -121,7 +122,9 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
+LPCDLGTEMPLATE DoSystemParametersInfoStuff(HWND hwnd);
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
@@ -547,6 +550,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						if (pCmdLineActive) 
 							{
 								//MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK); //for debugging
+							if (!foundResolution) lpTemplate = DoSystemParametersInfoStuff(hwnd);
+
 								PopulateList (hwnd);
 								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 								//MessageBoxW(NULL, NULL, L"Warning", NULL);
@@ -1657,6 +1662,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			_CrtDumpMemoryLeaks();
 			}
 		break;
+
+		case WM_DESTROY: PostQuitMessage(0); return TRUE;
+		break;
 		default: return FALSE;
 		break;	
 	}
@@ -1676,25 +1684,70 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	pCmdLineActive = true;
 	}
 	//else
-	LPCDLGTEMPLATE lpTemplate = (LPCDLGTEMPLATE)IDD_768P;
-	if (foundResolution)
-	{
-		return DialogBoxW(hInstance, MAKEINTRESOURCEW(lpTemplate), nullptr, DlgProc);
-	}
-	else 
-	{
-		return DialogBoxW(hInstance, MAKEINTRESOURCEW(lpTemplate), nullptr, DlgProc);
-	}
-
-	LPCDLGTEMPLATE lpTemplate = DoSystemParametersInfoStuff();
 	
 
+
+ WNDCLASS wc = { };
+
+ wc.lpfnWndProc   = WindowProc;
+ wc.hInstance     = hInstance;
+ wc.lpszClassName = CLASS_NAME;
+
+ RegisterClass(&wc);
+
+    // Create the window.
+
+    HWND hwnd = CreateWindowEx(
+        0,                              // Optional window styles.
+        CLASS_NAME,                     // Window class
+        L"Learn to Program Windows",    // Window text
+        WS_OVERLAPPEDWINDOW,            // Window style
+
+        // Size and position
+        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+
+        NULL,       // Parent window    
+        NULL,       // Menu
+        hInstance,  // Instance handle
+        NULL        // Additional application data
+        );
+
+    if (hwnd == NULL)
+    {
+        return 0;
+    }
+
+
+	
+	
+	
+	
+	lpTemplate = (LPCDLGTEMPLATE)IDD_768P;
+	return DialogBoxW(hInstance, MAKEINTRESOURCEW(lpTemplate), nullptr, DlgProc);
+
+
+
 }
+
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	switch (uMsg)
+	{
+	case WM_DESTROY:
+	PostQuitMessage(0);
+	return 0;
+	
+	}
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+}
+
 
 LPCDLGTEMPLATE DoSystemParametersInfoStuff(HWND hwnd)
 {
 	HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+	return lpTemplate;
 }
+
 
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath)
 {
