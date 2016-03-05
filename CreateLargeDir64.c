@@ -56,7 +56,6 @@ BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
 BOOL removeButtonEnabled = true;
 BOOL am64Bit, exe64Bit; 
-LPCDLGTEMPLATE lpTemplate; //resolution
 PVOID OldValue = nullptr; //Redirection
 WNDPROC g_pOldProc;
 HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
@@ -73,21 +72,20 @@ HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 
 
-
 //NTcreatefile stuff
 //typedef int (*NTDLLptr) (int); //Function pointer example, but following is required
 typedef NTSTATUS (__stdcall *NTDLLptr)(
-    PHANDLE FileHandle, 
-    ACCESS_MASK DesiredAccess, 
-    POBJECT_ATTRIBUTES ObjectAttributes, 
-    PIO_STATUS_BLOCK IoStatusBlock, 
-    PLARGE_INTEGER AllocationSize,
-    ULONG FileAttributes, 
-    ULONG ShareAccess, 
-    ULONG CreateDisposition, 
-    ULONG CreateOptions, 
-    PVOID EaBuffer, 
-    ULONG EaLength );
+	PHANDLE FileHandle, 
+	ACCESS_MASK DesiredAccess, 
+	POBJECT_ATTRIBUTES ObjectAttributes, 
+	PIO_STATUS_BLOCK IoStatusBlock, 
+	PLARGE_INTEGER AllocationSize,
+	ULONG FileAttributes, 
+	ULONG ShareAccess, 
+	ULONG CreateDisposition, 
+	ULONG CreateOptions, 
+	PVOID EaBuffer, 
+	ULONG EaLength );
 
 
 //for NTcreatefile fileObject,  NTAPI is __stdcall
@@ -108,7 +106,7 @@ NTSTATUS status;
 const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
-const wchar_t CLASS_NAME[]  = L"Sample Window Class";
+const wchar_t CLASS_NAME[]  = L"ResCheckClass";
 //A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
 //The long directory name with 255 char "\" separator
@@ -122,9 +120,9 @@ const wchar_t CLASS_NAME[]  = L"Sample Window Class";
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
-LPCDLGTEMPLATE DoSystemParametersInfoStuff(HWND hwnd);
+int DoSystemParametersInfoStuff(HWND hwnd);
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
@@ -311,7 +309,7 @@ else
 
 
 	createlargedirVAR= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", createlargedirVAR, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
+	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", createlargedirVAR, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
 	wcscat_s(createlargedirVAR, maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
 
 		if (GetFileAttributesW(createlargedirVAR)!=INVALID_FILE_ATTRIBUTES)
@@ -550,7 +548,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						if (pCmdLineActive) 
 							{
 								//MessageBoxW (NULL, L"if (pCmdLineActive)", L"\0", MB_OK); //for debugging
-							if (!foundResolution) lpTemplate = DoSystemParametersInfoStuff(hwnd);
 
 								PopulateList (hwnd);
 								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
@@ -1663,7 +1660,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 		break;
 
-		case WM_DESTROY: PostQuitMessage(0); return TRUE;
+		case WM_DESTROY:
+			PostQuitMessage(0);
 		break;
 		default: return FALSE;
 		break;	
@@ -1674,8 +1672,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-	
-	
+
 	if (pCmdLine[0] != L'\0')
 	{
 	//also https://msdn.microsoft.com/en-us/library/windows/desktop/bb776391%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
@@ -1686,66 +1683,81 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	//else
 	
 
+	// Create a new window see https://msdn.microsoft.com/en-us/library/windows/desktop/ff381397(v=vs.85).aspx
+	WNDCLASS wc = { };
+	wc.lpfnWndProc   = RescheckWindowProc;
+	wc.hInstance     = hInstance;
+	wc.lpszClassName = CLASS_NAME;
+	RegisterClass(&wc);
 
- WNDCLASS wc = { };
+	HWND hwnd = CreateWindowExW(
+		0,								// Optional window styles.
+		CLASS_NAME,						// Window class
+		L"Nada",	// Window text
+		WS_OVERLAPPEDWINDOW,			// Window style
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,	//Size and position
+		NULL,							// Parent window
+		NULL,							// Menu
+		hInstance,						// Instance handle
+		NULL							// Additional application data
+		);
 
- wc.lpfnWndProc   = WindowProc;
- wc.hInstance     = hInstance;
- wc.lpszClassName = CLASS_NAME;
-
- RegisterClass(&wc);
-
-    // Create the window.
-
-    HWND hwnd = CreateWindowEx(
-        0,                              // Optional window styles.
-        CLASS_NAME,                     // Window class
-        L"Learn to Program Windows",    // Window text
-        WS_OVERLAPPEDWINDOW,            // Window style
-
-        // Size and position
-        CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-
-        NULL,       // Parent window    
-        NULL,       // Menu
-        hInstance,  // Instance handle
-        NULL        // Additional application data
-        );
-
-    if (hwnd == NULL)
-    {
-        return 0;
-    }
-
-
-	
-	
-	
-	
-	lpTemplate = (LPCDLGTEMPLATE)IDD_768P;
-	return DialogBoxW(hInstance, MAKEINTRESOURCEW(lpTemplate), nullptr, DlgProc);
-
-
-
-}
-
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	switch (uMsg)
+	if (hwnd == NULL)
 	{
-	case WM_DESTROY:
-	PostQuitMessage(0);
-	return 0;
-	
+		ErrorExit (L"Cannot create the Rescheck window!!!?", 0);
+		return 0;
 	}
+	else
+	{
+		int resResult = DoSystemParametersInfoStuff(hwnd);
+		if (!DestroyWindow(hwnd)) DisplayError (hwnd, L"Rescheck window cannot be destroyed!", 0, 0);
+		UnregisterClassW(CLASS_NAME, hInstance);
+
+	    switch (resResult)
+	{
+		case 1:
+			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, DlgProc);
+		break;
+		case 2:
+			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, DlgProc);
+		break;
+		case 3:
+			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, DlgProc);
+		break;
+		default:
+			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_768P), nullptr, DlgProc);
+		break;
+	}
+
+	}
+
+}
+
+LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
 	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	//temp windowfor res check.
 }
 
 
-LPCDLGTEMPLATE DoSystemParametersInfoStuff(HWND hwnd)
+int DoSystemParametersInfoStuff(HWND hwnd)
 {
 	HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-	return lpTemplate;
+	MONITORINFO monInfo;
+	monInfo.cbSize = sizeof(MONITORINFO);
+if (GetMonitorInfo (hMon, &monInfo))
+{
+	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 5000) return 1;
+	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 3000) return 2;
+	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 2000) return 3;
+	else return 4;
+}
+else
+{
+	DisplayError (hwnd, L"GetMonitorInfo: Cannot get info!", 0, 0);
+}
+return 0;
+
 }
 
 
