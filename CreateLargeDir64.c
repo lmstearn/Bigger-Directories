@@ -391,6 +391,7 @@ rootFolderCW = PopulateListBox (hwnd, true);
 
 
 //http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
+https://groups.google.com/forum/#!topic/comp.os.ms-windows.programmer.win32/L7o1PeransU
 if (currPath) free (currPath);
 if (currPathW) free (currPathW);
 if (findPathW) free (findPathW);
@@ -1373,13 +1374,11 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			HWND hList = GetDlgItem(hwnd, IDC_LIST);
 			currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 			findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-			tempDest = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-			if ((currPathW == nullptr) || (findPathW == nullptr) || (tempDest == nullptr))
+			if ((currPathW == nullptr) || (findPathW == nullptr))
 			{
 				DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
 				return 0;
 			}
-
 				switch(HIWORD(wParam))
 				{
 					case LBN_SELCHANGE:
@@ -1535,44 +1534,68 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					case LBN_DBLCLK:
 					{
 					sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
-					if (!SetCurrentDirectoryW (findPathW))
+					
+					dblclkString[0]= L'\0';
+					if ((0 == wcscmp(findPathW, L"..")))
 					{
-						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
-						dblclkLevel = 0;
-						goto DblclkEnd;
+							for (i = 0; i <= dblclkLevel; i++)
+							{
+							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
+							wcscat_s(dblclkString, pathLength, L"\\");
+							}
+							wcscpy_s(findPathW, maxPathFolder, dblclkString);
+							dblclkLevel -=1;
 					}
-					if (dblclkLevel == treeLevelLimit && (!wcscmp(findPathW, L"..")))
+					else
 					{
-						ErrorExit (L"Double Click No more!", 0);
-						dblclkLevel = 0;
-						goto DblclkEnd;
+						if (!SetCurrentDirectoryW (findPathW))
+						{
+							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+							dblclkLevel = 0;
+							goto DblclkEnd;
+						}
+						if (dblclkLevel == treeLevelLimit)
+						{
+							ErrorExit (L"Double Click No more!", 0);
+							dblclkLevel = 0;
+							goto DblclkEnd;
+						}
+
+						wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
+
+						for (i = 0; i <= dblclkLevel; i++)
+						{
+						wcscat_s(dblclkString, pathLength, dblclkPath[i]);
+						wcscat_s(dblclkString, pathLength, L"\\");
+						}
+						dblclkLevel +=1;
 					}
-					for (i = 1; i <= dblclkLevel; i++)
-					{
-					wcscat_s(dblclkString, pathLength, dblclkPath[i]);
-					//L"\\"
-					}
+
 					SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 					PopulateListBox (hwnd, true);
-					(0 == wcscmp(findPathW, L".."))? dblclkLevel -=1: dblclkLevel +=1;
-
-					wcscat_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
+					
+					//remove the '.'
+					DblclkEnd:					
 					if (dblclkLevel)
 						{
+						sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0);
 							//disable buttons
 						}
 					else
 						{
 							//enable buttons
+
+							currPathW [0] =L'\0';
+							findPathW [0] =L'\0';
+							if (findPathW) free (findPathW);
+							if (currPathW) free (currPathW);
+
+							InitProc(hwnd);
 						}
 
 					}
 					break; //This break for consistency
 				}
-			DblclkEnd:
-			if (findPathW) free (tempDest);
-			if (findPathW) free (findPathW);
-			if (currPathW) free (currPathW);
 			break;
 			} //end WM_COMMAND
 		break;
@@ -1704,26 +1727,7 @@ else
 {
 	memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
 	//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
-	if (dblclkPath) 
-	{
-		if (!tempDest)
-		{
-		wchar_t * currPathWtmp;
-		currPathWtmp = currPathW + 7;
-		wcscpy_s(tempDest, maxPathFolder, currPathWtmp);
-		//wcscpy_s(dblclkPath, maxPathFolder, currPathWtmp);
-		}
-		else
-		{
-		wcscat_s(currPathW, maxPathFolder, findPathW);
-		}
-		wcscat_s(currPathW, maxPathFolder, L"\\");
-		//wcscpy_s(dblclkPath, maxPathFolder, currPathW);
-	}
-	else
-	{
-		wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
-	}
+	(dblclkLevel)? wcscat_s(currPathW, maxPathFolder, dblclkString): wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
 	wcscat_s(currPathW, maxPathFolder, L"*");
 	ds = FindFirstFileW(currPathW, &dw); //dw points to found folders
 
@@ -1742,7 +1746,7 @@ if (ds == INVALID_HANDLE_VALUE && (widecharNames == 0))
 	return false;
 }
 
-	//There's an internal index that is reset to 0 each time you call FindFirstFile() and it's incremented each time you call FindNextFile() so unless you do it in a loop, you'll only get the first filename ( a dot ) each time.
+//There's an internal index that is reset to 0 each time you call FindFirstFile() and it's incremented each time you call FindNextFile() so unless you do it in a loop, you'll only get the first filename ( a dot ) each time.
 while (ds != INVALID_HANDLE_VALUE && findhandle)
 {
 
@@ -1785,7 +1789,7 @@ while (ds != INVALID_HANDLE_VALUE && findhandle)
 		if ((dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM
 			|| dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
 
-		(findPathW)? currPathW[0]= L'\0': wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
+		(dblclkLevel)? currPathW[0]= L'\0': wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
 		wcscat_s(currPathW, maxPathFolder, dw.cFileName);
 			
 				
