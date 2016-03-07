@@ -385,13 +385,13 @@ else
 	}
 	SetDlgItemInt(hwnd, IDC_NUMBER, 3, FALSE); //set repeat number
 	
-
+sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 rootFolderCS = PopulateListBox (hwnd, false);
 rootFolderCW = PopulateListBox (hwnd, true);
 
 
 //http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
-https://groups.google.com/forum/#!topic/comp.os.ms-windows.programmer.win32/L7o1PeransU
+//https://groups.google.com/forum/#!topic/comp.os.ms-windows.programmer.win32/L7o1PeransU
 if (currPath) free (currPath);
 if (currPathW) free (currPathW);
 if (findPathW) free (findPathW);
@@ -1189,7 +1189,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//free(cumPath);
 				if (errCode == 0) //succeeded
 				{
-				sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 				InitProc(hwnd);
 				removeButtonEnabled = true;
 				EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
@@ -1292,7 +1291,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			case IDC_CLEAR:
 				{
-				sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 				InitProc(hwnd);
 				}
 			break;
@@ -1371,19 +1369,22 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 			case IDC_LIST:
-			HWND hList = GetDlgItem(hwnd, IDC_LIST);
-			currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-			findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-			if ((currPathW == nullptr) || (findPathW == nullptr))
-			{
-				DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
-				return 0;
-			}
+
 				switch(HIWORD(wParam))
 				{
+
 					case LBN_SELCHANGE:
 					{
 						// Get the number of items selected.
+						HWND hList = GetDlgItem(hwnd, IDC_LIST);
+						currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						if (currPathW == nullptr)
+						{
+						DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
+						return 0;
+						}
+
+
 						int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
 						bool removeTrig = false;
 						if(count != LB_ERR)
@@ -1399,6 +1400,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								if (index == LB_ERR)
 								{
 									DisplayError (hwnd, L"Something has gone wrong with the Listbox!", errCode, 0);
+									if (currPathW) free (currPathW);
 									return 0;
 								}								
 								sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)currPathW);
@@ -1529,22 +1531,31 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							errCode = 0;
 							DisplayError (hwnd, L"Error counting items :(", errCode, 0);
 						}
+						if (currPathW) free (currPathW);
 					}
 					break;
 					case LBN_DBLCLK:
 					{
+					HWND hList = GetDlgItem(hwnd, IDC_LIST);
+					currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+					findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+					if ((currPathW == nullptr) || (findPathW == nullptr))
+					{
+					DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
+					return 0;
+					}
 					sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
 					
 					dblclkString[0]= L'\0';
 					if ((0 == wcscmp(findPathW, L"..")))
 					{
-							for (i = 0; i <= dblclkLevel; i++)
+						dblclkLevel -=1;
+							for (i = 0; i < dblclkLevel; i++)
 							{
 							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 							wcscat_s(dblclkString, pathLength, L"\\");
 							}
 							wcscpy_s(findPathW, maxPathFolder, dblclkString);
-							dblclkLevel -=1;
 					}
 					else
 					{
@@ -1560,7 +1571,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							dblclkLevel = 0;
 							goto DblclkEnd;
 						}
-
 						wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
 
 						for (i = 0; i <= dblclkLevel; i++)
@@ -1570,28 +1580,25 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						dblclkLevel +=1;
 					}
-
-					SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-					PopulateListBox (hwnd, true);
 					
-					//remove the '.'
-					DblclkEnd:					
 					if (dblclkLevel)
 						{
-						sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0);
+							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+							PopulateListBox (hwnd, true);
+							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
 							//disable buttons
 						}
 					else
 						{
-							//enable buttons
-
-							currPathW [0] =L'\0';
-							findPathW [0] =L'\0';
 							if (findPathW) free (findPathW);
 							if (currPathW) free (currPathW);
-
 							InitProc(hwnd);
+							return 0;
+							//enable buttons
 						}
+					DblclkEnd:
+					if (findPathW) free (findPathW);
+					if (currPathW) free (currPathW);
 
 					}
 					break; //This break for consistency
@@ -2648,7 +2655,6 @@ if (cmdlineParmtooLong)
 			{
 			errCode = 0; //flag okay now
 			listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 			InitProc(hwnd);
 			}
 			else 
