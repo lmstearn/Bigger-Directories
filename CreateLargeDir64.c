@@ -344,6 +344,8 @@ else
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
 	memset(pathsToSave, L'\0', sizeof(pathsToSave)); //required for create
 	memset(dblclkPath, L'\0', sizeof(dblclkPath));
+	EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
+	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
@@ -1291,7 +1293,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			case IDC_CLEAR:
 				{
-				InitProc(hwnd);
+
+					if (dblclkLevel)
+					{
+						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
+					}
+					else
+					{
+						InitProc(hwnd);
+					}
 				}
 			break;
 
@@ -1587,14 +1598,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							PopulateListBox (hwnd, true);
 							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
 							//disable buttons
+							EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
 						}
 					else
 						{
 							if (findPathW) free (findPathW);
 							if (currPathW) free (currPathW);
 							InitProc(hwnd);
-							return 0;
 							//enable buttons
+							return 0;
 						}
 					DblclkEnd:
 					if (findPathW) free (findPathW);
