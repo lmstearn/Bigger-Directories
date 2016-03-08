@@ -7,7 +7,7 @@
 #include <tlhelp32.h> //Find process stuff
 #include "CreateLargeDir64.h" //my file
 #include <Winternl.h> //NtCreateFile
-
+//#include <commctrl.h>
 
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
@@ -24,8 +24,7 @@
 
 //findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 
-bool foundResolution = false;
-bool pCmdLineActive = false;
+
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATAA da;
@@ -51,6 +50,9 @@ int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branch
 int i,j,k, errCode;
 int idata, index, listTotal = 0, sendMessageErr = 0;
 int treeLevel, trackFTA[branchLimit][2];
+BOOL foundResolution = false;
+BOOL pCmdLineActive = false;
+BOOL secondTryDelete = false;
 BOOL createFail = FALSE;
 BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
@@ -135,6 +137,11 @@ void FSDeleteInit (HWND hwnd, HWND hList);
 bool FSDelete (HWND hwnd);
 bool fsDelsub (int i, int j, HWND hwnd);
 int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
+// Start of HyperLink URL
+LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+static void CreateHyperLink(HWND hwndControl);
+// End of HyperLink URL
 
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
@@ -338,12 +345,16 @@ else
 	branchTotalCum = 0;
 	branchTotalCumOld = 0;
 	dblclkLevel = 0;
-	dblclkString[0] =L'\0';
+	dblclkString[0] =L'';
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
 	memset(dacfoldersW, L'\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
 	memset(pathsToSave, L'\0', sizeof(pathsToSave)); //required for create
 	memset(dblclkPath, L'\0', sizeof(dblclkPath));
+	SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Add");
+	SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"times.");
+	SetDlgItemInt(hwnd, IDC_NUMBER, 3, FALSE);//set repeat number
+	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
@@ -385,7 +396,6 @@ else
 		return;
 
 	}
-	SetDlgItemInt(hwnd, IDC_NUMBER, 3, FALSE); //set repeat number
 	
 sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 rootFolderCS = PopulateListBox (hwnd, false);
@@ -433,11 +443,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
 						if (pCmdLineActive) 
 							{
-								//MessageBoxW (NULL, L"Debugging message", L"\0", MB_OK); //for debugging
+								secondTryDelete = true;
 
 								InitProc (hwnd);
 								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-								//MessageBoxW(NULL, NULL, L"Warning", NULL);
 								FSDeleteInit (hwnd, nullptr);
 								if (rootDir[0] != L'\0') rootDir[0] = L'\0';
 								
@@ -537,9 +546,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					goto NoAddSuccess;
 					}
 
-					SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is repeated");
+					SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"This entry is repeated");
 
-					SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times.");
+					SetDlgItemTextW(hwnd,IDC_STATIC_THREE, L"times.");
 
 
 
@@ -852,8 +861,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//Load FS into branchTotalSaveFile + 1 (appendMode true so FS loaded after)
 						if (!ProcessfileSystem (hwnd, false, true))
 						{
-							if (!DisplayError (hwnd, L"Problem with FS file! Try alternate Create?", 0, 1))
+							if (DisplayError (hwnd, L"Problem with FS file! Try alternate Create?", 0, 1))
 							{
+								free (currPathW);
 								goto AltCreate;
 							}
 							else
@@ -1187,7 +1197,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					branchTotalCum = 0;
 				}
 
-				free(currPathW);
+				if (currPathW) free(currPathW);
 				//free(cumPath);
 				if (errCode == 0) //succeeded
 				{
@@ -1460,16 +1470,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 									if (idata)
 									{
-										SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is repeated");
-										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"times.");
+										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"This entry is repeated");
+										SetDlgItemTextW(hwnd,IDC_STATIC_THREE, L"times.");
 										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
 									}
 									
 									else
 									{
 										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, index, FALSE);
-										SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"This entry is ranked");
-										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"on the list.");
+										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"This entry is ranked");
+										SetDlgItemTextW(hwnd,IDC_STATIC_THREE, L"on the list.");
 									}
 									//This function performs like:
 									//TCHAR buf[16];
@@ -1555,18 +1565,28 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
 					return 0;
 					}
+					index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
+					if ((index >= rootFolderCS + rootFolderCW) && (!dblclkLevel)) goto DblclkEnd;
+
 					sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
 					
-					dblclkString[0]= L'\0';
+					dblclkString[0]= L'';
 					if ((0 == wcscmp(findPathW, L"..")))
 					{
 						dblclkLevel -=1;
+						if (!dblclkLevel) goto DblclkEnd;
 							for (i = 0; i < dblclkLevel; i++)
 							{
 							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 							wcscat_s(dblclkString, pathLength, L"\\");
 							}
 							wcscpy_s(findPathW, maxPathFolder, dblclkString);
+							if (!SetCurrentDirectoryW (findPathW))
+							{
+								ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+								dblclkLevel = 0;
+							goto DblclkEnd;
+						}
 					}
 					else
 					{
@@ -1591,6 +1611,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						dblclkLevel +=1;
 					}
+					DblclkEnd:
 					
 					if (dblclkLevel)
 						{
@@ -1598,6 +1619,11 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							PopulateListBox (hwnd, true);
 							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
 							//disable buttons
+							SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
+							SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"");
+							SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
+							SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
+							EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
@@ -1605,6 +1631,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
+							if (findPathW) free (findPathW);
+							if (currPathW) free (currPathW);
 						}
 					else
 						{
@@ -1614,10 +1642,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							//enable buttons
 							return 0;
 						}
-					DblclkEnd:
-					if (findPathW) free (findPathW);
-					if (currPathW) free (currPathW);
-
 					}
 					break; //This break for consistency
 				}
@@ -1649,14 +1673,28 @@ BOOL WINAPI AboutDlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 	case WM_INITDIALOG:
 	{
+	//INITCOMMONCONTROLSEX InitCtrls;
+	//InitCtrls.dwSize = sizeof(InitCtrls);
+	//DWORD dwStyle = GetWindowLong(hdlg, GWL_STYLE);
 	//PlaySound(MAKEINTRESOURCE(WAV_OMG), (HMODULE)GetWindowLong(hdlg, GWL_HINSTANCE), SND_RESOURCE | SND_ASYNC);
 	}
 	return TRUE;
+
 	case WM_COMMAND:
 	switch(wParam)
 	{
 	case IDOK:
 	EndDialog(hdlg, IDOK);
+	break;
+	case IDC_STATIC_FOUR:
+		{
+	ShellExecuteW(NULL, L"open", L"http://www.google.com", NULL, NULL, SW_SHOWNORMAL);
+		}
+	break;
+	case IDC_STATIC_FIVE:
+		{
+	ShellExecuteW(NULL, L"open", L"http://www.google.com", NULL, NULL, SW_SHOWNORMAL);
+		}
 	break;
 	}
 	break;
@@ -1814,7 +1852,7 @@ while (ds != INVALID_HANDLE_VALUE && findhandle)
 		if ((dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM
 			|| dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
 
-		(dblclkLevel)? currPathW[0]= L'\0': wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
+		(dblclkLevel)? currPathW[0]= L'': wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
 		wcscat_s(currPathW, maxPathFolder, dw.cFileName);
 			
 				
@@ -2134,7 +2172,6 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 {
 	NTSTATUS ntStatus;
 	DWORD Status;
-	bool newFile = false;
 	int  result;
 	int  jLim;
 	wint_t ch = 0, chOld = 0;
@@ -2148,53 +2185,70 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	//If the file already exists and is opened for reading or appending, the Byte Order Mark (BOM), if it present in the file, determines the encoding.
 	if (!stream) //returns NULL Pointer
 	{
-		if (falseReadtrueWrite) 
+
+	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort...", 0, 1))
 		{
-			if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort...", 0, 1))
+
+			stream = _wfopen(fsName, L"w+b");
+			if (stream == nullptr) 
 			{
-				newFile = true;
-				stream = _wfopen(fsName, L"w+b");
-				if (stream == nullptr) 
+				ErrorExit (L"Problems with opening input File.", 0);
+				free (fsName);
+				return false;
+			}
+			_setmode(_fileno(stdout), _O_U16TEXT);
+			//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
+				if(fputwc(BOM, stream) == EOF)
+				//if (fwrite("\xFEFF", 2, 2, stream) < 0)
+		
 				{
-					ErrorExit (L"Problems with opening input File.", 0);
+					ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
 					free (fsName);
+					fclose (stream);
 					return false;
 				}
-			}
-			else
-			{
-			free (fsName);
-			return false; // can't read from empty file
-			}
+		
 		}
 		else
 		{
-		DisplayError (hwnd, L"Cannot Find Input file so cannot read!", 0, 0);
 		free (fsName);
-		return false;
+		return false; //won't read/write on empty file
 		}
+
+
 	}
 	else //file exists
 	{
 	
-	if (appendMode)
-	{
-	stream = _wfopen(fsName, L"a+b");
-	}
-	else //load FS when deleting
-	{
-	newFile = true; //BOM must be rewritten as it is wiped
-	(falseReadtrueWrite)? stream = _wfopen(fsName, L"w+b"): stream = _wfopen(fsName, L"rb");
+		if (appendMode)
+		{
+		stream = _wfopen(fsName, L"a+b");
+		//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
+		if (!stream) //returns NULL Pointer
+		{
+		ErrorExit (L"Problems with input File: Cannot append.", 0);
+		free (fsName);
+		return false;
+		}
 
-	}
+		}
+		else //load FS when deleting
+		{
+		//BOM must be rewritten as it is wiped
+		(falseReadtrueWrite)? stream = _wfopen(fsName, L"w+b"): stream = _wfopen(fsName, L"rb");
+			_setmode(_fileno(stdout), _O_U16TEXT);
+		//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
+			if(fputwc(BOM, stream) == EOF)
+			//if (fwrite("\xFEFF", 2, 2, stream) < 0)
+		
+			{
+				ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
+				free (fsName);
+				fclose (stream);
+				return false;
+			}
+		}
 	
-	//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
-	if (!stream) //returns NULL Pointer
-	{
-	ErrorExit (L"Problems with input File: Cannot append.", 0);
-	free (fsName);
-	return false;
-	}
 
 	}
 
@@ -2202,20 +2256,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	if (falseReadtrueWrite) //write or append to file
 	{
 
-		_setmode(_fileno(stdout), _O_U16TEXT);
-		//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
-	if (newFile)
-	{
-		if(fputwc(BOM, stream) == EOF)
-		//if (fwrite("\xFEFF", 2, 2, stream) < 0)
-		
-		{
-			ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
-			free (fsName);
-			fclose (stream);
-			return false;
-		}
-	}	
+
 		
 		//copy to whole string first: no sorting for write: create: append, Remove: write
 
@@ -2371,7 +2412,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 										folderTreeArray[i][j][0] = L'\0';
 									}
 									pathsToSave[i][0] = L'\0';
-									ErrorExit (L"Cannot verify file in FS: Probably doesn't exist!!! ", 1);
+									ErrorExit (L"Cannot verify a file entry in FS: Probably doesn't exist! recommend restarting the program ASAP", 1);
 									if (appendMode)
 									{
 										if (i > branchTotal + 1) i -=1;
@@ -2491,7 +2532,7 @@ else
 			}
 		}
 
-	currPathW[0] = L'\0';
+	currPathW[0] = L'';
 	wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-rootFolderCW]);
 	wchar_t * currPathWtmp;
 	currPathWtmp = currPathW + 7;
@@ -2537,7 +2578,7 @@ else
 		for (i = branchTotal; (i >= 0); i--) //place paths to delete at end of FS
 		{
 
-			if (!wcsncmp (rootDir, pathsToSave[i], wcslen (rootDir))) //0 if perfect match
+			if (!wcscmp (rootDir, folderTreeArray[i][0])) //0 if perfect match
 			{
 				if (i < j)
 				{
@@ -2742,7 +2783,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 	if (RemoveDirectoryW (pathToDeleteW))
 			{
 				//clear everything
-				pathsToSave[j][0] = L'\0';
+				pathsToSave[j][0] = L'';
 				//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
 							
 
@@ -2772,13 +2813,21 @@ bool fsDelsub (int i, int j, HWND hwnd)
 			{
 				if (((int)GetLastError() == 32) ) //"used by another process" error
 				{
-					memset(rootDir, L'\0', sizeof(rootDir));
+					if (secondTryDelete)
+					{
+					DisplayError (hwnd, L"Delete failed the second time. Try running 7-zip and shift-del.", 0, 0);
+					}
+					else
+					{
+					DisplayError (hwnd, L"Oops, 'Used by another process': Something went wrong. Restarting to attempt deletion...", 0, 0);
+					rootDir[0] = L'\0';
 					pCmdLineActive = true;
 					wcscpy_s(pathToDeleteW, pathLength, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
 					wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
 
 					((ProcessfileSystem(hwnd, true, false))? errCode = 0: errCode = 1);
 					Kleenup (hwnd, weareatBoot);
+					}
 					return false;
 
 				}
@@ -2919,7 +2968,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 				trackFTA[treeLevel][0] +=1;
 
 				// set inits for this branch
-				findPathW[0] = L'\0';
+				findPathW[0] = L'';
 				wcscat_s(findPathW, maxPathFolder, folderTreeArray[trackFTA[treeLevel][0]-1][treeLevel]);
 				//
 				if (!SetCurrentDirectoryW (findPathW))
@@ -2994,7 +3043,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 
 			{
 
-				currPathW[0] = L'\0';
+				currPathW[0] = L'';
 				wcscat_s(currPathW, maxPathFolder, dw.cFileName);
 				wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 
@@ -3084,5 +3133,29 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 					}
 				}
 	} //trackFTA[treeLevel][0] = 0
+}
+void ReportError (int nError)
+{
+    char* str;
+    switch (nError) 
+	{
+        case 0:                       str = "The operating system is out\nof memory or resources."; break;
+        case SE_ERR_PNF:              str = "The specified path was not found."; break;
+        case SE_ERR_FNF:              str = "The specified file was not found."; break;
+        case ERROR_BAD_FORMAT:        str = "The .EXE file is invalid\n(non-Win32 .EXE or error in .EXE image)."; break;
+        case SE_ERR_ACCESSDENIED:     str = "The operating system denied\naccess to the specified file."; break;
+        case SE_ERR_ASSOCINCOMPLETE:  str = "The filename association is\nincomplete or invalid."; break;
+        case SE_ERR_DDEBUSY:          str = "The DDE transaction could not\nbe completed because other DDE transactions\nwere being processed."; break;
+        case SE_ERR_DDEFAIL:          str = "The DDE transaction failed."; break;
+        case SE_ERR_DDETIMEOUT:       str = "The DDE transaction could not\nbe completed because the request timed out."; break;
+        case SE_ERR_DLLNOTFOUND:      str = "The specified dynamic-link library was not found."; break;
+        case SE_ERR_NOASSOC:          str = "There is no application associated\nwith the given filename extension."; break;
+        case SE_ERR_OOM:              str = "There was not enough memory to complete the operation."; break;
+        case SE_ERR_SHARE:            str = "A sharing violation occurred. ";
+        default:                      str = "Unknown Error (%d) occurred."; break;
+    }
+    str = "Unable to open hyperlink:\n\n";
  
 }
+ 
+
