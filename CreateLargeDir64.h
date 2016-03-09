@@ -3,7 +3,11 @@
 // Used by CreateLargeDir64.rc
 //
 #define arraysize                       30
-#define IDD_MAIN                        101
+#define IDD_768P                        101
+#define IDD_1080P                       102
+#define IDD_2160P                       103
+#define IDD_4320P                       104
+#define IDD_HELPBOX                     105
 #define IDC_TEXT                        1000
 #define IDC_NUMBER                      1001
 #define IDC_LIST                        1002
@@ -15,14 +19,27 @@
 #define IDC_REMOVE                      1008
 #define IDC_LOGON                       1009
 #define IDC_NOLOGON                     1010
-#define IDC_HELP                        1011
+#define IDC_HALP                        1011
 #define IDC_SHOWCOUNT                   1012
 #define IDC_LIST2                       1013
-#define IDC_STATIC_ONE                  1014
-#define IDC_STATIC_TWO                  1015
-#define IDC_SYSLINK1                    1016
-#define IDI_APP_ICON                    1017
+#define IDC_STATIC_ZERO                 1014
+#define IDC_STATIC_ONE                  1015
+#define IDC_STATIC_TWO                  1016
+#define IDC_STATIC_THREE                1017
+#define IDC_STATIC_FOUR                 1018
+#define IDC_STATIC_FIVE                 1019
+#define IDC_SYSLINK1                    1020
+#define IDI_APP_ICON                    1021
 #define IDC_STATIC                      -1
+
+
+// Start of HyperLink URL //
+#define PROP_ORIGINAL_FONT      TEXT("_Hyperlink_Original_Font_")
+#define PROP_ORIGINAL_PROC      TEXT("_Hyperlink_Original_Proc_")
+#define PROP_STATIC_HYPERLINK   TEXT("_Hyperlink_From_Static_")
+#define PROP_UNDERLINE_FONT     TEXT("_Hyperlink_Underline_Font_")
+// End of HyperLink URL */
+
 
 //check properties/c++/preprocessor defs are _Win64
 #if _WIN32 || _WIN64
@@ -38,14 +55,14 @@
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        102
+#define _APS_NEXT_RESOURCE_VALUE        30
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1017
+#define _APS_NEXT_CONTROL_VALUE         1021
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
 
-
+//#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 //NT_ERROR(ntStatus)) bad practice to define consts here (performance)
 #define STATUS_OBJECT_NAME_INVALID			((NTSTATUS)0xC0000033L)
 #define STATUS_OBJECT_NAME_COLLISION		((NTSTATUS)0xC0000035L)

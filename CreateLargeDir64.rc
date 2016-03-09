@@ -1,8 +1,9 @@
 // Microsoft Visual C++ generated resource script.
 //
 #include "CreateLargeDir64.h"
+#include <windows.h>
 
-#define APSTUDIO_READONLY_SYMBOLS
+/*#define APSTUDIO_READONLY_SYMBOLS
 /////////////////////////////////////////////////////////////////////////////
 //
 // Generated from the TEXTINCLUDE 2 resource.
@@ -12,7 +13,7 @@
 #undef APSTUDIO_HIDDEN_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-#undef APSTUDIO_READONLY_SYMBOLS
+#undef APSTUDIO_READONLY_SYMBOLS*/
 
 /////////////////////////////////////////////////////////////////////////////
 // English (United States) resources
@@ -21,7 +22,7 @@
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 #pragma code_page(1252)
 
-#ifdef APSTUDIO_INVOKED
+/*#ifdef APSTUDIO_INVOKED
 /////////////////////////////////////////////////////////////////////////////
 //
 // TEXTINCLUDE
@@ -45,47 +46,134 @@ BEGIN
     "\0"
 END
 
-#endif    // APSTUDIO_INVOKED
+#endif    // APSTUDIO_INVOKED*/
 
-IDI_APP_ICON ICON DISCARDABLE "CaveMantizardum.ico"
 
- IDD_ABOUTBOX DIALOGEX 0, 0, 218, 118
- STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_CENTER 
- CAPTION "CreatelargeDir Help"
- FONT 8, "MS Shell Dlg"
- BEGIN
-    ICON            IDI_APP_ICON,IDC_STATIC,13,88,15,15
-    LTEXT           "http://members.ozemail.com.au/~lmstearn/public_html/",IDC_STATIC,15,6,194,24,SS_NOPREFIX
-    DEFPUSHBUTTON   "OK",IDOK,95,98,50,14,WS_GROUP
- END    
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_APP_ICON            ICON                    "CaveMantizardum.ico"
 
 /////////////////////////////////////////////////////////////////////////////
 //
 // Dialog
 //
 
-IDD_MAIN DIALOGEX 0, 0, 701, 218
-STYLE DS_SETFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+IDD_HELPBOX DIALOGEX 0, 0, 418, 413
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION
+CAPTION "CreatelargeDir Help"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+
+ICON            IDI_APP_ICON,IDC_STATIC,7,401,21,20
+LTEXT           "http://members.ozemail.com.au/~lmstearn/public_html/",IDC_STATIC_FOUR,40,382,119,24
+DEFPUSHBUTTON   "OK",IDOK,339,401,50,14,WS_GROUP
+LTEXT           "2nd link 2nd link",IDC_STATIC_FIVE,187,382,137,14
+CTEXT           "Header Header Header Header Header",IDC_STATIC,35,14,361,14
+CTEXT           "Body Body Body Body Body Body Body Body Body Body ",IDC_STATIC,27,56,361,16
+CTEXT           "Body Body Body Body Body Body Body Body Body Body ",IDC_STATIC,30,80,361,14
+END
+
+IDD_768P DIALOGEX 0, 0, 701, 218
+STYLE DS_SHELLFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "CreateLargeDirectory"
+FONT 8, "MS Shell Dlg", 0, 0, 0x0
+BEGIN
+
+LTEXT           "Add",IDC_STATIC_ZERO,506,8,14,8
+EDITTEXT        IDC_TEXT,528,5,120,14,ES_AUTOHSCROLL
+EDITTEXT        IDC_NUMBER,650,5,26,14,ES_NUMBER
+LTEXT           "times.",IDC_STATIC_ONE,677,8,23,8
+LISTBOX         IDC_LIST,7,22,641,176,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | WS_VSCROLL | WS_TABSTOP
+PUSHBUTTON      "&Add",IDC_ADD,650,30,47,14
+PUSHBUTTON      "&Up",IDC_UP,650,47,47,14
+PUSHBUTTON      "&Down",IDC_DOWN,650,64,47,14
+PUSHBUTTON      "&Make New",IDC_CREATE,650,81,47,14
+PUSHBUTTON      "&Del Dir",IDC_REMOVE,650,98,47,14
+PUSHBUTTON      "&Clear",IDC_CLEAR,650,115,47,14
+PUSHBUTTON      "&RunAtLogon",IDC_LOGON,650,132,47,14
+PUSHBUTTON      "&NoLogon",IDC_NOLOGON,650,149,47,14
+PUSHBUTTON      "&Help",IDC_HALP,650,166,47,14
+LTEXT           "This entry is ranked",IDC_STATIC_TWO,530,205,70,8
+CTEXT           "-",IDC_SHOWCOUNT,600,205,25,8
+LTEXT           "on the list.",IDC_STATIC_THREE,625,205,30,8
+
+END
+
+IDD_1080P DIALOGEX 0, 0, 984, 307
+STYLE DS_SHELLFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
 CAPTION "CreateLargeDirectory"
 FONT 8, "MS Sans Serif", 0, 0, 0x0
 BEGIN
-    LTEXT           "Add",IDC_STATIC,506,8,14,8
-    EDITTEXT        IDC_TEXT,528,5,120,14,ES_AUTOHSCROLL
-    EDITTEXT        IDC_NUMBER,650,5,21,14,ES_NUMBER
-    LTEXT           "times.",IDC_STATIC,671,8,23,8
-    LISTBOX         IDC_LIST,7,22,641,176,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | WS_VSCROLL | WS_TABSTOP
-    PUSHBUTTON      "&Add",IDC_ADD,650,30,47,14
-    PUSHBUTTON      "&Up",IDC_UP,650,47,47,14
-    PUSHBUTTON      "&Down",IDC_DOWN,650,64,47,14
-    PUSHBUTTON      "&Make New",IDC_CREATE,650,81,47,14
-    PUSHBUTTON      "&Del Dir",IDC_REMOVE,650,98,47,14
-    PUSHBUTTON      "&Clear",IDC_CLEAR,650,115,47,14
-    PUSHBUTTON      "&RunAtLogon",IDC_LOGON,650,132,47,14
-    PUSHBUTTON      "&NoLogon",IDC_NOLOGON,650,149,47,14
-	PUSHBUTTON      "&Help",IDC_HELP,650,166,47,14
-    LTEXT           "This entry is ranked",IDC_STATIC_ONE,530,205,70,8
-    CTEXT           "-",IDC_SHOWCOUNT,600,205,25,8
-    LTEXT           "on the list.",IDC_STATIC_TWO,625,205,30,8
+    LTEXT           "Add",IDC_STATIC_ZERO,710,11,20,11
+    EDITTEXT        IDC_TEXT,741,7,168,20,ES_AUTOHSCROLL
+    EDITTEXT        IDC_NUMBER,912,7,36,20,ES_NUMBER
+    LTEXT           "times.",IDC_STATIC_ONE,950,11,32,11
+    LISTBOX         IDC_LIST,10,31,900,248,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Add",IDC_ADD,912,42,66,20
+    PUSHBUTTON      "&Up",IDC_UP,912,66,66,20
+    PUSHBUTTON      "&Down",IDC_DOWN,912,90,66,20
+    PUSHBUTTON      "&Make New",IDC_CREATE,912,114,66,20
+    PUSHBUTTON      "&Del Dir",IDC_REMOVE,912,138,66,20
+    PUSHBUTTON      "&Clear",IDC_CLEAR,912,162,66,20
+    PUSHBUTTON      "&RunAtLogon",IDC_LOGON,912,185,66,20
+    PUSHBUTTON      "&NoLogon",IDC_NOLOGON,912,210,66,20
+    PUSHBUTTON      "&Help",IDC_HALP,912,233,66,20
+    LTEXT           "This entry is ranked",IDC_STATIC_TWO,744,288,98,11
+    CTEXT           "-",IDC_SHOWCOUNT,842,288,35,11
+    LTEXT           "on the list.",IDC_STATIC_THREE,877,288,42,11
+END
+
+IDD_2160P DIALOGEX 0, 0, 1968, 613
+STYLE DS_SHELLFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "CreateLargeDirectory"
+FONT 8, "MS Sans Serif", 0, 0, 0x0
+BEGIN
+    LTEXT           "Add",IDC_STATIC_ZERO,1420,23,39,23
+    EDITTEXT        IDC_TEXT,1482,14,337,39,ES_AUTOHSCROLL
+    EDITTEXT        IDC_NUMBER,1825,14,73,39,ES_NUMBER
+    LTEXT           "times.",IDC_STATIC_ONE,1900,23,65,23
+    LISTBOX         IDC_LIST,20,62,1799,495,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Add",IDC_ADD,1825,84,132,39
+    PUSHBUTTON      "&Up",IDC_UP,1825,132,132,39
+    PUSHBUTTON      "&Down",IDC_DOWN,1825,180,132,39
+    PUSHBUTTON      "&Make New",IDC_CREATE,1825,228,132,39
+    PUSHBUTTON      "&Del Dir",IDC_REMOVE,1825,276,132,39
+    PUSHBUTTON      "&Clear",IDC_CLEAR,1825,323,132,39
+    PUSHBUTTON      "&RunAtLogon",IDC_LOGON,1825,371,132,39
+    PUSHBUTTON      "&NoLogon",IDC_NOLOGON,1825,419,132,39
+    PUSHBUTTON      "&Help",IDC_HALP,1825,467,132,39
+    LTEXT           "This entry is ranked",IDC_STATIC_TWO,1488,577,196,23
+    CTEXT           "-",IDC_SHOWCOUNT,1684,577,70,23
+    LTEXT           "on the list.",IDC_STATIC_THREE,1754,577,84,23
+END
+
+IDD_4320P DIALOGEX 0, 0, 3935, 1226
+STYLE DS_SHELLFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
+CAPTION "CreateLargeDirectory"
+FONT 8, "MS Sans Serif", 0, 0, 0x0
+BEGIN
+    LTEXT           "Add",IDC_STATIC_ZERO,2841,45,79,45
+    EDITTEXT        IDC_TEXT,2964,28,674,79,ES_AUTOHSCROLL
+    EDITTEXT        IDC_NUMBER,3649,28,146,79,ES_NUMBER
+    LTEXT           "times.",IDC_STATIC_ONE,3800,45,129,45
+    LISTBOX         IDC_LIST,39,124,3599,990,LBS_NOINTEGRALHEIGHT | LBS_EXTENDEDSEL | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Add",IDC_ADD,3649,169,264,79
+    PUSHBUTTON      "&Up",IDC_UP,3649,264,264,79
+    PUSHBUTTON      "&Down",IDC_DOWN,3649,360,264,79
+    PUSHBUTTON      "&Make New",IDC_CREATE,3649,456,264,79
+    PUSHBUTTON      "&Del Dir",IDC_REMOVE,3649,551,264,79
+    PUSHBUTTON      "&Clear",IDC_CLEAR,3649,647,264,79
+    PUSHBUTTON      "&RunAtLogon",IDC_LOGON,3649,743,264,79
+    PUSHBUTTON      "&NoLogon",IDC_NOLOGON,3649,838,264,79
+    PUSHBUTTON      "&Help",IDC_HALP,3649,934,264,79
+    LTEXT           "This entry is ranked",IDC_STATIC_TWO,2975,1153,393,45
+    CTEXT           "-",IDC_SHOWCOUNT,3368,1153,140,45
+    LTEXT           "on the list.",IDC_STATIC_THREE,3509,1153,168,45
 END
 
 
@@ -97,17 +185,17 @@ END
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO
 BEGIN
-    IDD_MAIN, DIALOG
+    IDD_HELPBOX, DIALOG
     BEGIN
-        LEFTMARGIN, 7
-        RIGHTMARGIN, 750
-        VERTGUIDE, 647
-        VERTGUIDE, 648
-        TOPMARGIN, 7
-        BOTTOMMARGIN, 200
+    END
+
+    IDD_768P, DIALOG
+    BEGIN
     END
 END
 #endif    // APSTUDIO_INVOKED
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////
+
+
