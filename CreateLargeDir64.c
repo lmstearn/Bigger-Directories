@@ -58,7 +58,8 @@ BOOL createFail = FALSE;
 BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
 BOOL removeButtonEnabled = true;
-BOOL am64Bit, exe64Bit; 
+BOOL am64Bit, exe64Bit;
+BOOL folderNotEmpty = false;
 PVOID OldValue = nullptr; //Redirection
 WNDPROC g_pOldProc;
 HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
@@ -2205,8 +2206,9 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	wint_t ch = 0, chOld = 0;
 	FILE *stream = nullptr;
 	bool fsReturn = true;
-
+	wchar_t *tempDestOld = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 	wchar_t *fsName= (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
 	wcscat_s(fsName, pathLength, L"\\Temp\\CreateLargeFileSystem.txt");
 	stream = _wfopen(fsName, L"r+b");
@@ -2391,7 +2393,15 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 
 			trackFTA [i][0] = j; //track the nesting level for validation
 			if (ch == eolFTA) break;
-			if (j != 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA); //tacking them back on: what a waste doing it this way
+			if (j != 0)
+				{
+					wcscpy_s(tempDestOld, pathLength, pathsToSave[i]);
+					wcscat_s(pathsToSave[i], pathLength, &separatorFTA); //tacking them back on: what a waste doing it this way
+				}
+			else
+			{
+				wcscpy_s(tempDestOld, pathLength, driveIDBaseWNT);
+			}
 			wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][j]);
 
 
@@ -2402,7 +2412,6 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 					wcscat_s(tempDest, pathLength, pathsToSave[i]);
 					if (DynamicLoader (false, tempDest))
 					{
-
 						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, &fileObject, &ioStatus, nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT, nullptr, 0);
 
 						PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
@@ -2431,33 +2440,23 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 							case 3://NT_ERROR
 								{
 									//GetFileAttributesW is good to go else it's FltCancellableWaitForSingleObject
-									if (Status != 0X00000057 || (GetFileAttributesW(tempDest) == INVALID_FILE_ATTRIBUTES)) //The status_wait_one is always reached after creation
+									if (GetFileAttributesW(tempDest) == INVALID_FILE_ATTRIBUTES) //The status_wait_one is always reached after creation
 									{
+										//(Status is often invalid parm 0X00000057 from prevoious call)
+										trackFTA [i][0] -=1; //Rollback
+										wcscpy_s(pathsToSave[i], pathLength, tempDestOld);
+
+										ErrorExit (L"Cannot verify a file entry in FS: Probably doesn't exist! recommend restarting the program ASAP: ", 1);
 										folderTreeArray[i][j][0] = L'\0';
-										if (j >= trackFTA [i][0])
+
+											
+										//wind forward to EOL
+										for (k = 0; ((k  < (pathLength)) && (ch!= eolFTA)); k++)
 										{
-											pathsToSave[i][0] = L'\0';
-											ErrorExit (L"Cannot verify a file entry in FS: Probably doesn't exist! recommend restarting the program ASAP", 1);
-											if (appendMode)
-											{
-												if (i > branchTotal + 1) i -=1;
-											}
-											else
-											{
-												if (i > 0) i -=1;
-											}
-											 //(ch == eolFTA)
-												 //fseek (stream, 1, SEEK_CUR);
-
-
-											//forward to EOL
-											for (k = 0; ((k  < (maxPathFolder - 1)) && (ch!= eolFTA)); k++)
-											{
-												ch = fgetwc(stream);
-												chOld = ch;
-											}
-
+											ch = fgetwc(stream);
+											chOld = ch;
 										}
+										
 									}
 								}
 							break;
@@ -2488,12 +2487,13 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	} 
 
 
-WEOFFOUND:
-if (foundNTDLL && !appendMode && !falseReadtrueWrite) //cleanup
-{
-	if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close...", errCode, 0);
-}
-	// Close stream if it is not NULL 
+	WEOFFOUND:
+	free (tempDestOld);
+	if (foundNTDLL && !appendMode && !falseReadtrueWrite) //cleanup
+	{
+		if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close...", errCode, 0);
+	}
+		// Close stream if it is not NULL 
 
 	if (fclose (stream))
 	{
@@ -2845,6 +2845,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 			}
 		else
 			{
+				
 				if (((int)GetLastError() == 32) ) //"used by another process" error
 				{
 					if (secondTryDelete)
@@ -2878,6 +2879,23 @@ bool fsDelsub (int i, int j, HWND hwnd)
 						trackFTA [i][1] = 0;
 						trackFTA [j][0] = 0;
 						goto FSReorg;
+						}
+						if (((int)GetLastError() == 145))
+						{
+							if (!folderNotEmpty)
+
+								{
+								if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when a subfolder is deleted outside of this program. Continue deletion?", 0, 1))
+								{
+									folderNotEmpty = true;
+									return false;
+								}
+								else
+								{
+									folderNotEmpty = false;
+									return false;
+								}
+							}
 						}
 					else
 						{
