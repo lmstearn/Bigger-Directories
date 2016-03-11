@@ -7,6 +7,7 @@
 #include <tlhelp32.h> //Find process stuff
 #include "CreateLargeDir64.h" //my file
 #include <Winternl.h> //NtCreateFile
+#include <Strsafe.h>
 //#include <commctrl.h>
 
 #define _CRTDBG_MAP_ALLOC
@@ -77,17 +78,17 @@ typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 //NTcreatefile stuff
 //typedef int (*NTDLLptr) (int); //Function pointer example, but following is required
 typedef NTSTATUS (__stdcall *NTDLLptr)(
-	PHANDLE FileHandle, 
-	ACCESS_MASK DesiredAccess, 
-	POBJECT_ATTRIBUTES ObjectAttributes, 
-	PIO_STATUS_BLOCK IoStatusBlock, 
-	PLARGE_INTEGER AllocationSize,
-	ULONG FileAttributes, 
-	ULONG ShareAccess, 
-	ULONG CreateDisposition, 
-	ULONG CreateOptions, 
-	PVOID EaBuffer, 
-	ULONG EaLength );
+	OUT PHANDLE FileHandle, 
+	IN ACCESS_MASK DesiredAccess, 
+	IN POBJECT_ATTRIBUTES ObjectAttributes, 
+	OUT PIO_STATUS_BLOCK IoStatusBlock, 
+	IN PLARGE_INTEGER AllocationSize,
+	IN ULONG FileAttributes, 
+	IN ULONG ShareAccess, 
+	IN ULONG CreateDisposition, 
+	IN ULONG CreateOptions, 
+	IN PVOID EaBuffer, 
+	IN ULONG EaLength );
 
 
 //for NTcreatefile fileObject,  NTAPI is __stdcall
@@ -99,12 +100,12 @@ typedef ULONG (__stdcall *PFN_RtlNtStatusToDosError) (
 //static my_RtlInitUnicodeString rtlInitUnicodeString; //Makes no difference
 //PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 
-//PHANDLE hdlNTOut;
+
 NTDLLptr foundNTDLL = nullptr; //returns variable here
 UNICODE_STRING fn;
 OBJECT_ATTRIBUTES fileObject;
 IO_STATUS_BLOCK ioStatus;
-NTSTATUS status;
+NTSTATUS ntStatus;
 const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
@@ -132,6 +133,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
+bool CloseNTDLLObjs (BOOL atWMClose);
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
 void FSDeleteInit (HWND hwnd, HWND hList);
 bool FSDelete (HWND hwnd);
@@ -828,7 +830,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			case IDC_CREATE:
 				{
-				NTSTATUS ntStatus;
 				int jMax = 0;
 				HWND hList = GetDlgItem(hwnd, IDC_LIST);
 				//get total for loop
@@ -982,7 +983,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 						}
 						//SetCurrentDirectory Often fails here at root node with error 32 "used by another process"
-
+						if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
 						}
 
 
@@ -1040,7 +1041,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								if (!SetCurrentDirectoryW(currPathW))
 								{
 								errCode = 1;
-								createFail = true;
 								ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 								goto EndCreate;
 								}
@@ -1048,7 +1048,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						else
 							{
 								errCode = 1;
-								createFail = true;
 								ErrorExit (L"CreateDirectoryW: ", 0);
 								goto EndCreate;
 							}
@@ -1063,7 +1062,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (!SetCurrentDirectoryW(currPathW))
 									{
 									errCode = 1;
-									createFail = true;
 									ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 									goto EndCreate;
 									}
@@ -1071,7 +1069,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							else
 								{
 								errCode = 1;
-								createFail = true;
 								ErrorExit (L"CreateDirectoryW: ", 0);
 								goto EndCreate;
 								}
@@ -1102,12 +1099,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				EndCreate:
 				if (foundNTDLL)
 				{
-					if (hdlNTOut) CloseHandle (hdlNTOut);
-					memset(&ioStatus, 0, sizeof(ioStatus));
-					memset(&fileObject, 0, sizeof(fileObject));
-					FreeLibrary ((HMODULE)hdlNtCreateFile);
-					ntStatus = NULL;
-				}
+					if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
 
 				if (createFail)
 				{
@@ -1196,19 +1188,20 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 					branchTotalCum = 0;
 				}
+				}
 
 				if (currPathW) free(currPathW);
 				//free(cumPath);
-				if (errCode == 0) //succeeded
-				{
-				InitProc(hwnd);
-				removeButtonEnabled = true;
-				EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
-				}
-				else
-				{
-				errCode = 0;
-				}
+					if (errCode == 0) //succeeded
+						{
+						InitProc(hwnd);
+						removeButtonEnabled = true;
+						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
+						}
+					else
+						{
+						errCode = 0;
+						}
 				}
 				break;
 
@@ -1623,6 +1616,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"");
 							SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
 							SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
+							SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
 							EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
@@ -1648,12 +1642,21 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			} //end WM_COMMAND
 		break;
+/*		        case WM_KEYDOWN: 
+            switch (wParam) 
+            {
+
+			}*/
 		case WM_CLOSE:
 			{
 			//Cleanup
 			if (weareatBoot) Kleenup (hwnd, weareatBoot);
 			 
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
+				if (foundNTDLL)
+				{
+					if (!CloseNTDLLObjs(true)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
+				}
 			EndDialog(hwnd, 0);
 			_CrtDumpMemoryLeaks();
 			}
@@ -2135,7 +2138,11 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
 
 NTDLLptr DynamicLoader (bool progInit, wchar_t * fileObjVar)
 {
+	
+
 	hdlNtCreateFile = LoadLibraryW(L"NtDll.dll");
+	if (hdlNtCreateFile) 
+	{
 	foundNTDLL = (NTDLLptr) GetProcAddress ((HMODULE) hdlNtCreateFile, createFnString);
 	if (foundNTDLL)
 		{
@@ -2145,38 +2152,59 @@ NTDLLptr DynamicLoader (bool progInit, wchar_t * fileObjVar)
 			memset(&fileObject, 0, sizeof(fileObject));
 			fileObject.Length = sizeof(fileObject);
 			fileObject.Attributes = OBJ_CASE_INSENSITIVE;
-			}
-			else
-			{
 			//status error codes //also try GetModuleHandle("ntdll.dll"),
 			//RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress((HMODULE)hdlNtCreateFile, NtStatusToDosErrorString);
 			PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 			if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return nullptr;
+
+			}
+			else
+			{
 			//init Unicode string
 			PFN_RtlInitUnicodeString RtlInitUnicodeString;
 			if( !(RtlInitUnicodeString = (PFN_RtlInitUnicodeString) GetProcAddress( (HMODULE)hdlNtCreateFile, initUnicodeFnString )) ) return nullptr;
 			RtlInitUnicodeString(&fn, fileObjVar);
 			fileObject.ObjectName = &fn; //Ntdll.dll
 			}
-			return foundNTDLL;
 		}
 	else
 		{
 		FreeLibrary ((HMODULE) hdlNtCreateFile);
-		return foundNTDLL;
 		}
+	}
+return foundNTDLL;
+}
 
+bool CloseNTDLLObjs (BOOL atWMClose)
+{
+	bool returnClose = true;
+	memset(&ioStatus, 0, sizeof(ioStatus));
+	memset(&fileObject, 0, sizeof(fileObject));
+
+	if (!atWMClose && hdlNTOut) 
+	{
+		if (CloseHandle (hdlNTOut) == (ERROR_INVALID_HANDLE)) returnClose = false;
+		fileObject.Length = sizeof(fileObject);
+		fileObject.Attributes = OBJ_CASE_INSENSITIVE;
+	}
+
+	if (hdlNtCreateFile)
+	{
+		if (!FreeLibrary ((HMODULE)hdlNtCreateFile)) returnClose = false; 
+	}
+	ntStatus = NULL;
+
+	return returnClose;
 }
 
 bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 {
-	NTSTATUS ntStatus;
 	DWORD Status;
 	int  result;
 	int  jLim;
 	wint_t ch = 0, chOld = 0;
 	FILE *stream = nullptr;
-
+	bool fsReturn = true;
 
 	wchar_t *fsName= (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
@@ -2193,8 +2221,9 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 			if (stream == nullptr) 
 			{
 				ErrorExit (L"Problems with opening input File.", 0);
-				free (fsName);
-				return false;
+				fsReturn = false;
+				goto WEOFFOUND;
+
 			}
 			_setmode(_fileno(stdout), _O_U16TEXT);
 			//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
@@ -2203,9 +2232,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 		
 				{
 					ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
-					free (fsName);
-					fclose (stream);
-					return false;
+					fsReturn = false;
+					goto WEOFFOUND;
 				}
 		
 		}
@@ -2227,8 +2255,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 		if (!stream) //returns NULL Pointer
 		{
 		ErrorExit (L"Problems with input File: Cannot append.", 0);
-		free (fsName);
-		return false;
+		fsReturn = false;
+		goto WEOFFOUND;
 		}
 
 		}
@@ -2243,9 +2271,8 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 		
 			{
 				ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
-				free (fsName);
-				fclose (stream);
-				return false;
+				fsReturn = false;
+				goto WEOFFOUND;
 			}
 		}
 	
@@ -2310,21 +2337,19 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	if (result)
 	{
 	ErrorExit (L"fseek: Could not rewind!", 0);
-	free (fsName);
-	fclose (stream);
-	return false;
+	fsReturn = false;
+	goto WEOFFOUND;
 	}
 
 	//Read BOM
 	ch = fgetwc(stream);
-		
+	
 	if(ch != BOM)
 		
 	{
 		DisplayError(hwnd, L"fgetwc: input file does not have BOM!", 0, 0);
-		free (fsName);
-		fclose (stream);
-		return false;
+		fsReturn = false;
+		goto WEOFFOUND;
 	}
 
 
@@ -2369,25 +2394,23 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 			if (j != 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA); //tacking them back on: what a waste doing it this way
 			wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][j]);
 
- 			}
 
-			
-			if (foundNTDLL && !appendMode) //only verify entire FS before delete
+
+			if (foundNTDLL && !appendMode)   //only verify entire FS before delete
 				{
 					wcscpy_s(tempDest, pathLength, driveIDBaseWNT);
 					wcscat_s(tempDest, pathLength, pathsToSave[i]);
 					if (DynamicLoader (false, tempDest))
 					{
 
-						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | SYNCHRONIZE, &fileObject, &ioStatus, nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT, nullptr, 0);
+						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, &fileObject, &ioStatus, nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT, nullptr, 0);
 
 						PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 						if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) 
 						{
 							ErrorExit (L"RtlNtStatusToDosError: Problem!", 0);
-							free (fsName);
-							fclose (stream);
-							return false;
+							fsReturn = false;
+							goto WEOFFOUND;
 						}
 						Status = RtlNtStatusToDosError (ntStatus);
 
@@ -2407,34 +2430,56 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 							break;
 							case 3://NT_ERROR
 								{
-									for (j = 0; (j  <= trackFTA [i][j]); j++)
+									//GetFileAttributesW is good to go else it's FltCancellableWaitForSingleObject
+									if (Status != 0X00000057 || (GetFileAttributesW(tempDest) == INVALID_FILE_ATTRIBUTES)) //The status_wait_one is always reached after creation
 									{
 										folderTreeArray[i][j][0] = L'\0';
+										if (j >= trackFTA [i][0])
+										{
+											pathsToSave[i][0] = L'\0';
+											ErrorExit (L"Cannot verify a file entry in FS: Probably doesn't exist! recommend restarting the program ASAP", 1);
+											if (appendMode)
+											{
+												if (i > branchTotal + 1) i -=1;
+											}
+											else
+											{
+												if (i > 0) i -=1;
+											}
+											 //(ch == eolFTA)
+												 //fseek (stream, 1, SEEK_CUR);
+
+
+											//forward to EOL
+											for (k = 0; ((k  < (maxPathFolder - 1)) && (ch!= eolFTA)); k++)
+											{
+												ch = fgetwc(stream);
+												chOld = ch;
+											}
+
+										}
 									}
-									pathsToSave[i][0] = L'\0';
-									ErrorExit (L"Cannot verify a file entry in FS: Probably doesn't exist! recommend restarting the program ASAP", 1);
-									if (appendMode)
-									{
-										if (i > branchTotal + 1) i -=1;
-									}
-									else
-									{
-										if (i > 0) i -=1;
-									}
-									
 								}
 							break;
 							}
 						}
 						else
 						{
-							errCode = 1;
-							createFail = true;
-							ErrorExit (L"DynamicLoader failed: Cannot create. ", 1);
+							ErrorExit (L"DynamicLoader failed: Cannot verify. ", 1);
+							fsReturn = false;
+							goto WEOFFOUND;
 
 						}
+				if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
 
-				}
+				}//FoundNTdll
+
+
+
+
+ 			}
+
+			
 
 		branchTotalSaveFile = i;
 		i += 1;
@@ -2446,28 +2491,17 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 WEOFFOUND:
 if (foundNTDLL && !appendMode && !falseReadtrueWrite) //cleanup
 {
-	if (hdlNTOut) CloseHandle (hdlNTOut);
-	memset(&ioStatus, 0, sizeof(ioStatus));
-	memset(&fileObject, 0, sizeof(fileObject));
-	FreeLibrary ((HMODULE)hdlNtCreateFile);
-	ntStatus = NULL;
+	if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close...", errCode, 0);
 }
 	// Close stream if it is not NULL 
 
 	if (fclose (stream))
 	{
 	ErrorExit (L"Stream was not closed properly: exit & restart?", 0);
-	free (fsName);
-	return false;
+	fsReturn = false;
 	}
-	else
-	{
 	free (fsName);
-	return true;
-	}
-
-
-
+	return fsReturn;
 
 	}
 
@@ -2775,7 +2809,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 	{
 	//do not iterate below trackFTA [i + 1][1]
 
-	pathToDeleteW[0] = L'\0'; // driveIDBaseWNT L"C:\\"
+	pathToDeleteW[0] = L''; // driveIDBaseWNT L"C:\\"
 
 	wcscpy_s(pathToDeleteW, pathLength, driveIDBaseWNT);
 	wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
@@ -2816,6 +2850,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 					if (secondTryDelete)
 					{
 					DisplayError (hwnd, L"Delete failed the second time. Try running 7-zip and shift-del.", 0, 0);
+					secondTryDelete = false;
 					}
 					else
 					{
