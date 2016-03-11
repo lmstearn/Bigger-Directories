@@ -1702,6 +1702,15 @@ BOOL WINAPI AboutDlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	break;
 	}
 	break;
+	case WM_KEYDOWN: 
+    switch (wParam) 
+    { 
+        case VK_CONTROL:   // LEFT ARROW 
+	{
+
+	}
+		break;
+	}
 	}
 return FALSE;
 }
@@ -2153,7 +2162,6 @@ NTDLLptr DynamicLoader (bool progInit, wchar_t * fileObjVar)
 			memset(&fileObject, 0, sizeof(fileObject));
 			fileObject.Length = sizeof(fileObject);
 			fileObject.Attributes = OBJ_CASE_INSENSITIVE;
-			//status error codes //also try GetModuleHandle("ntdll.dll"),
 			//RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress((HMODULE)hdlNtCreateFile, NtStatusToDosErrorString);
 			PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 			if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return nullptr;
@@ -2882,24 +2890,21 @@ bool fsDelsub (int i, int j, HWND hwnd)
 						}
 						if (((int)GetLastError() == 145))
 						{
-							if (!folderNotEmpty)
+							if (folderNotEmpty)
 
-								{
-								if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when a subfolder is deleted outside of this program. Continue deletion?", 0, 1))
-								{
-									folderNotEmpty = true;
-									return false;
-								}
-								else
-								{
-									folderNotEmpty = false;
-									return false;
-								}
+							{
+								DisplayError (hwnd, L"Cannot remove Folder: Retry or restart & retry.", 0, 0);
+								folderNotEmpty = false;
 							}
+							else
+							{
+								if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when a subfolder is deleted outside of this program. Continue deletion?", 0, 1)) folderNotEmpty = true;
+							}
+							return !folderNotEmpty;
 						}
 					else
 						{
-						ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+						ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. ", 0);
 						errCode = 0;
 						return false;
 					}
