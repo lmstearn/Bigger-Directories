@@ -63,24 +63,35 @@ IDI_APP_ICON            ICON                    "CaveMantizardum.ico"
 // Dialog
 //
 
-IDD_HELPBOX DIALOGEX 0, 0, 418, 413
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION
+IDD_HELPBOX DIALOGEX 0, 0, 418, 310
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "CreatelargeDir Help"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
 
-ICON            IDI_APP_ICON,IDC_STATIC,7,401,21,20
-LTEXT           "http://members.ozemail.com.au/~lmstearn/public_html/",IDC_STATIC_FOUR,40,382,119,24
-DEFPUSHBUTTON   "OK",IDOK,339,401,50,14,WS_GROUP
-LTEXT           "2nd link 2nd link",IDC_STATIC_FIVE,187,382,137,14
-CTEXT           "Header Header Header Header Header",IDC_STATIC,35,14,361,14
-CTEXT           "Body Body Body Body Body Body Body Body Body Body ",IDC_STATIC,27,56,361,16
-CTEXT           "Body Body Body Body Body Body Body Body Body Body ",IDC_STATIC,30,80,361,14
+CTEXT           "Welcome to Wide Directories, or, Long Paths in a ListBox!",IDC_STATIC,25,15,360,20
+CTEXT           "_________________________________________________________",IDC_STATIC,25,30,360,20
+CTEXT           "Add: Add a directory candidate to the ListBox in <Your_Number> multiples",IDC_STATIC,10,55,360,20
+CTEXT           "Up: Move the pointer up to the next directory level where a new candidate can be Added",IDC_STATIC,10,80,360,20
+CTEXT           "Down: Move the pointer down to the next directory level where a new candidate can be Added ",IDC_STATIC,10,105,360,20
+CTEXT           "Make New: Create Directories Added to Homedrive or C:\ Path: only top level directory is shown in ListBox",IDC_STATIC,10,130,360,20
+CTEXT           "Del: Delete a directory or a directory candidate entry",IDC_STATIC,10,155,360,20
+CTEXT           "RunAtLogon: Run this program at next logon. Consult Code Project or Github before use",IDC_STATIC,10,180,360,20
+CTEXT           "NoLogon: Cancel running this program at next logon",IDC_STATIC,10,205,360,20
+CTEXT           "_________________________________________________________",IDC_STATIC,10,230,360,20
+CTEXT           "Version: 1.0",IDC_STATIC,10,250,360,20
+LTEXT           "Code Project",IDC_STATIC_FOUR,40,280,80,24
+LTEXT           "Github",IDC_STATIC_FIVE,120,280,80,14
+LTEXT           "Homepage",IDC_STATIC_SIX,200,280,80,14
+ICON            IDI_APP_ICON,IDC_STATIC,340,280,20,20
+DEFPUSHBUTTON   "OK",IDOK,340,280,20,20,WS_GROUP
+
+
 END
 
 IDD_768P DIALOGEX 0, 0, 701, 218
 STYLE DS_SHELLFONT | DS_FIXEDSYS | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME
-CAPTION "CreateLargeDirectory"
+CAPTION "Long Path Directories"
 FONT 8, "MS Shell Dlg", 0, 0, 0x0
 BEGIN
 
@@ -100,7 +111,7 @@ PUSHBUTTON      "&NoLogon",IDC_NOLOGON,650,149,47,14
 PUSHBUTTON      "&Help",IDC_HALP,650,166,47,14
 LTEXT           "This entry is ranked",IDC_STATIC_TWO,530,205,70,8
 CTEXT           "-",IDC_SHOWCOUNT,600,205,25,8
-LTEXT           "on the list.",IDC_STATIC_THREE,625,205,30,8
+LTEXT           "on the list.",IDC_STATIC_THREE,625,205,35,8
 
 END
 
@@ -125,7 +136,7 @@ BEGIN
     PUSHBUTTON      "&Help",IDC_HALP,912,233,66,20
     LTEXT           "This entry is ranked",IDC_STATIC_TWO,744,288,98,11
     CTEXT           "-",IDC_SHOWCOUNT,842,288,35,11
-    LTEXT           "on the list.",IDC_STATIC_THREE,877,288,42,11
+    LTEXT           "on the list.",IDC_STATIC_THREE,877,288,49,11
 END
 
 IDD_2160P DIALOGEX 0, 0, 1968, 613
@@ -149,7 +160,7 @@ BEGIN
     PUSHBUTTON      "&Help",IDC_HALP,1825,467,132,39
     LTEXT           "This entry is ranked",IDC_STATIC_TWO,1488,577,196,23
     CTEXT           "-",IDC_SHOWCOUNT,1684,577,70,23
-    LTEXT           "on the list.",IDC_STATIC_THREE,1754,577,84,23
+    LTEXT           "on the list.",IDC_STATIC_THREE,1754,577,88,23
 END
 
 IDD_4320P DIALOGEX 0, 0, 3935, 1226
@@ -173,7 +184,7 @@ BEGIN
     PUSHBUTTON      "&Help",IDC_HALP,3649,934,264,79
     LTEXT           "This entry is ranked",IDC_STATIC_TWO,2975,1153,393,45
     CTEXT           "-",IDC_SHOWCOUNT,3368,1153,140,45
-    LTEXT           "on the list.",IDC_STATIC_THREE,3509,1153,168,45
+    LTEXT           "on the list.",IDC_STATIC_THREE,3509,1153,197,45
 END
 
 
