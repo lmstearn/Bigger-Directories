@@ -58,6 +58,8 @@ BOOL createFail = FALSE;
 BOOL weareatBoot = FALSE;
 BOOL setforDeletion = FALSE;
 BOOL removeButtonEnabled = true;
+BOOL nologonEnabled = false;
+BOOL logonEnabled = false;
 BOOL am64Bit, exe64Bit;
 BOOL folderNotEmpty = false;
 PVOID OldValue = nullptr; //Redirection
@@ -124,7 +126,7 @@ const wchar_t CLASS_NAME[]  = L"ResCheckClass";
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
-BOOL WINAPI AboutDlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 int PopulateListBox (HWND hwnd, BOOL widecharNames);
@@ -141,6 +143,7 @@ bool FSDelete (HWND hwnd);
 bool fsDelsub (int i, int j, HWND hwnd);
 int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 // Start of HyperLink URL
+void ShellError (HWND aboutHwnd, int nError);
 LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CreateHyperLink(HWND hwndControl);
@@ -154,7 +157,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//if (hrtext[0] == NULL) ErrorExit("LocalAlloc");
 		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough but not req'd
 
-		if (errorcode ==0){
+		if (errorcode == 0){
 		swprintf_s(hrtext, _countof(hrtext), L"%s.", messageText);
 		}
 		else //LT 0 my defined error, GT error should be GET_LAST_ERROR
@@ -306,8 +309,10 @@ void InitProc(HWND hwnd)
 if (FindProcessId (hwnd, L"explorer.exe", exeHandle) == NULL)
 	{
 	weareatBoot=TRUE;
-	EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
-	EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
+	nologonEnabled = false;
+	logonEnabled = false;
+	EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
+	EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
 	}
 else
 	{
@@ -324,8 +329,15 @@ else
 
 		if (GetFileAttributesW(createlargedirVAR)!=INVALID_FILE_ATTRIBUTES)
 		{
-			EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
+			logonEnabled = false;
+			EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
 		}
+		else
+		{
+			EnableWindow(GetDlgItem(hwnd, IDC_LOGON), true);
+		}
+	nologonEnabled = true;
+	EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
 	free(createlargedirVAR);
 	}
 	
@@ -1327,8 +1339,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (CopyFileW(thisexePath, tempDest, FALSE) == 0)
 					{
 						ErrorExit (L"CopyFile: Copy to Temp failed... aborting.", 0);
-						EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
-						EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
+						logonEnabled = false;
+						nologonEnabled = false;
+						EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
+						EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
 						free (thisexePath);
 						free (tempDest);
 						break;
@@ -1339,7 +1353,9 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					
 				free (thisexePath);
 				free (tempDest);
-				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
+				logonEnabled = false;
+				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
+
 
 				//NOTE WOW6432node is 64bit view of 32bit setting. reg:64 bypasses VS 32bit redirection
 				//Debug & CALL ECHO %KEY_NAME% %VALUE_NAME% %CURREGVALUE% %NEWREGVALUE%
@@ -1356,7 +1372,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
 			if (setforDeletion==TRUE)
 			{
-			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no and check they key's value if unsure whether another program besides this one has marked another file for deletion at reboot.", errCode, 1)) break;
+			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no and check the key's value if unsure whether another program besides this one has marked another file for deletion at reboot.", errCode, 1)) break;
 			
 			//delete the key ExistRegValue
 			system ("REG DELETE \"HKLM\\System\\CurrentControlSet\\Control\\Session Manager\" /v PendingFileRenameOperations /f");
@@ -1365,8 +1381,10 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
 			if (Kleenup (hwnd, weareatBoot))
 			{
-				EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
-				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), true);
+				logonEnabled = false;
+				nologonEnabled = true;
+				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
+				EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
 				setforDeletion = TRUE;
 			}
 			else
@@ -1478,7 +1496,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									//This function performs like:
 									//TCHAR buf[16];
 									//wnsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
-									//SetDlgItemText(hDlg, nIDDlgItem, buf);
+									//SetDlgItemText(hwnd, nIDDlgItem, buf);
 
 
 
@@ -1624,8 +1642,6 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-							EnableWindow(GetDlgItem(hwnd, IDC_LOGON), false);
-							EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), false);
 							if (findPathW) free (findPathW);
 							if (currPathW) free (currPathW);
 						}
@@ -1671,7 +1687,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 	}
 	return TRUE;
 }
-BOOL WINAPI AboutDlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	switch(uMsg)
 	{
@@ -1679,38 +1695,51 @@ BOOL WINAPI AboutDlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 	//INITCOMMONCONTROLSEX InitCtrls;
 	//InitCtrls.dwSize = sizeof(InitCtrls);
-	//DWORD dwStyle = GetWindowLong(hdlg, GWL_STYLE);
-	//PlaySound(MAKEINTRESOURCE(WAV_OMG), (HMODULE)GetWindowLong(hdlg, GWL_HINSTANCE), SND_RESOURCE | SND_ASYNC);
+	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FOUR));
+	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FIVE));
+	//DWORD dwStyle = GetWindowLong(aboutHwnd, GWL_STYLE);
+	//PlaySound(MAKEINTRESOURCE(WAV_OMG), (HMODULE)GetWindowLong(aboutHwnd, GWL_HINSTANCE), SND_RESOURCE | SND_ASYNC);
 	}
 	return TRUE;
 
 	case WM_COMMAND:
-	switch(wParam)
-	{
-	case IDOK:
-	EndDialog(hdlg, IDOK);
-	break;
-	case IDC_STATIC_FOUR:
-		{
-	ShellExecuteW(NULL, L"open", L"http://www.google.com", NULL, NULL, SW_SHOWNORMAL);
-		}
-	break;
-	case IDC_STATIC_FIVE:
-		{
-	ShellExecuteW(NULL, L"open", L"http://www.google.com", NULL, NULL, SW_SHOWNORMAL);
-		}
-	break;
-	}
-	break;
-	case WM_KEYDOWN: 
-    switch (wParam) 
-    { 
-        case VK_CONTROL:   // LEFT ARROW 
-	{
+    switch (LOWORD(wParam))
+            {
+				case IDC_STATIC_FOUR:
+				{
+				if(HIWORD(wParam) == BN_CLICKED)
+					{
+						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://members.ozemail.com.au/~lmstearn/index.html", NULL, NULL, SW_SHOWNORMAL));
+					}
+				}           
+				break;
+				case IDC_STATIC_FIVE:
+				{
+					{
+						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://members.ozemail.com.au/~lmstearn/index.html", NULL, NULL, SW_SHOWNORMAL));
+					}
 
-	}
-		break;
-	}
+				}           
+				break;
+
+				case IDOK:
+				EndDialog(aboutHwnd, IDOK);
+				break;
+				}
+				break;
+				case WM_KEYDOWN: 
+				switch (wParam) 
+				{ 
+					case VK_CONTROL:   // LEFT ARROW 
+				{
+
+				}
+					break;
+				}
+			case WM_CLOSE:
+			{
+				EndDialog(aboutHwnd, IDOK);
+			}
 	}
 return FALSE;
 }
@@ -3192,28 +3221,160 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 				}
 	} //trackFTA[treeLevel][0] = 0
 }
-void ReportError (int nError)
+void ShellError (HWND aboutHwnd, int nError)
 {
-    char* str;
-    switch (nError) 
+	nError = 1;
+	if (nError > 32) return; //no problem
+	wchar_t* str;
+	switch (nError) 
 	{
-        case 0:                       str = "The operating system is out\nof memory or resources."; break;
-        case SE_ERR_PNF:              str = "The specified path was not found."; break;
-        case SE_ERR_FNF:              str = "The specified file was not found."; break;
-        case ERROR_BAD_FORMAT:        str = "The .EXE file is invalid\n(non-Win32 .EXE or error in .EXE image)."; break;
-        case SE_ERR_ACCESSDENIED:     str = "The operating system denied\naccess to the specified file."; break;
-        case SE_ERR_ASSOCINCOMPLETE:  str = "The filename association is\nincomplete or invalid."; break;
-        case SE_ERR_DDEBUSY:          str = "The DDE transaction could not\nbe completed because other DDE transactions\nwere being processed."; break;
-        case SE_ERR_DDEFAIL:          str = "The DDE transaction failed."; break;
-        case SE_ERR_DDETIMEOUT:       str = "The DDE transaction could not\nbe completed because the request timed out."; break;
-        case SE_ERR_DLLNOTFOUND:      str = "The specified dynamic-link library was not found."; break;
-        case SE_ERR_NOASSOC:          str = "There is no application associated\nwith the given filename extension."; break;
-        case SE_ERR_OOM:              str = "There was not enough memory to complete the operation."; break;
-        case SE_ERR_SHARE:            str = "A sharing violation occurred. ";
-        default:                      str = "Unknown Error (%d) occurred."; break;
+	case 0:							str = L"The operating system is out\nof memory or resources"; break;
+	case ERROR_FILE_NOT_FOUND:		str = L"The specified path was not found"; break;
+	case ERROR_PATH_NOT_FOUND:		str = L"The specified file was not found"; break;
+	case ERROR_BAD_FORMAT:			str = L"The .EXE file is invalid\n(non-Win32 .EXE or error in .EXE image)"; break;
+	case SE_ERR_ACCESSDENIED:		str = L"The operating system denied\naccess to the specified file"; break;
+	case SE_ERR_ASSOCINCOMPLETE:	str = L"The filename association is\nincomplete or invalid"; break;
+	case SE_ERR_DDEBUSY:			str = L"The DDE transaction could not\nbe completed because other DDE transactions\nwere being processed"; break;
+	case SE_ERR_DDEFAIL:			str = L"The DDE transaction failed"; break;
+	case SE_ERR_DDETIMEOUT:			str = L"The DDE transaction could not\nbe completed because the request timed out"; break;
+	case SE_ERR_DLLNOTFOUND:		str = L"The specified dynamic-link library was not found"; break;
+	case SE_ERR_NOASSOC:			str = L"There is no application associated\nwith the given filename extension"; break;
+	case SE_ERR_OOM:				str = L"There was not enough memory to complete the operation"; break;
+	case SE_ERR_SHARE:				str = L"A sharing violation occurred";
+	default:						str = L"Unknown Error occurred"; break;
+	}
+	swprintf_s(hrtext, _countof(hrtext), L"Unable to open hyperlink:\n\n %s", str);
+	DisplayError (aboutHwnd, hrtext, 0, 0);
+ }
+static void CreateHyperLink(HWND hwndControl)
+{
+    // Subclass the parent so we can color the controls as we desire.
+    HWND hwndParent = GetParent(hwndControl);
+    if (NULL != hwndParent)
+    {
+        WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndParent, GWL_WNDPROC);
+        if (pfnOrigProc != _HyperlinkParentProc)
+        {
+            SetProp(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
+            SetWindowLong(hwndParent, GWL_WNDPROC, (LONG)(WNDPROC)_HyperlinkParentProc);
+        }
     }
-    str = "Unable to open hyperlink:\n\n";
- 
-}
- 
 
+    // Make sure the control will send notifications.
+    DWORD dwStyle = GetWindowLong(hwndControl, GWL_STYLE);
+    SetWindowLong(hwndControl, GWL_STYLE, dwStyle | SS_NOTIFY);
+
+    // Subclass the existing control.
+    WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndControl, GWL_WNDPROC);
+    SetProp(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
+    SetWindowLong(hwndControl, GWL_WNDPROC, (LONG)(WNDPROC)_HyperlinkProc);
+
+    // Create an updated font by adding an underline.
+    HFONT hOrigFont = (HFONT)SendMessage(hwndControl, WM_GETFONT, 0, 0);
+    SetProp(hwndControl, PROP_ORIGINAL_FONT, (HANDLE)hOrigFont);
+
+    LOGFONT lf;
+    GetObject(hOrigFont, sizeof(lf), &lf);
+    lf.lfUnderline = TRUE;
+
+    HFONT hFont = CreateFontIndirect(&lf);
+    SetProp(hwndControl, PROP_UNDERLINE_FONT, (HANDLE)hFont);
+
+    // Set a flag on the control so we know what color it should be.
+    SetProp(hwndControl, PROP_STATIC_HYPERLINK, (HANDLE)1);
+}
+LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    WNDPROC pfnOrigProc = (WNDPROC)GetProp(hwnd, PROP_ORIGINAL_PROC);
+
+    switch (message)
+    {
+    case WM_CTLCOLORSTATIC:
+    {
+        HDC hdc = (HDC)wParam;
+        HWND hwndCtl = (HWND)lParam;
+
+        BOOL fHyperlink = (NULL != GetProp(hwndCtl, PROP_STATIC_HYPERLINK));
+        if (fHyperlink)
+        {
+            LRESULT lr = CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
+            SetTextColor(hdc, RGB(0, 0, 192));
+            return lr;
+        }
+
+        break;
+    }
+    case WM_DESTROY:
+    {
+        SetWindowLong(hwnd, GWL_WNDPROC, (LONG)pfnOrigProc);
+        RemoveProp(hwnd, PROP_ORIGINAL_PROC);
+        break;
+    }
+    }
+    return CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
+}
+
+LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    WNDPROC pfnOrigProc = (WNDPROC)GetProp(hwnd, PROP_ORIGINAL_PROC);
+
+    switch (message)
+    {
+    case WM_DESTROY:
+    {
+        SetWindowLong(hwnd, GWL_WNDPROC, (LONG)pfnOrigProc);
+        RemoveProp(hwnd, PROP_ORIGINAL_PROC);
+
+        HFONT hOrigFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
+        SendMessage(hwnd, WM_SETFONT, (WPARAM)hOrigFont, 0);
+        RemoveProp(hwnd, PROP_ORIGINAL_FONT);
+
+        HFONT hFont = (HFONT)GetProp(hwnd, PROP_UNDERLINE_FONT);
+        DeleteObject(hFont);
+        RemoveProp(hwnd, PROP_UNDERLINE_FONT);
+
+        RemoveProp(hwnd, PROP_STATIC_HYPERLINK);
+
+        break;
+    }
+    case WM_MOUSEMOVE:
+    {
+        if (GetCapture() != hwnd)
+        {
+            HFONT hFont = (HFONT)GetProp(hwnd, PROP_UNDERLINE_FONT);
+            SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
+            InvalidateRect(hwnd, NULL, FALSE);
+            SetCapture(hwnd);
+        }
+        else
+        {
+            RECT rect;
+            GetWindowRect(hwnd, &rect);
+
+            POINT pt = { LOWORD(lParam), HIWORD(lParam) };
+            ClientToScreen(hwnd, &pt);
+
+            if (!PtInRect(&rect, pt))
+            {
+                HFONT hFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
+                SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
+                InvalidateRect(hwnd, NULL, FALSE);
+                ReleaseCapture();
+            }
+        }
+        break;
+    }
+    case WM_SETCURSOR:
+    {
+        // Since IDC_HAND is not available on all operating systems,
+        // we will load the arrow cursor if IDC_HAND is not present.
+        HCURSOR hCursor = LoadCursor(NULL, IDC_HAND);
+        if (NULL == hCursor)
+            hCursor = LoadCursor(NULL, IDC_ARROW);
+        SetCursor(hCursor);
+        return TRUE;
+    }
+    }
+
+    return CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
+}
