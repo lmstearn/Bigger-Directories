@@ -51,17 +51,17 @@ int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branch
 int i,j,k, errCode;
 int idata, index, listTotal = 0, sendMessageErr = 0;
 int treeLevel, trackFTA[branchLimit][2];
-BOOL foundResolution = false;
-BOOL pCmdLineActive = false;
-BOOL secondTryDelete = false;
-BOOL createFail = FALSE;
-BOOL weareatBoot = FALSE;
-BOOL setforDeletion = FALSE;
-BOOL removeButtonEnabled = true;
-BOOL nologonEnabled = false;
-BOOL logonEnabled = false;
-BOOL am64Bit, exe64Bit;
+bool foundResolution = false;
+bool pCmdLineActive = false;
+bool secondTryDelete = false;
+bool createFail = false;
+bool setforDeletion = false;
+bool removeButtonEnabled = true;
+bool nologonEnabled = false;
+bool logonEnabled = false;
 BOOL folderNotEmpty = false;
+BOOL weareatBoot = FALSE;
+BOOL am64Bit, exe64Bit;
 PVOID OldValue = nullptr; //Redirection
 WNDPROC g_pOldProc;
 HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
@@ -543,8 +543,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 					//http://www.experts-exchange.com/Programming/Languages/.NET/Visual_CPP/Q_27207428.html
 					//On the first call of IDC_ADD change text & button enables. 
-					//Add button disabled until a successful create or Clear
-					//FIX LATER
+
 
 
 					int len;
@@ -567,29 +566,19 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 
-
-
-					// When somebody clicks the Add button, first we get the number of
-					// they entered
-
 					BOOL bSuccess;
 					int nTimes = GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE);
 					if(bSuccess) 
 					{
-						// Then we get the string they entered
-						// First we need to find out how long it is so that we can
-						// allocate some memory (2* +1 for two words > long)
+						//Allocate memory (2* +1 for two words > long)
 
 						len = (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT))); //wchar
 						if(len > 0)
 						{
-							// Now we allocate, and get the string into our buffer
-
 
 							
 							wchar_t *buf1 = (wchar_t *)calloc(2 * len + 1, sizeof(wchar_t));
 							GetDlgItemTextW(hwnd, IDC_TEXT, buf1, 2 * len + 1);
-
 
 
 						//validation for terminating space & period
@@ -623,16 +612,20 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							for(i = 0 ; i < nTimes; i++)
 							{
+								if ( i * len < pathLength)
+								{
 								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)buf);
 
-								// Here we are associating the value nTimes with the item 
-								// just for the heck of it, we'll use it to display later.
-								// Normally you would put some more useful data here, such
-								// as a pointer.
 								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)sendMessageErr, (LPARAM)nTimes);
+								}
+								else
+								{
+									DisplayError (hwnd, L"32k Limit reached!", errCode, 0);
+									break;
+								}
+
 							}
 
-							// free the memory!
 							GlobalFree((HANDLE)buf);
 							sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 							SetDlgItemInt(hwnd, IDC_SHOWCOUNT, nTimes, FALSE);
@@ -891,10 +884,20 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						for (i = (createFail)? branchTotalCumOld + 1: 0; i <= branchTotal; i++)
 						{
 
-							for (j = 0; (j < trackFTA [i][0] + trackFTA [i][1]) && (folderTreeArray[i][j][0] != '\0'); j++)
+							for (j = 0; (j < trackFTA [i][0] + trackFTA [i][1]) && (folderTreeArray[i][j][0] != L'\0'); j++)
 							{
 								if (j != 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA);
-								wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][j]);
+								if FAILED(StringCchCatW(pathsToSave[i], pathLength, folderTreeArray[i][j]))
+								{
+									for (k = j; (k < trackFTA [i][0] + trackFTA [i][1]) && (folderTreeArray[i][j][0] != L'\0'); k++)
+										{
+											folderTreeArray[i][k][0] = L'\0';
+											trackFTA [k][0] = 0;
+											trackFTA [k][1] = 0;
+										}
+									DisplayError (hwnd, L"32k Limit reached. truncating!", errCode, 0);
+									break;
+								}
 							}
 
 						}
@@ -1697,6 +1700,7 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 	//InitCtrls.dwSize = sizeof(InitCtrls);
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FOUR));
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FIVE));
+	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_SIX));
 	//DWORD dwStyle = GetWindowLong(aboutHwnd, GWL_STYLE);
 	//PlaySound(MAKEINTRESOURCE(WAV_OMG), (HMODULE)GetWindowLong(aboutHwnd, GWL_HINSTANCE), SND_RESOURCE | SND_ASYNC);
 	}
@@ -1714,6 +1718,14 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				}           
 				break;
 				case IDC_STATIC_FIVE:
+				{
+					{
+						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://members.ozemail.com.au/~lmstearn/index.html", NULL, NULL, SW_SHOWNORMAL));
+					}
+
+				}           
+				break;
+					case IDC_STATIC_SIX:
 				{
 					{
 						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://members.ozemail.com.au/~lmstearn/index.html", NULL, NULL, SW_SHOWNORMAL));
@@ -3223,7 +3235,6 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 }
 void ShellError (HWND aboutHwnd, int nError)
 {
-	nError = 1;
 	if (nError > 32) return; //no problem
 	wchar_t* str;
 	switch (nError) 
