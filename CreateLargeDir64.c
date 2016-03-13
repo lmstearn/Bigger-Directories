@@ -65,7 +65,7 @@ BOOL am64Bit, exe64Bit;
 PVOID OldValue = nullptr; //Redirection
 WNDPROC g_pOldProc;
 HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
-
+HINSTANCE AppHinstance;
 
 //struct fileSystem
 //{
@@ -535,7 +535,16 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				case IDC_NUMBER:
 					{
-					//no greater than 32760
+					//no greater than treeLevelLimit
+						BOOL bSuccess;
+						GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE);
+						if (bSuccess)
+						{
+						if (GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE) >	treeLevelLimit)
+							{
+								SetDlgItemInt(hwnd, IDC_NUMBER, (UINT)(treeLevelLimit -1), FALSE);
+							}
+						}
 					}
 				break;
 
@@ -895,7 +904,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											trackFTA [k][0] = 0;
 											trackFTA [k][1] = 0;
 										}
-									DisplayError (hwnd, L"32k Limit reached. truncating!", errCode, 0);
+									DisplayError (hwnd, L"32k Limit reached. truncating!", errCode, 0); //the unconcatenated strings checked before
 									break;
 								}
 							}
@@ -1739,11 +1748,13 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				break;
 				}
 				break;
-				case WM_KEYDOWN: 
+				case WM_KEYDOWN:
 				switch (wParam) 
 				{ 
-					case VK_CONTROL:   // LEFT ARROW 
+					case VK_CONTROL:   //
 				{
+					;
+
 
 				}
 					break;
@@ -1785,7 +1796,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,	//Size and position
 		NULL,							// Parent window
 		NULL,							// Menu
-		hInstance,						// Instance handle
+		hInstance,						// Instance handle of owning application (wWinMain)
 		NULL							// Additional application data
 		);
 
