@@ -3,11 +3,15 @@
 // Used by CreateLargeDir64.rc
 //
 #define arraysize                       30
-#define IDD_768P                        101
-#define IDD_1080P                       102
-#define IDD_2160P                       103
-#define IDD_4320P                       104
-#define IDD_HELPBOX                     105
+#define IDD_SMALL                       101
+#define IDD_768P                        102
+#define IDD_1080P                       103
+#define IDD_2160P                       104
+#define IDD_4320P                       105
+#define IDD_HELP768P                    106
+#define IDD_HELP1080P                   107
+#define IDD_HELP2160P                   108
+#define IDD_HELP4320P                   109
 #define IDC_TEXT                        1000
 #define IDC_NUMBER                      1001
 #define IDC_LIST                        1002
@@ -22,14 +26,17 @@
 #define IDC_HALP                        1011
 #define IDC_SHOWCOUNT                   1012
 #define IDC_LIST2                       1013
-#define IDC_STATIC_ZERO                 1014
-#define IDC_STATIC_ONE                  1015
-#define IDC_STATIC_TWO                  1016
-#define IDC_STATIC_THREE                1017
-#define IDC_STATIC_FOUR                 1018
-#define IDC_STATIC_FIVE                 1019
-#define IDC_SYSLINK1                    1020
-#define IDI_APP_ICON                    1021
+#define IDC_STATIC_SMALL                1014
+#define IDC_STATIC_ZERO                 1015
+#define IDC_STATIC_ONE                  1016
+#define IDC_STATIC_TWO                  1017
+#define IDC_STATIC_THREE                1018
+#define IDC_STATIC_FOUR                 1019
+#define IDC_STATIC_FIVE                 1020
+#define IDC_OK                          1021
+#define IDC_RES                         1022
+#define IDI_APP_ICON                    1023
+#define IDW_CLICK                       1024
 #define IDC_STATIC                      -1
 
 
@@ -40,6 +47,8 @@
 #define PROP_UNDERLINE_FONT     TEXT("_Hyperlink_Underline_Font_")
 // End of HyperLink URL */
 
+#pragma once
+#pragma comment( lib, "Winmm.lib" )
 
 //check properties/c++/preprocessor defs are _Win64
 #if _WIN32 || _WIN64
@@ -57,7 +66,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        30
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1021
+#define _APS_NEXT_CONTROL_VALUE         1025
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -8,7 +8,7 @@
 #include "CreateLargeDir64.h" //my file
 #include <Winternl.h> //NtCreateFile
 #include <Strsafe.h>
-//#include <commctrl.h>
+//#include <afxwin.h>
 
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
@@ -18,12 +18,11 @@
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
 
-#pragma once 
-//http://stackoverflow.com/questions/5896030/how-to-use-windows-tooltip-control-without-bounding-to-a-tool
-//http://www.cprogramming.com/tutorial/printf-format-strings.html
-//https://msdn.microsoft.com/en-us/library/windows/desktop/aa378137(v=vs.85).aspxy
 
-//findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
+//http://www.cprogramming.com/tutorial/printf-format-strings.html
+//https://msdn.microsoft.com/en-us/library/windows/desktop/aa378137(v=vs.85).aspx
+
+
 
 
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
@@ -51,6 +50,8 @@ int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branch
 int i,j,k, errCode;
 int idata, index, listTotal = 0, sendMessageErr = 0;
 int treeLevel, trackFTA[branchLimit][2];
+int resResult;
+bool resWarned;
 bool foundResolution = false;
 bool pCmdLineActive = false;
 bool secondTryDelete = false;
@@ -64,8 +65,8 @@ BOOL weareatBoot = FALSE;
 BOOL am64Bit, exe64Bit;
 PVOID OldValue = nullptr; //Redirection
 WNDPROC g_pOldProc;
-HANDLE hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
-HINSTANCE AppHinstance;
+HANDLE keyHwnd, hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
+HINSTANCE appHinstance;
 
 //struct fileSystem
 //{
@@ -78,7 +79,7 @@ HINSTANCE AppHinstance;
 typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 
 
-//NTcreatefile stuff
+
 //typedef int (*NTDLLptr) (int); //Function pointer example, but following is required
 typedef NTSTATUS (__stdcall *NTDLLptr)(
 	OUT PHANDLE FileHandle, 
@@ -115,12 +116,6 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 const wchar_t CLASS_NAME[]  = L"ResCheckClass";
 //A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
-//The long directory name with 255 char "\" separator
-
-
-
-//const size_t cchDest = MAX_PATH;
-//#define arraysize cchDest;
 
 
 //------------------------------------------------------------------------------------------------------------------
@@ -130,7 +125,8 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 int PopulateListBox (HWND hwnd, BOOL widecharNames);
-int DoSystemParametersInfoStuff(HWND hwnd);
+int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
+int SwitchResolution (HWND hwnd, DLGPROC dProc);
 int GetCreateLargeDirPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
@@ -327,7 +323,7 @@ else
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", createlargedirVAR, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
 	wcscat_s(createlargedirVAR, maxPathFolder, L"\\Temp\\CreateLargeDir64.exe");
 
-		if (GetFileAttributesW(createlargedirVAR)!=INVALID_FILE_ATTRIBUTES)
+		if (GetFileAttributesW(createlargedirVAR) != INVALID_FILE_ATTRIBUTES)
 		{
 			logonEnabled = false;
 			EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
@@ -347,6 +343,16 @@ else
 	}
 
 
+//Raw keyboard for input- need to subclass child controls for keystrokes to work
+RAWINPUTDEVICE Rid[1];
+Rid[0].usUsagePage = 0x01; 
+Rid[0].usUsage = 0x06; 
+Rid[0].dwFlags = 0;   // adds HID keyboard and invludes legacy keyboard messages
+Rid[0].hwndTarget = 0;
+if (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0])) == FALSE) DisplayError (hwnd, L"Could not register Raw Input!", errCode, 0);
+
+
+
 	//NULL is a macro that's guaranteed to expand to a null pointer constant.
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  '\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
@@ -361,6 +367,8 @@ else
 	branchTotalCumOld = 0;
 	dblclkLevel = 0;
 	dblclkString[0] =L'';
+	resResult = 0;
+	resWarned = false;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
 	memset(dacfoldersW, L'\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
@@ -1376,7 +1384,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		
 				case IDC_NOLOGON:
 			{
-					//hFind = FindFirstFile("%systemroot%\Temp\Userinitreg.txt", &FindFileData);
+					
 					//https://msdn.microsoft.com/en-us/library/windows/desktop/aa365743(v=vs.85).aspx
 					//If you are writing a 32-bit application to list all the files in a directory and the application may be run
 					//on a 64-bit computer, you should call the Wow64DisableWow64FsRedirectionfunction before calling FindFirstFile
@@ -1409,8 +1417,8 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			case IDC_HALP: //HALP used because tlhelp32 produces a c4005 macro redefinition warning for HELP
 			{
-				DialogBoxW((HINSTANCE)GetWindowLong(hwnd, GWL_HINSTANCE), MAKEINTRESOURCEW(IDD_HELPBOX), hwnd, AboutDlgProc);
-				//
+				resResult = DoSystemParametersInfoStuff(hwnd, false);
+				SwitchResolution (hwnd, AboutDlgProc);
 			}
 			break;
 			case IDC_LIST:
@@ -1701,20 +1709,19 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 }
 BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	
 	switch(uMsg)
 	{
 	case WM_INITDIALOG:
 	{
-	//INITCOMMONCONTROLSEX InitCtrls;
-	//InitCtrls.dwSize = sizeof(InitCtrls);
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FOUR));
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FIVE));
-	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_SIX));
-	//DWORD dwStyle = GetWindowLong(aboutHwnd, GWL_STYLE);
-	//PlaySound(MAKEINTRESOURCE(WAV_OMG), (HMODULE)GetWindowLong(aboutHwnd, GWL_HINSTANCE), SND_RESOURCE | SND_ASYNC);
+	PlaySound(MAKEINTRESOURCE(IDW_CLICK), (HMODULE)GetWindowLong(aboutHwnd, GWL_HINSTANCE), SND_RESOURCE | SND_ASYNC);
+	return true;
 	}
-	return TRUE;
-
+	break;
+	//case WM_KEYDOWN needs a child control
+	
 	case WM_COMMAND:
     switch (LOWORD(wParam))
             {
@@ -1734,34 +1741,34 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 
 				}           
 				break;
-					case IDC_STATIC_SIX:
-				{
+
+				case IDC_OK:
+				EndDialog(aboutHwnd, IDC_OK);
+				break;
+
+				case IDC_RES:
+
+				resResult +=1;
+				if (resResult == 5) resResult = 1;
+				if (resResult < 3 && !resWarned)
 					{
-						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://members.ozemail.com.au/~lmstearn/index.html", NULL, NULL, SW_SHOWNORMAL));
+						DisplayError (aboutHwnd, L"Form testing: No controls? Spacebar loads new dialog", 0, 0);
+						resWarned = true;
 					}
 
-				}           
+
+				SwitchResolution (aboutHwnd, AboutDlgProc);
+				EndDialog(aboutHwnd, IDC_OK);
 				break;
 
-				case IDOK:
-				EndDialog(aboutHwnd, IDOK);
-				break;
 				}
 				break;
-				case WM_KEYDOWN:
-				switch (wParam) 
-				{ 
-					case VK_CONTROL:   //
-				{
-					;
 
+			break;
 
-				}
-					break;
-				}
-			case WM_CLOSE:
+	case WM_CLOSE:
 			{
-				EndDialog(aboutHwnd, IDOK);
+				EndDialog(aboutHwnd, IDC_OK);
 			}
 	}
 return FALSE;
@@ -1771,6 +1778,7 @@ return FALSE;
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
 
+	
 	if (pCmdLine[0] != L'\0')
 	{
 	//also https://msdn.microsoft.com/en-us/library/windows/desktop/bb776391%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
@@ -1807,28 +1815,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 	else
 	{
-		int resResult = DoSystemParametersInfoStuff(hwnd);
-		if (!DestroyWindow(hwnd)) DisplayError (hwnd, L"Rescheck window cannot be destroyed!", 0, 0);
-		UnregisterClassW(CLASS_NAME, hInstance);
 
-	    switch (resResult)
-	{
-		case 1:
-			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, DlgProc);
-		break;
-		case 2:
-			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, DlgProc);
-		break;
-		case 3:
-			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, DlgProc);
-		break;
-		default:
-			return DialogBoxW(hInstance, MAKEINTRESOURCEW(IDD_768P), nullptr, DlgProc);
-		break;
+		appHinstance = GetModuleHandle(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
+		resResult = DoSystemParametersInfoStuff(hwnd, true);
+		SwitchResolution (nullptr, DlgProc);
 	}
-
-	}
-
+return 0; //never gets here, but suppress C4715 warning
 }
 
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -1857,14 +1849,10 @@ else
 	//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
 	(dblclkLevel)? wcscat_s(currPathW, maxPathFolder, dblclkString): wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
 	wcscat_s(currPathW, maxPathFolder, L"*");
+	//findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 	ds = FindFirstFileW(currPathW, &dw); //dw points to found folders
 
 }
-
-
-//The plain versions without the underscore affect the character set the Windows header files treat as default. So if you define UNICODE, then GetWindowText will map to GetWindowTextW instead of GetWindowTextA, for example. Similarly, the TEXT macro will map to L"..." instead of "...". 
-//The versions with the underscore affect the character set the C runtime header files treat as default. So if you define _UNICODE, then _tcslen will map to wcslen instead of strlen, for example. Similarly, the _TEXT macro will map to L"..." instead of "...". 
-
 
 
 if (ds == INVALID_HANDLE_VALUE && (widecharNames == 0))
@@ -1941,23 +1929,82 @@ FindClose(ds);
 return listNum;
 }
 
-int DoSystemParametersInfoStuff(HWND hwnd)
+int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad)
 {
 	HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
 	MONITORINFO monInfo;
 	monInfo.cbSize = sizeof(MONITORINFO);
+
+	if (progLoad) //destroy ephemeral window 
+	{
+	if (!DestroyWindow(hwnd)) DisplayError (hwnd, L"Rescheck window cannot be destroyed!", 0, 0);
+	UnregisterClassW(CLASS_NAME, appHinstance);
+	}
+
 if (GetMonitorInfo (hMon, &monInfo))
 {
 	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 5000) return 1;
 	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 3000) return 2;
 	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 2000) return 3;
-	else return 4;
+	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 600) return 4;
+	else return 5;
 }
 else
 {
 	DisplayError (hwnd, L"GetMonitorInfo: Cannot get info!", 0, 0);
 }
 return 0;
+
+}
+int SwitchResolution (HWND hwndParent, DLGPROC dProc)
+{
+
+if (hwndParent) //About dialogue
+{
+	
+	switch (resResult)
+	{
+		//(HINSTANCE)GetWindowLong(hwnd, GWL_HINSTANCE) alternative to appHinstance. GetWindowLongPtr (64 bit) probably should be used
+		case 1:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_HELP4320P), hwndParent, (DLGPROC)dProc);
+		break;
+		case 2:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_HELP2160P), hwndParent, (DLGPROC)dProc);
+		break;
+		case 3:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_HELP1080P), hwndParent, (DLGPROC)dProc);
+		break;
+		default:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_HELP768P), hwndParent, (DLGPROC)dProc);
+		break;
+	}
+
+}
+
+
+
+else 
+{
+	switch (resResult)
+	{
+		case 1:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, (DLGPROC)dProc);
+		break;
+		case 2:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, (DLGPROC)dProc);
+		break;
+		case 3:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, (DLGPROC)dProc);
+		break;
+		case 4:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_768P), nullptr, (DLGPROC)dProc);
+		break;
+		default:
+			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_SMALL), nullptr, (DLGPROC)dProc);
+		break;
+	}
+
+}
 
 }
 
