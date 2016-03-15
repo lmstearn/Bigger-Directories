@@ -2178,12 +2178,10 @@ int ExistRegValue ()
 {
 	bool retVal = false;
 	bool openVal = false;
-	wchar_t *keyName, *valueName, *subKeyName;
+	wchar_t *valueName, *subKeyName;
 	HKEY hKey;
-	keyName = (wchar_t *)calloc(260, sizeof(wchar_t));
 	valueName = (wchar_t *)calloc(260, sizeof(wchar_t));
 	subKeyName = (wchar_t *)calloc(260, sizeof(wchar_t));
-	wcscpy_s(keyName, 260, L"HKLM\\System\\CurrentControlSet\\Control\\Session Manager");
 	wcscpy_s(subKeyName, 260, L"System\\CurrentControlSet\\Control\\Session Manager");
 	wcscpy_s(valueName, 260, L"PendingFileRenameOperations");
 	if (RegOpenKeyEx (HKEY_LOCAL_MACHINE, subKeyName, 0, KEY_QUERY_VALUE, &hKey) != ERROR_SUCCESS)
@@ -2198,10 +2196,8 @@ int ExistRegValue ()
 
 	if (RegQueryValueExW(hKey, valueName, nullptr, nullptr, nullptr, nullptr) != ERROR_FILE_NOT_FOUND) retVal = true;
 
-	free (keyName);
 	free (valueName);
 	free (subKeyName);
-
 
 	if (openVal && RegCloseKey (hKey) != ERROR_SUCCESS)
 		{
