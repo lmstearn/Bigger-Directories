@@ -1,11 +1,11 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2010
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CreateLargeDir", "CreateLargeDir\CreateLargeDir.vcxproj", "{6F5D4C4A-C8C3-41DA-BF44-6D42B76464DA}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "msgbox", "msgbox\msgbox.vcxproj", "{F030EB0D-2BEF-4809-87B6-080C0D7391C9}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CreateLargeDir64", "CreatelargeDir64\CreatelargeDir64.vcxproj", "{68BA375D-86C2-432A-8B66-BD28E86BF2C2}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BiggerDirectories", "BiggerDirectories\BiggerDirectories.vcxproj", "{68BA375D-86C2-432A-8B66-BD28E86BF2C2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
