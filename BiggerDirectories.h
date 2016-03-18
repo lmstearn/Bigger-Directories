@@ -60,6 +60,10 @@
 #endif
 
 
+//serevice pack info
+#define PACKVERSION(major,minor) MAKELONG(minor,major)
+
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

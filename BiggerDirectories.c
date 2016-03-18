@@ -7,7 +7,10 @@
 #include <tlhelp32.h> //Find process stuff
 #include "BiggerDirectories.h" //my file
 #include <Winternl.h> //NtCreateFile
-#include <Strsafe.h>
+#include "winbase.h"
+#include "windef.h"
+#include "shlwapi.h"
+
 //#include <afxwin.h>
 
 #define _CRTDBG_MAP_ALLOC
@@ -37,6 +40,9 @@ wchar_t const *lpref = L"\\\\?\\";
 wchar_t const *driveIDBaseW = L"\\\\?\\C:\\";
 wchar_t const *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
 char const *driveIDBase = "C:\\";
+wchar_t const APP_CLASS_NAME[]  = L"BiggerDirectories";
+UINT const WM_COPYGLOBALDATA = 0x0049; //Drop files filter
+
 wchar_t rootDir [pathLength], dblclkPath [treeLevelLimit + 1][maxPathFolder], dblclkString [pathLength], reorgTmpW[pathLength];//maxPathFolder unless delete fails
 wchar_t *pathToDeleteW, *currPathW, *findPathW, *tempDest, *thisexePath, *BiggerDirectoriesVAR; // directory pointers. cannot be initialised as a pointer
 char *currPath;
@@ -67,6 +73,7 @@ PVOID OldValue = nullptr; //Redirection
 WNDPROC g_pOldProc;
 HANDLE keyHwnd, hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 HINSTANCE appHinstance;
+HDROP hDropInfo = NULL; //shell drop handle
 
 //struct fileSystem
 //{
@@ -113,7 +120,7 @@ NTSTATUS ntStatus;
 const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
-const wchar_t CLASS_NAME[]  = L"ResCheckClass";
+const wchar_t TEMP_CLASS_NAME[]  = L"ResCheckClass";
 //A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
 
@@ -248,14 +255,14 @@ void InitProc(HWND hwnd)
 	
 	//if (foundNTDLL) we can use the better function
 
-	if (!DynamicLoader (true, tempDest)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions...", errCode, 0);
+	if (!DynamicLoader (true, tempDest)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions..", errCode, 0);
 
 	
 	#if defined(ENV64BIT) //#if is a directive: see header file
 	{
     if (sizeof(void*) != 8)
     {
-        	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting.", errCode, 0);
+        	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting", errCode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			exit (1); //EndDialog will process the rest of the code in the fn.
     }
@@ -266,7 +273,7 @@ void InitProc(HWND hwnd)
 	{
 		if (sizeof(void*) != 4)
 		{
-			DisplayError (hwnd, L"ENV32BIT: Error: pointer should be 4 bytes. Exiting.", errCode, 0);
+			DisplayError (hwnd, L"ENV32BIT: Error: pointer should be 4 bytes. Exiting", errCode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			ReleaseMutex (hMutex);
 			exit (1);
@@ -290,7 +297,7 @@ void InitProc(HWND hwnd)
 		else
 
 		{
-			DisplayError (hwnd, L"Our own process isn't active!? Must terminate!", 1, 0);
+			DisplayError (hwnd, L"Our own process isn't active!? Must terminate", 1, 0);
 			ReleaseMutex (hMutex);
 			exit (1); //EndDialog will process the rest of the code in the fn.
 		}
@@ -314,7 +321,7 @@ else
 	{
 	if (!FindProcessId (hwnd, L"userinit.exe", exeHandle) == NULL)
 	{
-	DisplayError (hwnd, L"Userinit should have ended. Try rebooting before running this (or any other) program!", errCode, 0);
+	DisplayError (hwnd, L"Userinit should have ended. Try rebooting before running this (or any other) program", errCode, 0);
 	}
 	//Now to check if I am 64 bit
 
@@ -349,7 +356,7 @@ Rid[0].usUsagePage = 0x01;
 Rid[0].usUsage = 0x06; 
 Rid[0].dwFlags = 0;   // adds HID keyboard and invludes legacy keyboard messages
 Rid[0].hwndTarget = 0;
-if (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0])) == FALSE) DisplayError (hwnd, L"Could not register Raw Input!", errCode, 0);
+if (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0])) == FALSE) DisplayError (hwnd, L"Could not register Raw Input", errCode, 0);
 
 
 
@@ -511,7 +518,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 				if  (WAIT_TIMEOUT && !pCmdLineActive)
 					{
-						DisplayError (hwnd, L"One instance is already running!", errCode, 0);
+						DisplayError (hwnd, L"One instance is already running", errCode, 0);
 						CloseHandle (hMutex);
 						_CrtDumpMemoryLeaks();
 						ExitProcess(1);
@@ -520,13 +527,19 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 			else
 			{
-				DisplayError (hwnd, L"Could not create hMutex!", errCode, 0);
+				DisplayError (hwnd, L"Could not create hMutex", errCode, 0);
 				CloseHandle (hMutex);
 				_CrtDumpMemoryLeaks();
 				ExitProcess(1);
 			}
+
 				
-				
+				if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
+				{
+					DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
+				}
+			
+				DragAcceptFiles(hwnd,TRUE); 
 				
             }
 		break;
@@ -637,7 +650,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 								else
 								{
-									DisplayError (hwnd, L"32k Limit reached!", errCode, 0);
+									DisplayError (hwnd, L"32k Limit reached", errCode, 0);
 									break;
 								}
 
@@ -651,14 +664,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						else 
 						{
 							errCode = 0;
-							DisplayError (hwnd, L"You didn't enter anything!", errCode, 0);
+							DisplayError (hwnd, L"You didn't enter anything", errCode, 0);
 							goto NoAddSuccess;
 						}
 					}
 					else 
 					{
 						errCode = 0;
-						DisplayError (hwnd, L"Couldn't translate that number :(", errCode, 0);
+						DisplayError (hwnd, L"Couldn't translate that number", errCode, 0);
 						goto NoAddSuccess;
 					}
 
@@ -674,7 +687,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						else
 						{
-						DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore!", errCode, 0);
+						DisplayError (hwnd, L"Limit of number of directories reached. Cannot create anymore", errCode, 0);
 						goto NoAddSuccess;
 						}
 
@@ -701,7 +714,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 							else
 							{
-							DisplayError (hwnd, L"Limit of number of nested directories reached. Cannot create anymore!", errCode, 0);
+							DisplayError (hwnd, L"Limit of number of nested directories reached. Cannot create anymore", errCode, 0);
 							goto NoAddSuccess;
 							}
 						}
@@ -732,7 +745,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					}
 					else
 					{
-					DisplayError (hwnd, L"NTDLL not found: Only one nested path is made with CREATE.", errCode, 0);
+					DisplayError (hwnd, L"NTDLL not found: Only one nested path is made with CREATE", errCode, 0);
 					EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 					EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 					}
@@ -877,7 +890,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							{
 							/* We were not so display a message */
 							errCode = -1;
-							DisplayError (hwnd, L"Could not allocate required memory to initialize String.", errCode, 0);
+							DisplayError (hwnd, L"Could not allocate required memory to initialize String", errCode, 0);
 							goto EndCreate;
 							}
 						
@@ -885,7 +898,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//Load FS into branchTotalSaveFile + 1 (appendMode true so FS loaded after)
 						if (!ProcessfileSystem (hwnd, false, true))
 						{
-							if (DisplayError (hwnd, L"Problem with FS file! Try alternate Create?", 0, 1))
+							if (DisplayError (hwnd, L"Problem with FS file! Try alternate Create", 0, 1))
 							{
 								free (currPathW);
 								goto AltCreate;
@@ -912,7 +925,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											trackFTA [k][0] = 0;
 											trackFTA [k][1] = 0;
 										}
-									DisplayError (hwnd, L"32k Limit reached. truncating!", errCode, 0); //the unconcatenated strings checked before
+									DisplayError (hwnd, L"32k Limit reached. Truncating", errCode, 0); //the unconcatenated strings checked before
 									break;
 								}
 							}
@@ -991,7 +1004,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 						case 1: //NT_INFORMATION
 							{
-								DisplayError (hwnd, L"Informational: No error ", Status, 0);
+								DisplayError (hwnd, L"Informational: No error", Status, 0);
 							}
 						break;
 						case 2: //NT_WARNING 
@@ -1004,7 +1017,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								
 								if ((Status == 87) && (createFail == true))
 								{
-									DisplayError (hwnd, L"There was another error prior to this on directory create. The create function is not available. Try again after deleting a line or clearing the list.", Status, 0);
+									DisplayError (hwnd, L"There was another error prior to this on directory create. The create function is not available. Try again after deleting a line or clearing the list", Status, 0);
 								}
 								else
 								{
@@ -1016,7 +1029,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 						}
 						//SetCurrentDirectory Often fails here at root node with error 32 "used by another process"
-						if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
+						if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 						}
 
 
@@ -1036,7 +1049,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					if (!ProcessfileSystem(hwnd, true, true))
 						{
-							DisplayError (hwnd, L"There was an error writing data to file. This program may not be able to delete directories just created. If their deletion is required in the future, run 7-zip and shift-del.", errCode, 0);
+							DisplayError (hwnd, L"There was an error writing data to file. This program may not be able to delete directories just created. If their deletion is required in the future, run 7-zip and shift-del", errCode, 0);
 							goto EndCreate;
 						}
 				} //foundNtdll
@@ -1050,7 +1063,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 					/* We were not so display a message */
 					errCode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory to initialize String.", errCode, 0);
+					DisplayError (hwnd, L"Could not allocate required memory to initialize String", errCode, 0);
 					goto EndCreate;
 					}
 
@@ -1108,7 +1121,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 							if (!Wow64RevertWow64FsRedirection(&OldValue))
 							{
-							DisplayError (hwnd, L"Problems with redirection...", errCode, 0);
+							DisplayError (hwnd, L"Problems with redirection", errCode, 0);
 							goto EndCreate;
 							}
 
@@ -1132,7 +1145,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				EndCreate:
 				if (foundNTDLL)
 				{
-					if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
+					if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 
 				if (createFail)
 				{
@@ -1140,7 +1153,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (branchTotalCum > 0)
 					{
 
-						if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del.", errCode, 0);
+						if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del", errCode, 0);
 					
 						k = 0;
 						int l = rootFolderCS + rootFolderCW;
@@ -1316,14 +1329,14 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							else
 							{
 								errCode = 0;
-								DisplayError (hwnd, L"No items selected...", errCode, 0);
+								DisplayError (hwnd, L"No items selected", errCode, 0);
 							}
 						}
 					}
 					else
 					{
 						errCode = 0;
-						DisplayError (hwnd, L"Error counting items...", errCode, 0);
+						DisplayError (hwnd, L"Error counting items", errCode, 0);
 					}
 			}
 			break;
@@ -1392,7 +1405,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
 			if (setforDeletion==TRUE)
 			{
-			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no and check the key's value if unsure whether another program besides this one has marked another file for deletion at reboot.", errCode, 1)) break;
+			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no and check the key's value if unsure whether another program besides this one has marked another file for deletion at reboot", errCode, 1)) break;
 			
 			//delete the key ExistRegValue
 			system ("REG DELETE \"HKLM\\System\\CurrentControlSet\\Control\\Session Manager\" /v PendingFileRenameOperations /f");
@@ -1433,7 +1446,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 						if (currPathW == nullptr)
 						{
-						DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
+						DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
 						return 0;
 						}
 
@@ -1452,7 +1465,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
 								if (index == LB_ERR)
 								{
-									DisplayError (hwnd, L"Something has gone wrong with the Listbox!", errCode, 0);
+									DisplayError (hwnd, L"Something has gone wrong with the Listbox", errCode, 0);
 									if (currPathW) free (currPathW);
 									return 0;
 								}								
@@ -1524,7 +1537,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								else 
 								{
 									errCode = 0;
-									DisplayError (hwnd, L"Error getting selected item :(", errCode, 0);
+									DisplayError (hwnd, L"Error getting selected item", errCode, 0);
 								}
 							}
 							else 
@@ -1582,7 +1595,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						else
 						{
 							errCode = 0;
-							DisplayError (hwnd, L"Error counting items :(", errCode, 0);
+							DisplayError (hwnd, L"Error counting items", errCode, 0);
 						}
 						if (currPathW) free (currPathW);
 					}
@@ -1679,7 +1692,23 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			} //end WM_COMMAND
 		break;
-/*		        case WM_KEYDOWN: 
+
+			case WM_DROPFILES:
+				{
+				wchar_t *dropBuf;
+				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				hDropInfo = (HDROP) wParam;
+				DragQueryFile (hDropInfo, 0, dropBuf, sizeof(dropBuf));
+
+
+
+
+				DragFinish(hDropInfo);
+				free (dropBuf);
+				}
+		
+		break;
+			/*case WM_KEYDOWN: 
             switch (wParam) 
             {
 
@@ -1692,7 +1721,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 				if (foundNTDLL)
 				{
-					if (!CloseNTDLLObjs(true)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
+					if (!CloseNTDLLObjs(true)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 				}
 			EndDialog(hwnd, 0);
 			_CrtDumpMemoryLeaks();
@@ -1701,6 +1730,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 		case WM_DESTROY:
 			PostQuitMessage(0);
+			if (!(UnregisterClassW(APP_CLASS_NAME, appHinstance))) DisplayError (hwnd, L"App class failed to unregister", 0, 0);;
 		break;
 		default: return FALSE;
 		break;	
@@ -1790,15 +1820,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	
 
 	// Create a new window see https://msdn.microsoft.com/en-us/library/windows/desktop/ff381397(v=vs.85).aspx
-	WNDCLASS wc = { };
-	wc.lpfnWndProc   = RescheckWindowProc;
-	wc.hInstance     = hInstance;
-	wc.lpszClassName = CLASS_NAME;
-	RegisterClass(&wc);
+	WNDCLASS ReschkC = { };
+	ReschkC.lpfnWndProc   = RescheckWindowProc;
+	ReschkC.hInstance     = hInstance;
+	ReschkC.lpszClassName = TEMP_CLASS_NAME;
+	if (!RegisterClass(&ReschkC)) ErrorExit (L"Cannot register Rescheck window!!!?", 0);
 
 	HWND hwnd = CreateWindowExW(
 		0,								// Optional window styles.
-		CLASS_NAME,						// Window class
+		TEMP_CLASS_NAME,						// Window class
 		L"Nada",	// Window text
 		WS_OVERLAPPEDWINDOW,			// Window style
 		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,	//Size and position
@@ -1816,7 +1846,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	else
 	{
 
-		appHinstance = GetModuleHandle(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
 		resResult = DoSystemParametersInfoStuff(hwnd, true);
 		SwitchResolution (nullptr, DlgProc);
 	}
@@ -1937,8 +1966,8 @@ int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad)
 
 	if (progLoad) //destroy ephemeral window 
 	{
-	if (!DestroyWindow(hwnd)) DisplayError (hwnd, L"Rescheck window cannot be destroyed!", 0, 0);
-	UnregisterClassW(CLASS_NAME, appHinstance);
+	if (!DestroyWindow(hwnd)) DisplayError (hwnd, L"Rescheck window cannot be destroyed", 0, 0);
+	if (!(UnregisterClassW(TEMP_CLASS_NAME, appHinstance))) DisplayError (hwnd, L"Rescheck class failed to unregister", 0, 0);
 	}
 
 if (GetMonitorInfo (hMon, &monInfo))
@@ -1951,7 +1980,7 @@ if (GetMonitorInfo (hMon, &monInfo))
 }
 else
 {
-	DisplayError (hwnd, L"GetMonitorInfo: Cannot get info!", 0, 0);
+	DisplayError (hwnd, L"GetMonitorInfo: Cannot get info", 0, 0);
 }
 return 0;
 
@@ -1985,6 +2014,36 @@ if (hwndParent) //About dialogue
 
 else 
 {
+
+	WNDCLASS wc = { };
+	appHinstance = GetModuleHandle(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
+	
+	if( !GetClassInfoW( NULL, L"#32770", &wc )) ErrorExit (L"Cannot create App Class!?", 0);
+	
+	//These most likely not required
+	//wc.lpfnWndProc = DlgProc;
+	//HRSRC hRsc = FindResource(NULL, MAKEINTRESOURCE(IDD_768P), RT_DIALOG );
+	//wc.hInstance = (HINSTANCE)LoadResource(NULL, hRsc);
+
+
+	wc.hInstance = appHinstance;
+	wc.lpszClassName = APP_CLASS_NAME;
+	if (!RegisterClass(&wc)) ErrorExit (L"Cannot register Application Window!!!?", 0);
+
+	HWND hwnd = CreateWindowExW(
+		0,												// Optional window styles.
+		APP_CLASS_NAME,									// Window class
+		L"BiggerDirectories",							// Window text
+		WS_OVERLAPPEDWINDOW | WS_EX_ACCEPTFILES,		// Window style
+		CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,	//Size and position: X, Y, Width, Height
+		HWND_DESKTOP,									// Parent window
+		NULL,											// Menu
+		appHinstance,									// Instance handle of owning application (wWinMain)
+		NULL											// Additional application data
+		);
+
+
+
 	switch (resResult)
 	{
 		case 1:
@@ -2033,12 +2092,12 @@ else
 	}
 	else
 	{
-		DisplayError (hwnd, L"Problems with redirection...", errCode, 0);
+		DisplayError (hwnd, L"Problems with redirection", errCode, 0);
 		return 1;
 	}
     if (!Wow64RevertWow64FsRedirection(&OldValue) ) 
 	{
-		DisplayError (hwnd, L"Problems with redirection...", errCode, 0);
+		DisplayError (hwnd, L"Problems with redirection", errCode, 0);
 		return 1;
 	}
 }
@@ -2097,7 +2156,7 @@ if (!exePath)
 		break;
 		default:
 			{
-			DisplayError (hwnd, L"Unknown error has occurred.", errCode, 0);
+			DisplayError (hwnd, L"Unknown error has occurred", errCode, 0);
 			}
 	}
 	return 1;
@@ -2121,7 +2180,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 	{
 		if (!GetModuleFileNameW(nullptr, thisexePath, pathLength) || (wcslen(thisexePath) > pathLength))
 		{
-			DisplayError (hwnd, L"Oops, process path too long!? or non-existent?! Quitting...", 0, 0);
+			DisplayError (hwnd, L"Oops, process path too long!? or non-existent?! Quitting", 0, 0);
 			free (tempDest);
 			free (thisexePath);
 			return false;
@@ -2161,7 +2220,7 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 				}
 			if(!MoveFileExW(tempDest,nullptr,MOVEFILE_DELAY_UNTIL_REBOOT))
 			{
-			DisplayError (hwnd, L"Problems with file deletion. Solved with next Disk Cleanup...", 0, 0);
+			DisplayError (hwnd, L"Problems with file deletion. Solved with next Disk Cleanup", 0, 0);
 			free (tempDest);
 			free (thisexePath);
 			return false;
@@ -2224,7 +2283,7 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
     if (!Process32First(hProcessSnap, &pe32))
     {
         CloseHandle(hProcessSnap);          // clean the snapshot object
-        DisplayError (hwnd, L"!!! Failed to gather information on system processes! \n", 1, 0);
+        DisplayError (hwnd, L"Failed to gather information on system processes", 1, 0);
         return(NULL);
     }
 
@@ -2239,7 +2298,7 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
 			hProcessName = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pe32.th32ProcessID);
 			if(hProcessName == nullptr )
 				{
-					DisplayError (hwnd, L"Cannot open this process!", 1, 0);
+					DisplayError (hwnd, L"Cannot open this process", 1, 0);
 					CloseHandle(hProcessSnap);
 					return(NULL);
 				}
@@ -2331,7 +2390,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	if (!stream) //returns NULL Pointer
 	{
 
-	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort...", 0, 1))
+	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort", 0, 1))
 		{
 
 			stream = _wfopen(fsName, L"w+b");
@@ -2464,7 +2523,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	if(ch != BOM)
 		
 	{
-		DisplayError(hwnd, L"fgetwc: input file does not have BOM!", 0, 0);
+		DisplayError(hwnd, L"fgetwc: input file does not have BOM", 0, 0);
 		fsReturn = false;
 		goto WEOFFOUND;
 	}
@@ -2584,7 +2643,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 							goto WEOFFOUND;
 
 						}
-				if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close ", errCode, 0);
+				if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 
 				}//FoundNTdll
 
@@ -2606,7 +2665,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	free (tempDestOld);
 	if (foundNTDLL && !appendMode && !falseReadtrueWrite) //cleanup
 	{
-		if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close...", errCode, 0);
+		if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 	}
 		// Close stream if it is not NULL 
 
@@ -2630,7 +2689,7 @@ pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 
 if ((tempDest == nullptr) || (findPathW == nullptr) || (currPathW == nullptr) || (pathToDeleteW == nullptr))
 	{
-		DisplayError (hwnd, L"Could not allocate required memory!", errCode, 0);
+		DisplayError (hwnd, L"Could not allocate required memory", errCode, 0);
 		goto RemoveKleenup;
 	}
 
@@ -2650,7 +2709,7 @@ if (pCmdLineActive)
 	}
 	else
 	{
-	DisplayError (hwnd, L"Oops! CmdLine not there!", errCode, 0);
+	DisplayError (hwnd, L"Oops! CmdLine not there", errCode, 0);
 	free(pathToDeleteW);
 	goto RemoveKleenup;
 	}
@@ -2673,7 +2732,7 @@ else
 			//cumPath = dacfoldersW[i] + 4; // ////?// prefix away: 4 cuts out the //?/
 			if (wcscmp(dacfoldersW[index-rootFolderCW] + 4, dacfoldersWtmp[i]) == 0)
 			{
-			if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Continue?", errCode, 1))
+			if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Click Yes to continue", errCode, 1))
 				{
 					free(pathToDeleteW);
 					goto RemoveKleenup;
@@ -2696,7 +2755,7 @@ else
 		{
 			if (!ProcessfileSystem(hwnd, false, false)) //Reads and verifies entire FS
 			{
-			if (!DisplayError (hwnd, L"No FS file! Cannot tell whether directory was created by this program. Try alternate delete?", 0, 1))
+			if (!DisplayError (hwnd, L"No FS file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
 				{
 					free (tempDest);
 					free(pathToDeleteW);
@@ -2764,7 +2823,7 @@ else
 		{
 			if (branchTotal == j)
 			{
-				if (DisplayError (hwnd, L"The selected folder is not found in the FS. Try alternate delete?", 0, 1))
+				if (DisplayError (hwnd, L"The selected folder is not found in the FS. Click Yes for alternate delete", 0, 1))
 				{
 					free(pathToDeleteW);
 					goto OldDelete;
@@ -2799,7 +2858,7 @@ else
 	}
 	else
 	{
-		if (!DisplayError (hwnd, L"NTDLL not found on this machine. Continue with alternate delete?", 0, 1))
+		if (!DisplayError (hwnd, L"NTDLL not found on this machine. Click Yes for alternate delete", 0, 1))
 			{
 				free(pathToDeleteW);
 				goto RemoveKleenup;
@@ -2813,7 +2872,7 @@ OldDelete:
 if (cmdlineParmtooLong)
 	{
 		errCode = 0;
-		DisplayError (hwnd, L"Oops, command line too long! Delete won't work. Quit and try again should work.", 0, 0);
+		DisplayError (hwnd, L"Oops, command line too long! Delete won't work. Quit and rerun", 0, 0);
 		goto RemoveKleenup;
 	}
 	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
@@ -2837,7 +2896,7 @@ if (cmdlineParmtooLong)
 	if (RecurseRemovePath(trackFTA, folderTreeArray))
 		{
 			errCode = 0;
-			DisplayError (hwnd, L"Remove failed.", 0, 0);
+			DisplayError (hwnd, L"Remove failed", 0, 0);
 		}
 	else
 		{
@@ -2965,12 +3024,12 @@ bool fsDelsub (int i, int j, HWND hwnd)
 				{
 					if (secondTryDelete)
 					{
-					DisplayError (hwnd, L"Delete failed the second time. Try running 7-zip and shift-del.", 0, 0);
+					DisplayError (hwnd, L"Delete failed the second time. Try running 7-zip and shift-del", 0, 0);
 					secondTryDelete = false;
 					}
 					else
 					{
-					DisplayError (hwnd, L"Oops, 'Used by another process': Something went wrong. Restarting to attempt deletion...", 0, 0);
+					DisplayError (hwnd, L"Oops, 'Used by another process': Something went wrong. Restarting to attempt deletion", 0, 0);
 					rootDir[0] = L'\0';
 					pCmdLineActive = true;
 					wcscpy_s(pathToDeleteW, pathLength, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
@@ -3000,12 +3059,12 @@ bool fsDelsub (int i, int j, HWND hwnd)
 							if (folderNotEmpty)
 
 							{
-								DisplayError (hwnd, L"Cannot remove Folder: Retry or restart & retry.", 0, 0);
+								DisplayError (hwnd, L"Cannot remove Folder: Retry or rerun & retry", 0, 0);
 								folderNotEmpty = false;
 							}
 							else
 							{
-								if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when a subfolder is deleted outside of this program. Continue deletion?", 0, 1)) folderNotEmpty = true;
+								if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when a subfolder is deleted outside of this program. Click Yes to continue deletion", 0, 1)) folderNotEmpty = true;
 							}
 							return !folderNotEmpty;
 						}
@@ -3454,4 +3513,60 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     }
 
     return CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
+}
+DWORD dynamicComCtrl()
+{
+
+LPCWSTR lpszDllName = L"C:\\Windows\\System32\\ComCtl32.dll";
+
+
+    HINSTANCE hinstDll;
+    DWORD dwVersion = 0;
+
+    // For security purposes, LoadLibrary should be provided with a fully qualified 
+    // path to the DLL. The lpszDllName variable should be tested to ensure that it 
+    // is a fully qualified path before it is used. 
+    hinstDll = LoadLibraryW(lpszDllName);
+	
+	if(hinstDll)
+	{
+	DLLGETVERSIONPROC pDllGetVersion;
+	pDllGetVersion = (DLLGETVERSIONPROC)GetProcAddress(hinstDll, "DllGetVersion");
+
+	// Because some DLLs might not implement this function, you must test for 
+	// it explicitly. Depending on the particular DLL, the lack of a DllGetVersion 
+	// function can be a useful indicator of the version. 
+
+	if(pDllGetVersion)
+	{
+	DLLVERSIONINFO2 dvi;
+           
+	ZeroMemory(&dvi, sizeof(dvi));
+	dvi.info1.cbSize = sizeof(dvi);
+
+	HRESULT hr = (*pDllGetVersion)(&dvi.info1);
+
+	if(SUCCEEDED(hr))
+	{
+	dwVersion = PACKVERSION(dvi.info1.dwMajorVersion, dvi.info1.dwMinorVersion);
+	}
+	}
+	FreeLibrary(hinstDll);
+	}
+
+DWORD dwTarget = PACKVERSION(6,0);
+
+if(dwVersion >= dwTarget)
+{
+    // This version of ComCtl32.dll is version 6.0 or later.
+}
+else
+{
+    // Proceed knowing that version 6.0 or later additions are not available.
+    // Use an alternate approach for older the DLL version.
+}
+
+
+
+	return true;
 }
