@@ -11,6 +11,7 @@
 #include "windef.h"
 #include "shlwapi.h"
 
+
 //#include <afxwin.h>
 
 #define _CRTDBG_MAP_ALLOC
@@ -123,6 +124,46 @@ const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 const wchar_t TEMP_CLASS_NAME[]  = L"ResCheckClass";
 //A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
+
+
+class APP_CLASS
+{
+public:
+APP_CLASS();
+
+// This is the static callback that we register
+static INT_PTR CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+// The static callback recovers the "this" pointer and then calls this member function.
+INT_PTR DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+
+};
+
+
+APP_CLASS::APP_CLASS(void)
+{
+
+		switch (resResult)
+	{
+		case 1:
+			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+		break;
+		case 2:
+			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+		break;
+		case 3:
+			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+		break;
+		case 4:
+			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+		break;
+		default:
+			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+		break;
+	}
+
+}
+
 
 
 //------------------------------------------------------------------------------------------------------------------
@@ -454,7 +495,38 @@ LRESULT CALLBACK ValidateProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
 }
 
 
-INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK APP_CLASS::s_DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	APP_CLASS *pThis; // our "this" pointer will go here
+
+	if (uMsg == WM_INITDIALOG)
+	{
+		// Recover the "this" pointer which was passed as the last parameter to the ...Dialog...Param function.
+		pThis = reinterpret_cast<APP_CLASS*>(lParam);
+		// Put the value in a safe place for future use
+		SetWindowLongPtr(hwnd, DWLP_USER, reinterpret_cast<LONG_PTR>(pThis));
+	}
+ else
+	{
+		// Recover the "this" pointer from where our WM_INITDIALOG handler stashed it.
+		pThis = reinterpret_cast<APP_CLASS*>( GetWindowLongPtr(hwnd, DWLP_USER));
+	}
+
+	if (pThis)
+	{
+
+		// Now that we have recovered our "this" pointer, let the
+		// member function finish the job.
+		return pThis->DlgProc(hwnd, uMsg, wParam, lParam);
+	}
+
+// We don't know what our "this" pointer is, so just do the default thing. Hopefully, we didn't need to customize the behavior yet.
+return FALSE; // returning FALSE means "do the default thing"
+}
+
+
+
+INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
 	errCode = 0;
 	switch(Msg)
@@ -539,7 +611,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
 				}
 			
-				DragAcceptFiles(hwnd,TRUE); 
+				DragAcceptFiles(hwnd,TRUE);  //not necessary when using WS_EX_ACCEPTFILES but????
 				
             }
 		break;
@@ -1697,11 +1769,19 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 				wchar_t *dropBuf;
 				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-				hDropInfo = (HDROP) wParam;
-				DragQueryFile (hDropInfo, 0, dropBuf, sizeof(dropBuf));
+				if (!DragQueryFileW ((HDROP) wParam, 0, dropBuf, sizeof(dropBuf))) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
 
+				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				//if (!DragQueryFileW ((HDROP) wParam, 0, dropBuf, sizeof(dropBuf))) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
 
-
+				int n = 0;
+				int count = DragQueryFileW((HDROP) wParam, 0xFFFFFFFF, 0, 0 );
+				while ( n < count )
+				{
+				DragQueryFileW( (HDROP) wParam, n, dropBuf, 512 );
+				;
+				n++;
+				}
 
 				DragFinish(hDropInfo);
 				free (dropBuf);
@@ -1730,7 +1810,7 @@ INT_PTR CALLBACK DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 		case WM_DESTROY:
 			PostQuitMessage(0);
-			if (!(UnregisterClassW(APP_CLASS_NAME, appHinstance))) DisplayError (hwnd, L"App class failed to unregister", 0, 0);;
+			if (!(UnregisterClassW(APP_CLASS_NAME, appHinstance))) DisplayError (hwnd, L"App class failed to unregister", 0, 0);
 		break;
 		default: return FALSE;
 		break;	
@@ -1847,7 +1927,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	{
 
 		resResult = DoSystemParametersInfoStuff(hwnd, true);
-		SwitchResolution (nullptr, DlgProc);
+		SwitchResolution (nullptr, APP_CLASS::s_DlgProc);
 	}
 return 0; //never gets here, but suppress C4715 warning
 }
@@ -2015,20 +2095,20 @@ if (hwndParent) //About dialogue
 else 
 {
 
-	WNDCLASS wc = { };
+	WNDCLASSEX RSC_CLASS = { };
 	appHinstance = GetModuleHandle(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
 	
-	if( !GetClassInfoW( NULL, L"#32770", &wc )) ErrorExit (L"Cannot create App Class!?", 0);
-	
+	if( !GetClassInfoExW( NULL, L"#32770", &RSC_CLASS )) ErrorExit (L"Cannot get App Class!?", 0);
+	//The Dialog class is the default Window Class #32770, already registered,
+
 	//These most likely not required
-	//wc.lpfnWndProc = DlgProc;
 	//HRSRC hRsc = FindResource(NULL, MAKEINTRESOURCE(IDD_768P), RT_DIALOG );
-	//wc.hInstance = (HINSTANCE)LoadResource(NULL, hRsc);
+	//RSC_CLASS.hInstance = (HINSTANCE)LoadResource(NULL, hRsc);
 
-
-	wc.hInstance = appHinstance;
-	wc.lpszClassName = APP_CLASS_NAME;
-	if (!RegisterClass(&wc)) ErrorExit (L"Cannot register Application Window!!!?", 0);
+	RSC_CLASS.cbSize        = sizeof(RSC_CLASS);
+	RSC_CLASS.hInstance = appHinstance;
+	RSC_CLASS.lpszClassName = APP_CLASS_NAME;
+	if (!RegisterClassEx(&RSC_CLASS)) ErrorExit (L"Cannot register Application Window!!!?", 0);
 
 	HWND hwnd = CreateWindowExW(
 		0,												// Optional window styles.
@@ -2042,27 +2122,14 @@ else
 		NULL											// Additional application data
 		);
 
-
-
-	switch (resResult)
-	{
-		case 1:
-			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, (DLGPROC)dProc);
-		break;
-		case 2:
-			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, (DLGPROC)dProc);
-		break;
-		case 3:
-			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, (DLGPROC)dProc);
-		break;
-		case 4:
-			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_768P), nullptr, (DLGPROC)dProc);
-		break;
-		default:
-			return DialogBoxW(appHinstance, MAKEINTRESOURCEW(IDD_SMALL), nullptr, (DLGPROC)dProc);
-		break;
-	}
-
+APP_CLASS wnd;
+MSG msg;
+while (GetMessage(&msg, NULL, 0, 0))
+{
+TranslateMessage(&msg);
+DispatchMessage(&msg);
+}
+return 0;
 }
 
 }
