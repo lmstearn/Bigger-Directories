@@ -610,8 +610,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 					DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
 				}
-			
-				DragAcceptFiles(hwnd,TRUE);  //not necessary when using WS_EX_ACCEPTFILES but????
+				//No Drag Drop for root drive: WS_EX_ACCEPTFILES for WNDCLASS only
+				DragAcceptFiles(hwnd,FALSE);
 				
             }
 		break;
@@ -1732,6 +1732,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					
 					if (dblclkLevel)
 						{
+							DragAcceptFiles(hwnd,TRUE);
 							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 							PopulateListBox (hwnd, true);
 							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
@@ -1752,6 +1753,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 					else
 						{
+							DragAcceptFiles(hwnd,FALSE);
 							if (findPathW) free (findPathW);
 							if (currPathW) free (currPathW);
 							InitProc(hwnd);
@@ -1769,10 +1771,14 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 				wchar_t *dropBuf;
 				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				if ((currPathW == nullptr) || (dropBuf == nullptr) || (tempDest == nullptr))
+				{
+				DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
+				return 0;
+				}
 				if (!DragQueryFileW ((HDROP) wParam, 0, dropBuf, sizeof(dropBuf))) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
-
-				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-				//if (!DragQueryFileW ((HDROP) wParam, 0, dropBuf, sizeof(dropBuf))) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
 
 				int n = 0;
 				int count = DragQueryFileW((HDROP) wParam, 0xFFFFFFFF, 0, 0 );
@@ -1783,10 +1789,27 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				n++;
 				}
 
+				wchar_t *pdest;
+				int result;
+				pdest = wcsrchr( dropBuf, separatorFTA );
+				result = (int)(pdest - dropBuf + 1);
+				wcscpy_s(tempDest, pathLength, dblclkString);
+				wcscat_s(tempDest, pathLength, &dropBuf[result]);
+				// prepend "\\?\" to the path.
+ 				currPathW[0] = L'';
+				wcscat_s(currPathW, pathLength, lpref);
+				wcscat_s(currPathW, pathLength, dropBuf);
+				if (DisplayError (hwnd, L"Click Yes to copy file to selected directory", errCode, 1))
+				{
+				if (!(CopyFileW(currPathW, tempDest, FALSE))) ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
+				}
+				
+
 				DragFinish(hDropInfo);
 				free (dropBuf);
+				free (currPathW);
+				free (tempDest);
 				}
-		
 		break;
 			/*case WM_KEYDOWN: 
             switch (wParam) 
