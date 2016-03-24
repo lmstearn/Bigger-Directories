@@ -12,6 +12,11 @@
 #define IDD_HELP1080P                   107
 #define IDD_HELP2160P                   108
 #define IDD_HELP4320P                   109
+#define IDB_PENCIL                      113
+#define IDB_CRAYON                      115
+#define IDB_MARKER                      117
+#define IDB_PEN                         119
+#define IDB_FORK                        121
 #define IDC_TEXT                        1000
 #define IDC_NUMBER                      1001
 #define IDC_LIST                        1002

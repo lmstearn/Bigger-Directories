@@ -172,7 +172,7 @@ APP_CLASS::APP_CLASS(void)
 BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
-int PopulateListBox (HWND hwnd, BOOL widecharNames);
+int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
 int SwitchResolution (HWND hwnd, DLGPROC dProc);
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
@@ -191,6 +191,7 @@ void ShellError (HWND aboutHwnd, int nError);
 LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CreateHyperLink(HWND hwndControl);
+DWORD dynamicComCtrl(LPCWSTR lpszDllName);
 // End of HyperLink URL
 
 
@@ -401,6 +402,15 @@ if (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0])) == FALSE) DisplayError (hwnd
 
 
 
+LPCWSTR lpszDllName = L"C:\\Windows\\System32\\ComCtl32.dll";
+DWORD dwVer = dynamicComCtrl(lpszDllName);
+DWORD dwTarget = PACKVERSION(6,0);
+
+if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of ComCtl32.dll", errCode, 0);
+
+
+
+
 	//NULL is a macro that's guaranteed to expand to a null pointer constant.
 	//C strings are NUL-terminated, not NULL-terminated.  (char)(0) is the NUL character, (void * )(0) is	NULL, type void * , is called a null pointer constant
 	//If (NULL == 0) isn't true you're not using C.  '\0' is the same as '0' see https://msdn.microsoft.com/en-us/library/h21280bw.aspx but '0' does not work!
@@ -469,8 +479,8 @@ if (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0])) == FALSE) DisplayError (hwnd
 	}
 	
 sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-rootFolderCS = PopulateListBox (hwnd, false);
-rootFolderCW = PopulateListBox (hwnd, true);
+rootFolderCS = PopulateListBox (hwnd, false, true);
+rootFolderCW = PopulateListBox (hwnd, true, true);
 
 
 //http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
@@ -1734,8 +1744,9 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							DragAcceptFiles(hwnd,TRUE);
 							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-							PopulateListBox (hwnd, true);
+							int listNum = PopulateListBox (hwnd, true, true);
 							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
+							PopulateListBox (hwnd, true, false);
 							//disable buttons
 							SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
 							SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"");
@@ -1770,6 +1781,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			case WM_DROPFILES:
 				{
 				wchar_t *dropBuf;
+				int pdest;
 				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -1778,32 +1790,31 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
 				return 0;
 				}
-				if (!DragQueryFileW ((HDROP) wParam, 0, dropBuf, sizeof(dropBuf))) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
-
-				int n = 0;
-				int count = DragQueryFileW((HDROP) wParam, 0xFFFFFFFF, 0, 0 );
-				while ( n < count )
-				{
-				DragQueryFileW( (HDROP) wParam, n, dropBuf, 512 );
-				;
-				n++;
-				}
-
-				wchar_t *pdest;
-				int result;
-				pdest = wcsrchr( dropBuf, separatorFTA );
-				result = (int)(pdest - dropBuf + 1);
-				wcscpy_s(tempDest, pathLength, dblclkString);
-				wcscat_s(tempDest, pathLength, &dropBuf[result]);
-				// prepend "\\?\" to the path.
- 				currPathW[0] = L'';
-				wcscat_s(currPathW, pathLength, lpref);
-				wcscat_s(currPathW, pathLength, dropBuf);
-				if (DisplayError (hwnd, L"Click Yes to copy file to selected directory", errCode, 1))
-				{
-				if (!(CopyFileW(currPathW, tempDest, FALSE))) ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
-				}
 				
+				if (DisplayError (hwnd, L"Click Yes to copy selection", errCode, 1))
+					{
+
+
+					int n = 0;
+					int count = DragQueryFileW((HDROP) wParam, 0xFFFFFFFF, 0, 0 );
+					while ( n < count )
+					{
+					if (!DragQueryFileW ((HDROP) wParam, n, dropBuf, pathLength)) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
+					pdest = (int)(wcsrchr( dropBuf, separatorFTA ) - dropBuf + 1);
+					wcscpy_s(currPathW, pathLength, dblclkString);
+					wcscat_s(currPathW, pathLength, &dropBuf[pdest]);
+					// prepend "\\?\" to the path.
+ 					tempDest[0] = L'';
+					wcscat_s(tempDest, pathLength, lpref);
+					wcscat_s(tempDest, pathLength, dropBuf);
+					(CopyFileW(tempDest, currPathW, FALSE))? sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]): ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
+					n++;
+					}
+
+
+
+
+				}
 
 				DragFinish(hDropInfo);
 				free (dropBuf);
@@ -1961,103 +1972,172 @@ LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 	//temp windowfor res check.
 }
 
-int PopulateListBox (HWND hwnd, BOOL widecharNames)
+int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders)
 {
 BOOL findhandle = TRUE;
 int listNum = 0;
 
-if (widecharNames == 0)
-{
-	memset(&da, 0, sizeof(WIN32_FIND_DATA));
-	strcpy_s(currPath, maxPathFolder, driveIDBase);
-
-	strcat_s(currPath, maxPathFolder, "*");
-	ds = FindFirstFileA(currPath, &da);
-
-}
-else
-{
-	memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
-	//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
-	(dblclkLevel)? wcscat_s(currPathW, maxPathFolder, dblclkString): wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
-	wcscat_s(currPathW, maxPathFolder, L"*");
-	//findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
-	ds = FindFirstFileW(currPathW, &dw); //dw points to found folders
-
-}
-
-
-if (ds == INVALID_HANDLE_VALUE && (widecharNames == 0))
-{
-	errCode = -3;
-	DisplayError (hwnd, L"No directories found", errCode, 0);
-	return false;
-}
-
-//There's an internal index that is reset to 0 each time you call FindFirstFile() and it's incremented each time you call FindNextFile() so unless you do it in a loop, you'll only get the first filename ( a dot ) each time.
-while (ds != INVALID_HANDLE_VALUE && findhandle)
+if (listFolders)
 {
 
 	if (widecharNames == 0)
 	{
-		if ((da.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(da.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM
-			|| da.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || da.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE || da.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+		memset(&da, 0, sizeof(WIN32_FIND_DATA));
+		strcpy_s(currPath, maxPathFolder, driveIDBase);
 
-			//define FILE_ATTRIBUTE_READONLY              0x00000001
-			//#define FILE_ATTRIBUTE_HIDDEN               0x00000002
-			//#define FILE_ATTRIBUTE_SYSTEM               0x00000004
-			//#define FILE_ATTRIBUTE_DIRECTORY            0x00000010
-			//#define FILE_ATTRIBUTE_ARCHIVE              0x00000020
-			//#define FILE_ATTRIBUTE_DEVICE               0x00000040
-			//#define FILE_ATTRIBUTE_NORMAL               0x00000080
-			//#define FILE_ATTRIBUTE_TEMPORARY            0x00000100
-			//#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200
-			//#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400
-			//#define FILE_ATTRIBUTE_COMPRESSED           0x00000800
-			//#define FILE_ATTRIBUTE_OFFLINE              0x00001000
-			//#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000
-			//#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000
-			//#define FILE_ATTRIBUTE_VIRTUAL              0x00010000
+		strcat_s(currPath, maxPathFolder, "*");
+		ds = FindFirstFileA(currPath, &da);
 
-		// (wchar_t *)currPathW not necessary here
-			strcpy_s(currPath, maxPathFolder, (char *)driveIDBase);
-			strcat_s(currPath, maxPathFolder, da.cFileName);
-
-
-			strcat_s(dacfolders[listNum], maxPathFolder, currPath);
-			listNum += 1;
-
-			SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(listNum), (LPARAM)currPath); // wparam cannot exceed 32,767 
-					
-		}
-		findhandle = FindNextFileA(ds, &da);
 	}
 	else
 	{
-		if ((dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM
-			|| dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
-
-		(dblclkLevel)? currPathW[0]= L'': wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
-		wcscat_s(currPathW, maxPathFolder, dw.cFileName);
-			
-				
-		//compare with dacfolders[rootFolderC] to check for dups
-		wcscat_s(dacfoldersW[listNum], maxPathFolder, currPathW);
-		listNum += 1;
-		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(rootFolderCS + listNum), (LPARAM)currPathW); // wparam cannot exceed 32,767 
-				
-		}
-	findhandle = FindNextFileW(ds, &dw);
+		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
+		//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
+		(dblclkLevel)? wcscat_s(currPathW, maxPathFolder, dblclkString): wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
+		wcscat_s(currPathW, maxPathFolder, L"*");
+		//findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
+		ds = FindFirstFileW(currPathW, &dw); //dw points to found folders
 
 	}
-	sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)(rootFolderCS + listNum), (LPARAM)(rootFolderCS + listNum));
-//(lparam)rootFolderC required for getitemdata
-//The Notification Code is passed as the HIWORD of wParam, the other half of the parameter that gave us the index of the control identifier in the first place. 
-//HIWORD is the Upper 16 bits of UINT and LOWORD is the Lower 16 bits of UINT
-//DWORD is just a typedef for 32-bit integer, whereas WORD is a typedef for a 16-bit integer
+
+
+	if (ds == INVALID_HANDLE_VALUE && (widecharNames == 0))
+	{
+		errCode = -3;
+		DisplayError (hwnd, L"No directories found", errCode, 0);
+		return false;
+	}
+
+	//There's an internal index that is reset to 0 each time you call FindFirstFile() and it's incremented each time you call FindNextFile() so unless you do it in a loop, you'll only get the first filename ( a dot ) each time.
+	while (ds != INVALID_HANDLE_VALUE && findhandle)
+	{
+
+		if (widecharNames == 0)
+		{
+			if ((da.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(da.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM
+				|| da.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || da.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE || da.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN)) {
+
+				//define FILE_ATTRIBUTE_READONLY              0x00000001
+				//#define FILE_ATTRIBUTE_HIDDEN               0x00000002
+				//#define FILE_ATTRIBUTE_SYSTEM               0x00000004
+				//#define FILE_ATTRIBUTE_DIRECTORY            0x00000010
+				//#define FILE_ATTRIBUTE_ARCHIVE              0x00000020
+				//#define FILE_ATTRIBUTE_DEVICE               0x00000040
+				//#define FILE_ATTRIBUTE_NORMAL               0x00000080
+				//#define FILE_ATTRIBUTE_TEMPORARY            0x00000100
+				//#define FILE_ATTRIBUTE_SPARSE_FILE          0x00000200
+				//#define FILE_ATTRIBUTE_REPARSE_POINT        0x00000400
+				//#define FILE_ATTRIBUTE_COMPRESSED           0x00000800
+				//#define FILE_ATTRIBUTE_OFFLINE              0x00001000
+				//#define FILE_ATTRIBUTE_NOT_CONTENT_INDEXED  0x00002000
+				//#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000
+				//#define FILE_ATTRIBUTE_VIRTUAL              0x00010000
+
+			// (wchar_t *)currPathW not necessary here
+				strcpy_s(currPath, maxPathFolder, (char *)driveIDBase);
+				strcat_s(currPath, maxPathFolder, da.cFileName);
+
+
+				strcat_s(dacfolders[listNum], maxPathFolder, currPath);
+				listNum += 1;
+
+				SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(listNum), (LPARAM)currPath); // wparam cannot exceed 32,767 
+					
+			}
+			findhandle = FindNextFileA(ds, &da);
+		}
+		else
+		{
+			if ((dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM
+				|| dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN))
+			{
+
+
+			(dblclkLevel)? currPathW[0]= L'': wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
+			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
+			
+				
+			//compare with dacfolders[rootFolderC] to check for dups
+			wcscat_s(dacfoldersW[listNum], maxPathFolder, currPathW);
+			listNum += 1;
+			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(rootFolderCS + listNum), (LPARAM)currPathW); // wparam cannot exceed 32,767 
+				
+			}
+		findhandle = FindNextFileW(ds, &dw);
+
+		}
+		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)(rootFolderCS + listNum), (LPARAM)(rootFolderCS + listNum));
+	//(lparam)rootFolderC required for getitemdata
+	//The Notification Code is passed as the HIWORD of wParam, the other half of the parameter that gave us the index of the control identifier in the first place. 
+	//HIWORD is the Upper 16 bits of UINT and LOWORD is the Lower 16 bits of UINT
+	//DWORD is just a typedef for 32-bit integer, whereas WORD is a typedef for a 16-bit integer
+	}
+
+	FindClose(ds);
+
+}
+else
+{
+
+
+
+
+	if (dblclkLevel)
+
+	{
+		findhandle = TRUE;
+		int listNum = 0;
+		currPathW[0]=L'';
+		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
+		//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
+		wcscat_s(currPathW, maxPathFolder, dblclkString);
+		wcscat_s(currPathW, maxPathFolder, L"*");
+
+		ds = FindFirstFileW(currPathW, &dw);
+
+
+	if (ds == INVALID_HANDLE_VALUE)
+	{
+		errCode = -3;
+		DisplayError (hwnd, L"No files found", errCode, 0);
+		return false;
+	}
+
+
+	while (ds != INVALID_HANDLE_VALUE && findhandle)
+	{
+
+			//Symbolic links, junction points and mount points are all reparse points
+			if (!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ||	dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY))
+			{
+				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
+				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
+				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY))
+				//|| dw.dwFileAttributes & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED || dw.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE || dw.dwFileAttributes & FILE_ATTRIBUTE_VIRTUAL || dw.dwFileAttributes & FILE_ATTRIBUTE_TEMPORARY || dw.dwFileAttributes & FILE_ATTRIBUTE_OFFLINE || dw.dwFileAttributes & FILE_ATTRIBUTE_COMPRESSED || dw.dwFileAttributes & FILE_ATTRIBUTE_DEVICE
+				//((!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY) || !(dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
+
+				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ||	dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
+
+			currPathW[0]= L'';
+			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
+			
+				
+			//compare with dacfolders[rootFolderC] to check for dups
+			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(rootFolderCS + listNum), (LPARAM)currPathW); // wparam cannot exceed 32,767 
+				
+			}
+		findhandle = FindNextFileW(ds, &dw);
+
+	}
+		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)(rootFolderCS + listNum), (LPARAM)(rootFolderCS + listNum));
+
+	FindClose(ds);
+
+	}
 }
 
-FindClose(ds);
+
+
 return listNum;
 }
 
@@ -3604,11 +3684,8 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
     return CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
 }
-DWORD dynamicComCtrl()
+DWORD dynamicComCtrl(LPCWSTR lpszDllName)
 {
-
-LPCWSTR lpszDllName = L"C:\\Windows\\System32\\ComCtl32.dll";
-
 
     HINSTANCE hinstDll;
     DWORD dwVersion = 0;
@@ -3644,19 +3721,7 @@ LPCWSTR lpszDllName = L"C:\\Windows\\System32\\ComCtl32.dll";
 	FreeLibrary(hinstDll);
 	}
 
-DWORD dwTarget = PACKVERSION(6,0);
-
-if(dwVersion >= dwTarget)
-{
-    // This version of ComCtl32.dll is version 6.0 or later.
-}
-else
-{
-    // Proceed knowing that version 6.0 or later additions are not available.
-    // Use an alternate approach for older the DLL version.
-}
 
 
-
-	return true;
+	return dwVersion;
 }

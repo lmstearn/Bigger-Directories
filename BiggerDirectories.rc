@@ -65,6 +65,32 @@ IDI_APP_ICON            ICON                    "CaveMantizardum.ico"
 IDW_CLICK               wave                    "click.wav"
 
 /////////////////////////////////////////////////////////////////////////////
+
+
+//
+// Bitmap resources
+/*
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_CRAYON         BITMAP         "bitmap2.bmp"
+ 
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_FORK           BITMAP         "bitmap5.bmp"
+ 
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_MARKER         BITMAP         "bitmap3.bmp"
+ 
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_PEN            BITMAP         "bitmap4.bmp"
+ 
+
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDB_PENCIL         BITMAP         "bitmap1.bmp"
+*/ 
+
+
 /////////////////////////////////////////////////////////////////////////////
 //
 // Dialog
