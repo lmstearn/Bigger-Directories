@@ -48,8 +48,8 @@ wchar_t rootDir [pathLength], dblclkPath [treeLevelLimit + 1][maxPathFolder], db
 wchar_t *pathToDeleteW, *currPathW, *findPathW, *tempDest, *thisexePath, *BiggerDirectoriesVAR; // directory pointers. cannot be initialised as a pointer
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
-char dacfolders[127][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
-wchar_t dacfoldersW[255][MAX_PATH-3], dacfoldersWtmp[127][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL };
+char dacfolders[branchLimit][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
+wchar_t dacfoldersW[branchLimit][MAX_PATH-3], dacfoldersWtmp[branchLimit][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL };
 wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder], pathsToSave [branchLimit][pathLength];
 
 
@@ -1744,8 +1744,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							DragAcceptFiles(hwnd,TRUE);
 							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-							int listNum = PopulateListBox (hwnd, true, true);
-							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
+							sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, WPARAM(PopulateListBox (hwnd, true, true)), (LPARAM)(L""));
+							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'							
 							PopulateListBox (hwnd, true, false);
 							//disable buttons
 							SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
@@ -2086,7 +2086,6 @@ else
 
 	{
 		findhandle = TRUE;
-		int listNum = 0;
 		currPathW[0]=L'';
 		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
 		//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
@@ -2108,15 +2107,9 @@ else
 	{
 
 			//Symbolic links, junction points and mount points are all reparse points
-			if (!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ||	dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY))
+			if (!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ||	dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN))
 			{
-				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
-				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
-				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY))
 				//|| dw.dwFileAttributes & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED || dw.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE || dw.dwFileAttributes & FILE_ATTRIBUTE_VIRTUAL || dw.dwFileAttributes & FILE_ATTRIBUTE_TEMPORARY || dw.dwFileAttributes & FILE_ATTRIBUTE_OFFLINE || dw.dwFileAttributes & FILE_ATTRIBUTE_COMPRESSED || dw.dwFileAttributes & FILE_ATTRIBUTE_DEVICE
-				//((!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) && !(dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY) || !(dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
-
-				//(!(dw.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ||	dw.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT || dw.dwFileAttributes & FILE_ATTRIBUTE_SYSTEM || dw.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN || dw.dwFileAttributes & FILE_ATTRIBUTE_READONLY || dw.dwFileAttributes & FILE_ATTRIBUTE_ARCHIVE))
 
 			currPathW[0]= L'';
 			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
