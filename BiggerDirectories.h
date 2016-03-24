@@ -69,6 +69,11 @@
 #define PACKVERSION(major,minor) MAKELONG(minor,major)
 
 
+//G++ compatibility ...
+#define MSGFLT_ALLOW                            (1)
+BOOL (WINAPI * ChangeWindowMessageFilter)(UINT,DWORD) = NULL;
+
+
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED

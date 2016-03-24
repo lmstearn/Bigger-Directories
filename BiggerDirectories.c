@@ -146,19 +146,19 @@ APP_CLASS::APP_CLASS(void)
 		switch (resResult)
 	{
 		case 1:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 2:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 3:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 4:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		default:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCEW(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 	}
 
@@ -212,7 +212,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//change countof sizeof otherwise possible buffer overflow: here index and rootFolderCS gets set to -16843010!
 		if (yesNo)
 		{
-		int msgboxID = MessageBoxW(hwnd, hrtext, L"Warning", MB_YESNO);
+		int msgboxID = MessageBox(hwnd, hrtext, L"Warning", MB_YESNO);
 			if (msgboxID == IDYES) 
 			{
 			return 1;
@@ -224,7 +224,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		}
 		else
 		{
-		MessageBoxW(hwnd, hrtext, L"Warning", MB_OK);
+		MessageBox(hwnd, hrtext, L"Warning", MB_OK);
 		}
 
 		return 0;
@@ -269,12 +269,13 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	}
 	// Display the error message and exit the process
 
-	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlen((LPCTSTR)lpMsgBuf) + lstrlen((LPCTSTR)lpszFunction) + 40) * sizeof(TCHAR));
+	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlen((LPCWSTR)lpMsgBuf) + lstrlen((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
 	
 	
-	StringCchPrintf((LPTSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), TEXT("%s failed with error %lu: %s"), lpszFunction, dww, lpMsgBuf);
+	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
 	wprintf(L"\a");  //audible bell
-	MessageBoxW(nullptr, (LPCTSTR)lpDisplayBuf, L"Error", MB_OK);
+	Beep(400,500);
+	MessageBox(nullptr, (LPCWSTR)lpDisplayBuf, TEXT("Error"), MB_OK);
 
 	LocalFree(lpDisplayBuf);
 	LocalFree(lpMsgBuf);
@@ -545,8 +546,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
             {	
 				
-		
-			hMutex = CreateMutex( nullptr, TRUE, L"BiggerDirectories.exe" );
+			hMutex = CreateMutex( nullptr, TRUE, TEXT("BiggerDirectories.exe") );
 			if (hMutex)
 			{
 			DWORD wait_success = WaitForSingleObject (hMutex, 30 );
@@ -567,7 +567,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						InitProc (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
 						// Subclass the Edit control with ValidateProc
-						g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWL_WNDPROC, (LONG)ValidateProc);
+						g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWLP_WNDPROC, (LONG)ValidateProc);
 						switch (errCode)
 						{
 						case 1:
@@ -1860,7 +1860,7 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 	{
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FOUR));
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FIVE));
-	PlaySound(MAKEINTRESOURCE(IDW_CLICK), (HMODULE)GetWindowLong(aboutHwnd, GWL_HINSTANCE), SND_RESOURCE | SND_ASYNC);
+	PlaySound(MAKEINTRESOURCE(IDW_CLICK), (HMODULE)GetWindowLong(aboutHwnd, GWLP_HINSTANCE), SND_RESOURCE | SND_ASYNC);
 	return true;
 	}
 	break;
@@ -3527,20 +3527,20 @@ void ShellError (HWND aboutHwnd, int nError)
 	wchar_t* str;
 	switch (nError) 
 	{
-	case 0:							str = L"The operating system is out\nof memory or resources"; break;
-	case ERROR_FILE_NOT_FOUND:		str = L"The specified path was not found"; break;
-	case ERROR_PATH_NOT_FOUND:		str = L"The specified file was not found"; break;
-	case ERROR_BAD_FORMAT:			str = L"The .EXE file is invalid\n(non-Win32 .EXE or error in .EXE image)"; break;
-	case SE_ERR_ACCESSDENIED:		str = L"The operating system denied\naccess to the specified file"; break;
-	case SE_ERR_ASSOCINCOMPLETE:	str = L"The filename association is\nincomplete or invalid"; break;
-	case SE_ERR_DDEBUSY:			str = L"The DDE transaction could not\nbe completed because other DDE transactions\nwere being processed"; break;
-	case SE_ERR_DDEFAIL:			str = L"The DDE transaction failed"; break;
-	case SE_ERR_DDETIMEOUT:			str = L"The DDE transaction could not\nbe completed because the request timed out"; break;
-	case SE_ERR_DLLNOTFOUND:		str = L"The specified dynamic-link library was not found"; break;
-	case SE_ERR_NOASSOC:			str = L"There is no application associated\nwith the given filename extension"; break;
-	case SE_ERR_OOM:				str = L"There was not enough memory to complete the operation"; break;
-	case SE_ERR_SHARE:				str = L"A sharing violation occurred";
-	default:						str = L"Unknown Error occurred"; break;
+	case 0:							str = TEXT("The operating system is out\nof memory or resources"); break;
+	case ERROR_FILE_NOT_FOUND:		str = TEXT("The specified path was not found"); break;
+	case ERROR_PATH_NOT_FOUND:		str = TEXT("The specified file was not found"); break;
+	case ERROR_BAD_FORMAT:			str = TEXT("The .EXE file is invalid\n(non-Win32 .EXE or error in .EXE image)"); break;
+	case SE_ERR_ACCESSDENIED:		str = TEXT("The operating system denied\naccess to the specified file"); break;
+	case SE_ERR_ASSOCINCOMPLETE:	str = TEXT("The filename association is\nincomplete or invalid"); break;
+	case SE_ERR_DDEBUSY:			str = TEXT("The DDE transaction could not\nbe completed because other DDE transactions\nwere being processed"); break;
+	case SE_ERR_DDEFAIL:			str = TEXT("The DDE transaction failed"); break;
+	case SE_ERR_DDETIMEOUT:			str = TEXT("The DDE transaction could not\nbe completed because the request timed out"); break;
+	case SE_ERR_DLLNOTFOUND:		str = TEXT("The specified dynamic-link library was not found"); break;
+	case SE_ERR_NOASSOC:			str = TEXT("There is no application associated\nwith the given filename extension"); break;
+	case SE_ERR_OOM:				str = TEXT("There was not enough memory to complete the operation"); break;
+	case SE_ERR_SHARE:				str = TEXT("A sharing violation occurred");
+	default:						str = TEXT("Unknown Error occurred"); break;
 	}
 	swprintf_s(hrtext, _countof(hrtext), L"Unable to open hyperlink:\n\n %s", str);
 	DisplayError (aboutHwnd, hrtext, 0, 0);
@@ -3551,11 +3551,11 @@ static void CreateHyperLink(HWND hwndControl)
     HWND hwndParent = GetParent(hwndControl);
     if (NULL != hwndParent)
     {
-        WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndParent, GWL_WNDPROC);
+        WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndParent, GWLP_WNDPROC);
         if (pfnOrigProc != _HyperlinkParentProc)
         {
             SetProp(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-            SetWindowLong(hwndParent, GWL_WNDPROC, (LONG)(WNDPROC)_HyperlinkParentProc);
+            SetWindowLong(hwndParent, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkParentProc);
         }
     }
 
@@ -3564,9 +3564,9 @@ static void CreateHyperLink(HWND hwndControl)
     SetWindowLong(hwndControl, GWL_STYLE, dwStyle | SS_NOTIFY);
 
     // Subclass the existing control.
-    WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndControl, GWL_WNDPROC);
+    WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndControl, GWLP_WNDPROC);
     SetProp(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-    SetWindowLong(hwndControl, GWL_WNDPROC, (LONG)(WNDPROC)_HyperlinkProc);
+    SetWindowLong(hwndControl, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkProc);
 
     // Create an updated font by adding an underline.
     HFONT hOrigFont = (HFONT)SendMessage(hwndControl, WM_GETFONT, 0, 0);
@@ -3605,7 +3605,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
     }
     case WM_DESTROY:
     {
-        SetWindowLong(hwnd, GWL_WNDPROC, (LONG)pfnOrigProc);
+        SetWindowLong(hwnd, GWLP_WNDPROC, (LONG)pfnOrigProc);
         RemoveProp(hwnd, PROP_ORIGINAL_PROC);
         break;
     }
@@ -3621,7 +3621,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     {
     case WM_DESTROY:
     {
-        SetWindowLong(hwnd, GWL_WNDPROC, (LONG)pfnOrigProc);
+        SetWindowLong(hwnd, GWLP_WNDPROC, (LONG)pfnOrigProc);
         RemoveProp(hwnd, PROP_ORIGINAL_PROC);
 
         HFONT hOrigFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
