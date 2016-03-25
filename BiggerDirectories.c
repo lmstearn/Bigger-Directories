@@ -55,7 +55,7 @@ wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder], pathsToSave [branchLimit][pa
 
 int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld, dblclkLevel;
 int i,j,k, errCode;
-int idata, index, listTotal = 0, sendMessageErr = 0;
+int idata, index, folderIndex, listTotal = 0, sendMessageErr = 0;
 int treeLevel, trackFTA[branchLimit][2];
 int resResult;
 bool resWarned;
@@ -207,6 +207,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		}
 		else //LT 0 my defined error, GT error should be GET_LAST_ERROR
 		{
+		Beep(200,150);
 		swprintf_s(hrtext, _countof(hrtext), L"%s. Error Code:  %d", messageText, errorcode);
 		}
 		//change countof sizeof otherwise possible buffer overflow: here index and rootFolderCS gets set to -16843010!
@@ -289,7 +290,7 @@ void InitProc(HWND hwnd)
 	TCHAR* pszTxt = TEXT("My Bigger Directory");
 	TCHAR pszDest[arraysize];
 	errCode = 0;
-
+	
 
 	size_t cbDest = arraysize * sizeof(TCHAR); //the use of size_t implies C++ compile.
 	LPCTSTR pszFormat = TEXT("%s");
@@ -660,7 +661,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					int len;
 					wchar_t* buf;
-
+					int nTimes;
 
 
 					currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -679,7 +680,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 					BOOL bSuccess;
-					int nTimes = GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE);
+					nTimes = GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE);
 					if(bSuccess) 
 					{
 						//Allocate memory (2* +1 for two words > long)
@@ -1347,11 +1348,9 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 
 						//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
-						if (count == 1 && (index < (rootFolderCS + rootFolderCW)))
+						if (dblclkLevel && (index < folderIndex + 2) || (!dblclkLevel && count == 1 && (index < (rootFolderCS + rootFolderCW))))
 						{
-							
 						FSDeleteInit (hwnd, hList);
-
 						}
 						else
 
@@ -1429,6 +1428,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
+						index = 0;
+						folderIndex = 0;
 					}
 					else
 					{
@@ -1550,77 +1551,110 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									DisplayError (hwnd, L"Something has gone wrong with the Listbox", errCode, 0);
 									if (currPathW) free (currPathW);
 									return 0;
-								}								
+								}
+
+								
+
 								sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)currPathW);
 								SetDlgItemTextW(hwnd, IDC_TEXT, currPathW);
 
 								// Since we know ahead of time we're only getting one index, there's no need to allocate an array.
-									
-								//sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
-									
 
-								if (index >= rootFolderCS + rootFolderCW)
+								if (dblclkLevel) 
 								{
-									SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
-									if (index >= listTotal - branchLevel)
+
+									if (index < folderIndex + 2)
 									{
-									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+										if (index == 0 || index == folderIndex + 1)
+										{
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										}
+										else
+										{
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+										}
 									}
 									else
 									{
-									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del file\0");
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+
 									}
+
 								}
 								else
 								{
-
-									SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-
-									if (wcsstr(dacfoldersW[index], lpref) == nullptr)
-										//Check for wide string folder here
+									if (index >= rootFolderCS + rootFolderCW)
 									{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
-									}
-									else
-									{
-											//Cannot remove short folders
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
+										if (index >= listTotal - branchLevel)
+										{
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+										}
+										else
+										{
 										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										}
 									}
-								}
-
-
-								if (sendMessageErr != LB_ERR)
-								{
-									// Get the data we associated with the item above (the number of times it was added)
-									idata = SendMessageW(hList, LB_GETITEMDATA, (WPARAM)index, 0); //lparam not used, but return value IS value of lparam in setitemdata
-									//SO idata becomes ntimes when items are added, but not reliable! http://stackoverflow.com/questions/25337801/why-is-lb-getitemdata-returning-0
-
-									if (idata)
-									{
-										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"This entry is repeated");
-										SetDlgItemTextW(hwnd,IDC_STATIC_THREE, L"times.");
-										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
-									}
-									
 									else
 									{
-										SetDlgItemInt(hwnd, IDC_SHOWCOUNT, index, FALSE);
-										SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"This entry is ranked");
-										SetDlgItemTextW(hwnd,IDC_STATIC_THREE, L"on the list.");
+
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+
+										if (wcsstr(dacfoldersW[index], lpref) == nullptr)
+											//Check for wide string folder here
+										{
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
+										}
+										else
+										{
+												//Cannot remove short folders
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										}
 									}
-									//This function performs like:
-									//TCHAR buf[16];
-									//wnsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
-									//SetDlgItemText(hwnd, nIDDlgItem, buf);
 
+
+									if (sendMessageErr != LB_ERR)
+									{
+										// Get the data we associated with the item above (the number of times it was added)
+										idata = SendMessageW(hList, LB_GETITEMDATA, (WPARAM)index, 0); //lparam not used, but return value IS value of lparam in setitemdata
+										//SO idata becomes ntimes when items are added, but not reliable! http://stackoverflow.com/questions/25337801/why-is-lb-getitemdata-returning-0
+
+										if (idata)
+										{
+											SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"This entry is repeated");
+											SetDlgItemTextW(hwnd,IDC_STATIC_THREE, L"times.");
+											SetDlgItemInt(hwnd, IDC_SHOWCOUNT, idata, FALSE);
+										}
+									
+										else
+										{
+											SetDlgItemInt(hwnd, IDC_SHOWCOUNT, index, FALSE);
+											SetDlgItemTextW(hwnd,IDC_STATIC_TWO, L"This entry is ranked");
+											SetDlgItemTextW(hwnd,IDC_STATIC_THREE, L"on the list.");
+										}
+										//This function performs like:
+										//TCHAR buf[16];
+										//wnsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
+										//SetDlgItemText(hwnd, nIDDlgItem, buf);
+
+
+
+									}
+									else 
+									{
+										errCode = 0;
+										DisplayError (hwnd, L"Error getting selected item", errCode, 0);
+									}
 
 
 								}
-								else 
-								{
-									errCode = 0;
-									DisplayError (hwnd, L"Error getting selected item", errCode, 0);
-								}
+
+
+
+
 							}
 							else 
 							{
@@ -1629,44 +1663,105 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								sendMessageErr = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
 								int selItems[32767];
 								sendMessageErr = SendMessage(hwnd, LB_GETSELITEMS, count, (LPARAM)selItems);
-
-								if (listTotal > rootFolderCS + rootFolderCW)
+								if (dblclkLevel) 
 								{
-									for (i = 0; i < count; i++)
-									{
-										if (selItems[i] < listTotal - branchLevel)
+										for (i = 0; i < count; i++)
 										{
-											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
-											removeTrig = true;
+											if (selItems[i] < folderIndex + 2)
+											{
+												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+												SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
+												removeTrig = true;
+											}
 										}
+											if (removeTrig)
+											{
 
-									}
-									if (!removeTrig)
-									{
-									SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
-									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-									}
+
+
+											for (i = 0; i < count; i++)
+											{
+												if (selItems[i] > folderIndex + 1)
+												{
+													EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+													SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
+													break;
+												}
+											}
+
+											}
+											else
+											{
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Files\0");
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+											}
+
+
+
 								}
 								else
 								{
-									for (i = 0; i < count; i++)
+
+									if (listTotal > rootFolderCS + rootFolderCW)
 									{
-										if (selItems[i] < rootFolderCS)
+										for (i = 0; i < count; i++)
 										{
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-										removeTrig = true;
+											if (selItems[i] < listTotal - branchLevel)
+											{
+												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+												SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
+												removeTrig = true;
+											}
+
+										}
+										if (removeTrig)
+										{
+										for (i = 0; i < count; i++)
+										{
+											if (selItems[i] >= listTotal - branchLevel)
+											{
+												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+												SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
+												break;
+											}
+
+										}
+										}
+										else
+										{
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+
 										}
 
+
+
 									}
-										if (!removeTrig)
+									else
+									{
+										for (i = 0; i < count; i++)
 										{
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+											if (selItems[i] < rootFolderCS)
+											{
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+											removeTrig = true;
+											}
+
 										}
+											if (!removeTrig)
+											{
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+											}
 										
+									}
+
 								}
+
+
+
+
 
 
 
@@ -1684,7 +1779,12 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					break;
 					case LBN_DBLCLK:
 					{
+
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
+					index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
+					//do nothing if clicking a file
+
+					
 					currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 					findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 					if ((currPathW == nullptr) || (findPathW == nullptr))
@@ -1692,8 +1792,16 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
 					return 0;
 					}
-					index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
-					if ((index >= rootFolderCS + rootFolderCW) && (!dblclkLevel)) goto DblclkEnd;
+					if (dblclkLevel)
+					{
+						if (index >= folderIndex) return 0;
+					}
+					else
+					{
+						if (index >= rootFolderCS + rootFolderCW) goto DblclkEnd;
+					}
+					
+
 
 					sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
 					
@@ -1744,9 +1852,11 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							DragAcceptFiles(hwnd,TRUE);
 							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-							sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, WPARAM(PopulateListBox (hwnd, true, true)), (LPARAM)(L""));
-							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'							
-							PopulateListBox (hwnd, true, false);
+							folderIndex = PopulateListBox (hwnd, true, true);
+							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
+							folderIndex -=1;
+							//Account for folder/file separator
+							if (PopulateListBox (hwnd, true, false)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_INSERTSTRING, WPARAM(folderIndex), (LPARAM)(L""));
 							//disable buttons
 							SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
 							SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"");
@@ -2039,7 +2149,15 @@ if (listFolders)
 
 
 				strcat_s(dacfolders[listNum], maxPathFolder, currPath);
-				listNum += 1;
+				if (listNum < branchLimit) 
+				{
+					listNum += 1;
+				}
+				else
+				{
+					DisplayError (hwnd, L"Limit of folders reached!", errCode, 0);
+					break;
+				}
 
 				SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(listNum), (LPARAM)currPath); // wparam cannot exceed 32,767 
 					
@@ -2053,13 +2171,28 @@ if (listFolders)
 			{
 
 
-			(dblclkLevel)? currPathW[0]= L'': wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
+			if (dblclkLevel)
+			{
+				currPathW[0]= L'';
+				wcscat_s(currPathW, maxPathFolder, dw.cFileName);
+			}
+			else
+			{
+			wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
 			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
-			
-				
 			//compare with dacfolders[rootFolderC] to check for dups
 			wcscat_s(dacfoldersW[listNum], maxPathFolder, currPathW);
-			listNum += 1;
+			}
+			if (listNum < branchLimit) 
+				{
+					listNum += 1;
+				}
+			else
+				{
+					DisplayError (hwnd, L"Limit of folders reached", errCode, 0);
+					break;
+				}
+
 			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(rootFolderCS + listNum), (LPARAM)currPathW); // wparam cannot exceed 32,767 
 				
 			}
@@ -2085,6 +2218,7 @@ else
 	if (dblclkLevel)
 
 	{
+		listNum = 0;
 		findhandle = TRUE;
 		currPathW[0]=L'';
 		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
@@ -2113,8 +2247,15 @@ else
 
 			currPathW[0]= L'';
 			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
-			
-				
+			if (listNum < 32767 - folderIndex) 
+				{
+					listNum += 1;
+				}
+			else
+				{
+					DisplayError (hwnd, L"Limit of files in listbox reached", errCode, 0);
+					break;
+				}				
 			//compare with dacfolders[rootFolderC] to check for dups
 			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(rootFolderCS + listNum), (LPARAM)currPathW); // wparam cannot exceed 32,767 
 				
@@ -2129,9 +2270,8 @@ else
 	}
 }
 
-
-
 return listNum;
+
 }
 
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad)
@@ -3063,6 +3203,11 @@ if (cmdlineParmtooLong)
 		}
 	else
 		{
+			if (dblclkLevel) 
+			{
+				folderIndex -=1;
+				index -=1;
+			}
 			errCode = 1;
 		}
 
