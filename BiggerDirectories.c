@@ -641,12 +641,22 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 					//no greater than treeLevelLimit
 						BOOL bSuccess;
-						GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE);
+						HWND hList = GetDlgItem(hwnd, IDC_LIST);
+						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+
+						int nTimes = GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE);
 						if (bSuccess)
 						{
-						if (GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE) >	treeLevelLimit)
+							if (nTimes > 32767 - listTotal)
 							{
-								SetDlgItemInt(hwnd, IDC_NUMBER, (UINT)(treeLevelLimit -1), FALSE);
+								if (nTimes - listTotal > treeLevelLimit)
+								{
+									SetDlgItemInt(hwnd, IDC_NUMBER, (UINT)(treeLevelLimit -1), FALSE);
+								}
+								else
+								{
+								SetDlgItemInt(hwnd, IDC_NUMBER, (UINT)( nTimes - listTotal), FALSE);
+								}
 							}
 						}
 					}
@@ -662,6 +672,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					int len;
 					wchar_t* buf;
 					int nTimes;
+					HWND hList = GetDlgItem(hwnd, IDC_LIST);
+					listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 
 
 					currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -777,8 +789,6 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						(branchLevelClick) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						//next add is always at base
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
-						HWND hList = GetDlgItem(hwnd, IDC_LIST);
-						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 						currPathW[0] = L'\0';
 						branchLevel = 0;
 
@@ -1348,7 +1358,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 
 						//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
-						if (dblclkLevel && (index < folderIndex + 2) || (!dblclkLevel && count == 1 && (index < (rootFolderCS + rootFolderCW))))
+						if (dblclkLevel && (index <= folderIndex) || (!dblclkLevel && count == 1 && (index < (rootFolderCS + rootFolderCW))))
 						{
 						FSDeleteInit (hwnd, hList);
 						}
@@ -1357,23 +1367,72 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							if (count != 0)
 							{
+							currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+							tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+							if ((currPathW == nullptr) || (tempDest == nullptr))
+							{
+							DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
+							return 0;
+							}
+							
 
 								// And then allocate room to store the list of selected items.
 
+								int *selItems = (int*)GlobalAlloc(GPTR, sizeof(int) * count);
+								sendMessageErr = SendDlgItemMessage(hwnd, IDC_LIST, LB_GETSELITEMS, (WPARAM)count, (LPARAM)(LPINT)selItems);
 
-								int *buf = (int*)GlobalAlloc(GPTR, sizeof(int) * count);
-								sendMessageErr = SendMessageW(hList, LB_GETSELITEMS, (WPARAM)count, (LPARAM)buf);
-								//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L) + 1; //+ 1 ???
 								// Now we loop through the list and remove each item that was selected, looping backwards, because if we removed items from top to bottom, it would change the indexes of the other items!!!
+								if (dblclkLevel)
+								{
+									bool filePrompt = false;
+									for (i = count - 1; i >= 0; i--)
+									{
+										currPathW[0] = L'';
+										sendMessageErr = SendMessageW(hList, LB_GETTEXT, selItems[i], (LPARAM)currPathW);
+										if (selItems[i] && selItems[i] <= folderIndex)
+										{
+											if (DisplayError (hwnd, L"Click Yes to delete selected folder", errCode, 1))
+											{
 
+											}
+											else
+											{
+												break;
+											}
+
+										}
+										else
+										{
+											if (!filePrompt)
+												{
+													if (DisplayError (hwnd, L"Click Yes to delete selected files", errCode, 1))
+													{
+														wcscpy_s(tempDest, pathLength, dblclkString);
+														wcscat_s(tempDest, pathLength, L"\\");
+														wcscat_s(tempDest, pathLength, currPathW);
+														CopyFileW(L"c:\\recycled", tempDest, FALSE);
+														
+														filePrompt = true;
+													}
+													else
+													{
+														break;
+													}
+												}
+											else
+												{
+												}
+
+										}
+									}
+
+								}
+								else
+								{
 								for (i = count - 1; i >= 0; i--)
 								{
-									sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)buf[i], 0);
+									sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
 								}
-
-								GlobalFree(buf);
-
-
 								
 								branchLevelCum -= 1;
 								branchLevel -= 1;
@@ -1403,8 +1462,12 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 								sendMessageErr = SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((rootFolderCS + rootFolderCW + branchLevelIncCum)), 0);
 								listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-								
+								}
 
+
+
+
+								GlobalFree(selItems);
 
 							}
 							else
@@ -1412,6 +1475,9 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								errCode = 0;
 								DisplayError (hwnd, L"No items selected", errCode, 0);
 							}
+
+							if (currPathW) free (currPathW);
+							if (tempDest) free (tempDest);
 						}
 					}
 					else
@@ -1535,6 +1601,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 						int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
+						
 						bool removeTrig = false;
 						if(count != LB_ERR)
 						{
@@ -1563,10 +1630,10 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								if (dblclkLevel) 
 								{
 
-									if (index < folderIndex + 2)
+									if (index <= folderIndex)
 									{
 										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-										if (index == 0 || index == folderIndex + 1)
+										if (index == 0 || index == folderIndex)
 										{
 										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 										}
@@ -1661,17 +1728,19 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								// No items selected, or more than one.Either way, we aren't going to process this.
 									
 								sendMessageErr = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
-								int selItems[32767];
-								sendMessageErr = SendMessage(hwnd, LB_GETSELITEMS, count, (LPARAM)selItems);
+								
+								int * selItems = (int *)GlobalAlloc(GPTR, sizeof(int) * count);
+								sendMessageErr = SendDlgItemMessage(hwnd, IDC_LIST, LB_GETSELITEMS, count, (LPARAM)(LPINT)selItems);
 								if (dblclkLevel) 
 								{
 										for (i = 0; i < count; i++)
 										{
-											if (selItems[i] < folderIndex + 2)
+											if (selItems[i] <= folderIndex)
 											{
 												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 												SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
 												removeTrig = true;
+												break;
 											}
 										}
 											if (removeTrig)
@@ -1681,7 +1750,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 											for (i = 0; i < count; i++)
 											{
-												if (selItems[i] > folderIndex + 1)
+												if (selItems[i] > folderIndex)
 												{
 													EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 													SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del\0");
@@ -1759,14 +1828,13 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 								}
 
-
-
-
-
-
-
-
+								GlobalFree((HANDLE)selItems);
 								SetDlgItemTextW(hwnd, IDC_SHOWCOUNT, L"-");
+
+
+
+
+
 							}
 						}
 						else
