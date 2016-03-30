@@ -1376,7 +1376,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							if (count != 0)
 							{
-							currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+							currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 							tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 							findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 							if ((currPathW == nullptr) || (tempDest == nullptr)|| (findPathW == nullptr))
@@ -1399,10 +1399,10 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									for (i = count - 1; i >= 0; i--)
 									{
 										currPathW[0] = L'';
-										sendMessageErr = SendMessageW(hList, LB_GETTEXT, selItems[i], (LPARAM)currPathW);
+										sendMessageErr = SendMessageW(hList, LB_GETTEXT, selItems[i], (LPARAM)findPathW);
 										if (selItems[i] && selItems[i] <= folderIndex)
 										{
-											if (DisplayError (hwnd, L"Click Yes to delete selected folder", errCode, 1))
+											if (DisplayError (hwnd, L"Click Yes to permanently delete selected folder and all subfolders. It will not work if they contain files", errCode, 1))
 											{
 
 
@@ -1410,7 +1410,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											//Alternate Delete
 
 
-											wcscpy_s(findPathW, maxPathFolder, currPathW);
+											wcscpy_s(currPathW, maxPathFolder, findPathW);
 											wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 											wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
 
@@ -1457,21 +1457,21 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 												{
 													if (Sid)
 													{
-													if (DisplayError (hwnd, L"Click Yes to recycle selected files", errCode, 1))
+													if (DisplayError (hwnd, L"Click Yes to move selected files to a Temp folder on the Desktop", errCode, 1))
 													{
 
 														//wcscpy_s(currPathW2, pathLength, L"{");
 														//wcscat_s(currPathW2, pathLength, StringSid);
 														//wcscat_s(currPathW2, pathLength, L"}");
-														wcscpy_s(tempDest, pathLength, driveIDBaseW);
-														wcscat_s(tempDest, pathLength, L"$Recycle.Bin\\"); //Recycler on XP
-														wcscat_s(tempDest, pathLength, StringSid);
-														wcscat_s(tempDest, pathLength, L"\\");
-														wcscat_s(tempDest, pathLength, currPathW);
-														wcscpy_s(findPathW, pathLength, dblclkString);
-														wcscat_s(findPathW, pathLength, currPathW);
+														if (!ExpandEnvironmentStringsW (L"%USERPROFILE%", tempDest, pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
+														//wcscpy_s(tempDest, pathLength, driveIDBaseW);
+														//wcscat_s(tempDest, pathLength, L"$Recycle.Bin\\"); //Recycler on XP
+														wcscat_s(tempDest, pathLength, L"\\Desktop\\Temp\\");
+														wcscat_s(tempDest, pathLength, findPathW);
+														wcscpy_s(currPathW, pathLength, dblclkString);
+														wcscat_s(currPathW, pathLength, findPathW);
 														
-													if ((errCode = !MoveFileW(findPathW, tempDest)) != 0)
+													if ((errCode = !MoveFileW(currPathW, tempDest)) != 0)
 													{
 														swprintf_s(hrtext, _countof(hrtext), L"Unable to copy file \n\"%s\"", currPathW);
 														DisplayError (hwnd, hrtext, errCode, 0);
@@ -1490,8 +1490,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 													{
 													if (DisplayError (hwnd, L"Click Yes to permanently delete selected files", errCode, 1))
 													{
-														wcscpy_s(tempDest, pathLength, dblclkString);
-														wcscat_s(tempDest, pathLength, currPathW);
+														wcscpy_s(currPathW, pathLength, dblclkString);
+														wcscat_s(currPathW, pathLength, findPathW);
 														
 													filePrompt = true;
 													}
