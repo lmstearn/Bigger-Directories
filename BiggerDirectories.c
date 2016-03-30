@@ -10,6 +10,7 @@
 #include "winbase.h"
 #include "windef.h"
 #include "shlwapi.h"
+#include "Sddl.h"
 
 
 //#include <afxwin.h>
@@ -32,7 +33,7 @@
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATAA da;
-int const pathLength = 32759, maxPathFolder = MAX_PATH - 3, treeLevelLimit = 2000, branchLimit = 1000;
+int const pathLength = 32759, maxDWORD = 32767, maxPathFolder = MAX_PATH - 3, treeLevelLimit = 2000, branchLimit = 1000;
 const wchar_t BOM = L'\xFEFF'; //65279
 wchar_t const *invalidPathName = L":\"/\\|?*<>";
 wchar_t const eolFTA = L'\n';
@@ -192,6 +193,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
 LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CreateHyperLink(HWND hwndControl);
 DWORD dynamicComCtrl(LPCWSTR lpszDllName);
+BOOL GetAccountSidW(LPTSTR SystemName, PSID *Sid);
 // End of HyperLink URL
 
 
@@ -205,7 +207,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		if (errorcode == 0){
 		swprintf_s(hrtext, _countof(hrtext), L"%s.", messageText);
 		}
-		else //LT 0 my defined error, GT error should be GET_LAST_ERROR
+		else //LT 0 my defined error, GT 0 error should be GET_LAST_ERROR
 		{
 		Beep(200,150);
 		swprintf_s(hrtext, _countof(hrtext), L"%s. Error Code:  %d", messageText, errorcode);
@@ -647,7 +649,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						int nTimes = GetDlgItemInt(hwnd, IDC_NUMBER, &bSuccess, FALSE);
 						if (bSuccess)
 						{
-							if (nTimes > 32767 - listTotal)
+							if (nTimes > maxDWORD - listTotal)
 							{
 								if (nTimes - listTotal > treeLevelLimit)
 								{
@@ -1228,7 +1230,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//errCode = CreateDirectoryW(cumPath, NULL);
 
 				//wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
-				//\a  audible bell
+
 
 				//LB_GETTEXTLEN  https://msdn.microsoft.com/en-us/library/windows/desktop/bb761315(v=vs.85).aspx
 					
@@ -1347,18 +1349,25 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				case IDC_REMOVE:
 				{
-					//When the user clicks the Remove button, we first get the number of selected items
 
+					wchar_t * currPathW2;
+					errCode = 0;
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
 					listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
+					PSID Sid = nullptr;
+					LPWSTR StringSid;
+					if (GetAccountSidW(NULL, &Sid)) DisplayError (hwnd, L"Unable to retrieve account ID, recycle is disabled", errCode, 0);
+					//When the user clicks the Remove button, we first get the number of selected items
+					ConvertSidToStringSidW(Sid, &StringSid);
+					errCode = 0;
 					if (count != LB_ERR)
 					{
 						
 						sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 
 						//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
-						if (dblclkLevel && (index <= folderIndex) || (!dblclkLevel && count == 1 && (index < (rootFolderCS + rootFolderCW))))
+						if (!dblclkLevel && count == 1 && (index < (rootFolderCS + rootFolderCW)))
 						{
 						FSDeleteInit (hwnd, hList);
 						}
@@ -1369,7 +1378,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							{
 							currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 							tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-							if ((currPathW == nullptr) || (tempDest == nullptr))
+							findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+							if ((currPathW == nullptr) || (tempDest == nullptr)|| (findPathW == nullptr))
 							{
 							DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
 							return 0;
@@ -1384,6 +1394,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								// Now we loop through the list and remove each item that was selected, looping backwards, because if we removed items from top to bottom, it would change the indexes of the other items!!!
 								if (dblclkLevel)
 								{
+									
 									bool filePrompt = false;
 									for (i = count - 1; i >= 0; i--)
 									{
@@ -1393,6 +1404,45 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										{
 											if (DisplayError (hwnd, L"Click Yes to delete selected folder", errCode, 1))
 											{
+
+
+
+											//Alternate Delete
+
+
+											wcscpy_s(findPathW, maxPathFolder, currPathW);
+											wcscat_s(currPathW, maxPathFolder, &separatorFTA);
+											wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
+
+											treeLevel = 0;
+											trackFTA [0][0] = 0; //Initial conditions before search on path
+											trackFTA [0][1] = 1;
+
+											for (j = 1; j < branchLimit; j++)
+											{
+											trackFTA [j][0] = 0; //Initial conditons before search on path
+											trackFTA [j][1] = 0;
+											}
+						
+											if (!SetCurrentDirectoryW (dblclkString))
+											{
+											ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+											break;
+											}
+											if (RecurseRemovePath(trackFTA, folderTreeArray))
+												{
+													errCode = 0;
+													DisplayError (hwnd, L"Remove failed", 0, 0);
+													break;
+												}
+											else
+												{
+													folderIndex -=1;
+													index -=1;
+													errCode = 1;
+												}
+
+
 
 											}
 											else
@@ -1405,26 +1455,63 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										{
 											if (!filePrompt)
 												{
-													if (DisplayError (hwnd, L"Click Yes to delete selected files", errCode, 1))
+													if (Sid)
 													{
-														wcscpy_s(tempDest, pathLength, dblclkString);
+													if (DisplayError (hwnd, L"Click Yes to recycle selected files", errCode, 1))
+													{
+
+														//wcscpy_s(currPathW2, pathLength, L"{");
+														//wcscat_s(currPathW2, pathLength, StringSid);
+														//wcscat_s(currPathW2, pathLength, L"}");
+														wcscpy_s(tempDest, pathLength, driveIDBaseW);
+														wcscat_s(tempDest, pathLength, L"$Recycle.Bin\\"); //Recycler on XP
+														wcscat_s(tempDest, pathLength, StringSid);
 														wcscat_s(tempDest, pathLength, L"\\");
 														wcscat_s(tempDest, pathLength, currPathW);
-														CopyFileW(L"c:\\recycled", tempDest, FALSE);
+														wcscpy_s(findPathW, pathLength, dblclkString);
+														wcscat_s(findPathW, pathLength, currPathW);
 														
-														filePrompt = true;
+													if ((errCode = !MoveFileW(findPathW, tempDest)) != 0)
+													{
+														swprintf_s(hrtext, _countof(hrtext), L"Unable to copy file \n\"%s\"", currPathW);
+														DisplayError (hwnd, hrtext, errCode, 0);
+														
+													}
+													filePrompt = true;
 													}
 													else
 													{
 														break;
 													}
+
+
+													} //Sid zero
+													else
+													{
+													if (DisplayError (hwnd, L"Click Yes to permanently delete selected files", errCode, 1))
+													{
+														wcscpy_s(tempDest, pathLength, dblclkString);
+														wcscat_s(tempDest, pathLength, currPathW);
+														
+													filePrompt = true;
+													}
+													else
+													{
+														break;
+													}
+
+													}
+
 												}
 											else
 												{
 												}
 
 										}
+										sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
+
 									}
+
 
 								}
 								else
@@ -1478,6 +1565,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 							if (currPathW) free (currPathW);
 							if (tempDest) free (tempDest);
+							if (findPathW) free(findPathW);
+							errCode = 0;
 						}
 					}
 					else
@@ -1495,7 +1584,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
 						index = 0;
-						folderIndex = 0;
+						folderIndex = 1;
 					}
 					else
 					{
@@ -2315,7 +2404,7 @@ else
 
 			currPathW[0]= L'';
 			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
-			if (listNum < 32767 - folderIndex) 
+			if (listNum < maxDWORD - folderIndex) 
 				{
 					listNum += 1;
 				}
@@ -3271,11 +3360,6 @@ if (cmdlineParmtooLong)
 		}
 	else
 		{
-			if (dblclkLevel) 
-			{
-				folderIndex -=1;
-				index -=1;
-			}
 			errCode = 1;
 		}
 
@@ -3505,23 +3589,49 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 
 					if (treeLevel == 0) //Last folder to do!! 
 					{
-						if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
-						{
-						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
-						return 1;
-						}
-						wchar_t * currPathWtmp;
-						currPathWtmp = currPathW + 4;
+						if (dblclkLevel)
 
-						if (RemoveDirectoryW (currPathWtmp))
 						{
-							return 0;
+							if (!SetCurrentDirectoryW (dblclkString)) //objects to L".."
+							{
+							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+							return 1;
+							}
+							if (RemoveDirectoryW (currPathW))
+							{
+								return 0;
+							}
+							else
+							{
+								ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+
+								return 1; //Need more than this
+							}
+
+
 						}
+						
 						else
 						{
-							ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 
-							return 1; //Need more than this
+							if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
+							{
+							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+							return 1;
+							}
+							wchar_t * currPathWtmp;
+							currPathWtmp = currPathW + 4;
+
+							if (RemoveDirectoryW (currPathWtmp))
+							{
+								return 0;
+							}
+							else
+							{
+								ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+
+								return 1; //Need more than this
+							}
 						}
 
 					}
@@ -3665,27 +3775,52 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 
 					if (treeLevel == 1) //Last folder to do!! 
 					{
-						if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
+						if (dblclkLevel)
 						{
-						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
-						return 1;
+
+							if (!SetCurrentDirectoryW (dblclkString)) //objects to L".."
+							{
+							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+							return 1;
+							}
+							if (RemoveDirectoryW (currPathW))
+							{
+								return 0;
+							}
+							else
+							{
+								ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+
+								return 1; //Need more than this
+							}
+
+
 						}
-					wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-					currPathWtmp = currPathW + 4;
-					//GetCurrentDirectoryW(maxPathFolder, findPathW);
-						if (RemoveDirectoryW (currPathWtmp))
-						{
-							return 0;
-						}
+						
 						else
 						{
-							ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
+						
+							if (!SetCurrentDirectoryW (driveIDBaseW)) //objects to L".."
+							{
+							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+							return 1;
+							}
+							wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+							currPathWtmp = currPathW + 4;
+							//GetCurrentDirectoryW(maxPathFolder, findPathW);
+							if (RemoveDirectoryW (currPathWtmp))
+							{
+								return 0;
+							}
+							else
+							{
+								ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. It may contain files.", 0);
 
-							return 1; //Need more than this
+								return 1; //Need more than this
+							}
+
 						}
-
 					}
-
 					else
 					{
 
@@ -3930,4 +4065,100 @@ DWORD dynamicComCtrl(LPCWSTR lpszDllName)
 
 
 	return dwVersion;
+}
+BOOL GetAccountSidW(LPTSTR SystemName, PSID *Sid)
+{
+LPTSTR ReferencedDomain=NULL;
+DWORD cbSid=128;    // initial allocation attempt
+DWORD cchReferencedDomain=16; // initial allocation size
+SID_NAME_USE peUse;
+wchar_t infoBuf[maxDWORD];
+DWORD  bufCharCount = maxDWORD;
+bufCharCount = maxDWORD;
+
+
+// 
+// initial memory allocations
+// 
+if((*Sid=HeapAlloc(GetProcessHeap(),0,cbSid)) == NULL)
+{
+	errCode = 1;
+	goto CleanHeap;
+}
+if(!GetUserNameW(infoBuf, &bufCharCount))
+{
+	errCode = 2;
+	goto CleanHeap;
+}
+
+
+if((ReferencedDomain=(LPTSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * sizeof(TCHAR))) == NULL)
+{
+	errCode = 3;
+	goto CleanHeap;
+}
+
+// 
+// Obtain the SID of the specified account on the specified system.
+// 
+while(!LookupAccountName(
+SystemName,			//local SystemName is NULL
+infoBuf,			//account to lookup
+*Sid,				// SID of interest
+&cbSid,				// size of SID
+ReferencedDomain,	// domain account was found on
+&cchReferencedDomain,
+&peUse
+))
+{
+	if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+	{
+	// 
+	// reallocate memory
+	// 
+	if((*Sid=HeapReAlloc(GetProcessHeap(),0,*Sid,cbSid)) == NULL)
+	{
+		errCode = 4;
+		goto CleanHeap;
+	}
+
+	if((ReferencedDomain=(LPTSTR)HeapReAlloc(
+	GetProcessHeap(),
+	0,
+	ReferencedDomain,
+	cchReferencedDomain * sizeof(TCHAR)
+	)) == NULL)
+	{
+		errCode = 5;
+		goto CleanHeap;
+	}
+
+	}
+	else 
+	{
+		errCode = 6;
+		goto CleanHeap;
+	}
+
+}
+
+
+
+// 
+// Cleanup and indicate failure, if appropriate.
+// 
+CleanHeap:
+HeapFree(GetProcessHeap(), 0, ReferencedDomain);
+
+if(errCode)
+{
+if(*Sid != NULL)
+	{
+	HeapFree(GetProcessHeap(), 0, *Sid);
+	*Sid = NULL;
+	}
+}
+
+
+return errCode;
 }
