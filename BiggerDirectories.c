@@ -1,16 +1,16 @@
-#include<stdlib.h> //malloc
+#include <stdlib.h> //malloc
 #include <fcntl.h>
 #include <io.h> //setmode
-#include<stdio.h> //sprintf
+#include <stdio.h> //sprintf
 #include <windows.h>
-#include <Strsafe.h> //safe string copy e.e. StringCchPrintf
+#include <strsafe.h> //safe string copy e.e. StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
-#include "BiggerDirectories.h" //my file
-#include <Winternl.h> //NtCreateFile
+#include "biggerdirectories.h" //my file
+#include <winternl.h> //NtCreateFile
 #include "winbase.h"
 #include "windef.h"
 #include "shlwapi.h"
-#include "Sddl.h"
+#include "sddl.h"
 
 
 //#include <afxwin.h>
@@ -2077,7 +2077,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					// prepend "\\?\" to the path.
 					wcscpy_s(tempDest, pathLength, lpref);
 					wcscat_s(tempDest, pathLength, dropBuf);
-					(CopyFileW(tempDest, currPathW, FALSE))? SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]): ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
+					if (CopyFileW(tempDest, currPathW, FALSE)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]); else ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
 					n++;
 					}
 
