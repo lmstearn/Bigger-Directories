@@ -2071,6 +2071,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 					if (!DragQueryFileW ((HDROP) wParam, n, dropBuf, pathLength)) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
 					pdest = (int)(wcsrchr( dropBuf, separatorFTA ) - dropBuf + 1);
+					if (GetFileAttributesW(dropBuf) == FILE_ATTRIBUTE_DIRECTORY) break;
 					wcscpy_s(currPathW, pathLength, dblclkString);
 					wcscat_s(currPathW, pathLength, &dropBuf[pdest]);
 					// prepend "\\?\" to the path.
@@ -2139,15 +2140,12 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 	wcscpy_s(currPathW, maxPathFolder, L"B.D. Help for {");
 	wcscat_s(currPathW, maxPathFolder, StringSid);
 	wcscat_s(currPathW, maxPathFolder, L"}");
-	//wcscat_s(tempDest, pathLength, L"$Recycle.Bin\\"); //"Recycler" on XP //originally for recycle fn here
 	SendMessageW (aboutHwnd, WM_SETTEXT, 0, (LPARAM)currPathW);
 	free (currPathW);
-	//SetWindowTextW (aboutHwnd, (wchar_t *)Sid);
-	return true;
+	//wcscat_s(tempDest, pathLength, L"$Recycle.Bin\\"); //"Recycler" on XP //originally for recycle fn here //SetWindowTextW (aboutHwnd, (wchar_t *)Sid);
 	}
 	break;
 	//case WM_KEYDOWN needs a child control
-
 	case WM_COMMAND:
     switch (LOWORD(wParam))
             {
@@ -2178,8 +2176,14 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				if (resResult == 5) resResult = 1;
 				if (resResult < 3 && !resWarned)
 					{
-						DisplayError (aboutHwnd, L"Form testing: No controls? Spacebar loads new dialog", 0, 0);
-						resWarned = true;
+						if (DisplayError (aboutHwnd, L"Form testing only: No controls? Spacebar loads new dialog. Click Yes to continue", 0, 1))
+						{
+							resWarned = true;
+						}
+						else
+						{
+							return 0;
+						}
 					}
 
 
@@ -2196,7 +2200,8 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				EndDialog(aboutHwnd, IDC_OK);
 			}
 
-	//default: return DefWindowProc(aboutHwnd, uMsg, wParam, lParam); //this really breaks stuff
+	//default: return DefWindowProc(aboutHwnd, uMsg, wParam, lParam); //this really breaks stuff even with the WM_SETTEXT
+	//probably message deadlock? https://msdn.microsoft.com/en-us/library/ms644927(v=VS.85).aspx#deadlocks
 	}
 return FALSE;
 }
