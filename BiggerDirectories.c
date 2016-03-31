@@ -428,7 +428,7 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	branchTotalCum = 0;
 	branchTotalCumOld = 0;
 	dblclkLevel = 0;
-	dblclkString[0] =L'';
+	dblclkString[0] = L'\0';
 	resResult = 0;
 	resWarned = false;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
@@ -1355,11 +1355,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
 					listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-					PSID Sid = nullptr;
-					LPWSTR StringSid;
-					if (GetAccountSidW(NULL, &Sid)) DisplayError (hwnd, L"Unable to retrieve account ID, recycle is disabled", errCode, 0);
-					//When the user clicks the Remove button, we first get the number of selected items
-					ConvertSidToStringSidW(Sid, &StringSid);
+
 					errCode = 0;
 					if (count != LB_ERR)
 					{
@@ -1398,7 +1394,6 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									bool filePrompt = false;
 									for (i = count - 1; i >= 0; i--)
 									{
-										currPathW[0] = L'';
 										sendMessageErr = SendMessageW(hList, LB_GETTEXT, selItems[i], (LPARAM)findPathW);
 										if (selItems[i] && selItems[i] <= folderIndex)
 										{
@@ -1455,18 +1450,21 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										{
 											if (!filePrompt)
 												{
-													if (Sid)
-													{
 													if (DisplayError (hwnd, L"Click Yes to move selected files to a Temp folder on the Desktop", errCode, 1))
 													{
-
-														//wcscpy_s(currPathW2, pathLength, L"{");
-														//wcscat_s(currPathW2, pathLength, StringSid);
-														//wcscat_s(currPathW2, pathLength, L"}");
-														if (!ExpandEnvironmentStringsW (L"%USERPROFILE%", tempDest, pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
-														//wcscpy_s(tempDest, pathLength, driveIDBaseW);
-														//wcscat_s(tempDest, pathLength, L"$Recycle.Bin\\"); //Recycler on XP
+														if (!ExpandEnvironmentStringsW (L"%USERPROFILE%", tempDest, pathLength))
+														{
+															ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
+															break;
+														}
 														wcscat_s(tempDest, pathLength, L"\\Desktop\\Temp\\");
+															if (!CreateDirectoryW (tempDest, NULL) && GetLastError () != ERROR_ALREADY_EXISTS)
+															{
+																DisplayError (hwnd, L"Cannot create Temp folder", errCode, 0);
+																break;
+															}
+
+														
 														wcscat_s(tempDest, pathLength, findPathW);
 														wcscpy_s(currPathW, pathLength, dblclkString);
 														wcscat_s(currPathW, pathLength, findPathW);
@@ -1475,17 +1473,13 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 													{
 														swprintf_s(hrtext, _countof(hrtext), L"Unable to copy file \n\"%s\"", currPathW);
 														DisplayError (hwnd, hrtext, errCode, 0);
-														
-													}
-													filePrompt = true;
-													}
-													else
-													{
 														break;
 													}
+													filePrompt = true;
+													sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
+													break;
+													}
 
-
-													} //Sid zero
 													else
 													{
 													if (DisplayError (hwnd, L"Click Yes to permanently delete selected files", errCode, 1))
@@ -1508,7 +1502,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 												}
 
 										}
-										sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
+										if (errCode) sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
 
 									}
 
@@ -1734,7 +1728,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									else
 									{
 
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del file\0");
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Move file\0");
 										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 
 									}
@@ -1962,12 +1956,14 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
 					
-					dblclkString[0]= L'';
+					wcscpy_s(dblclkString, pathLength, dblclkPath[0]);
+					wcscat_s(dblclkString, pathLength, L"\\");
+
 					if ((0 == wcscmp(findPathW, L"..")))
 					{
 						dblclkLevel -=1;
 						if (!dblclkLevel) goto DblclkEnd;
-							for (i = 0; i < dblclkLevel; i++)
+							for (i = 1; i < dblclkLevel; i++)
 							{
 							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 							wcscat_s(dblclkString, pathLength, L"\\");
@@ -1995,8 +1991,9 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							goto DblclkEnd;
 						}
 						wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
-
-						for (i = 0; i <= dblclkLevel; i++)
+						wcscpy_s(dblclkString, pathLength, dblclkPath[0]);
+						wcscat_s(dblclkString, pathLength, L"\\");
+						for (i = 1; i <= dblclkLevel; i++)
 						{
 						wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 						wcscat_s(dblclkString, pathLength, L"\\");
@@ -2013,10 +2010,10 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
 							folderIndex -=1;
 							//Account for folder/file separator
-							if (PopulateListBox (hwnd, true, false)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_INSERTSTRING, WPARAM(folderIndex), (LPARAM)(L""));
+							if (PopulateListBox (hwnd, true, false)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_INSERTSTRING, WPARAM(folderIndex), (LPARAM)(L"\0"));
 							//disable buttons
 							SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
-							SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"");
+							SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"\0");
 							SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
 							SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
 							SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
@@ -2071,8 +2068,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					wcscpy_s(currPathW, pathLength, dblclkString);
 					wcscat_s(currPathW, pathLength, &dropBuf[pdest]);
 					// prepend "\\?\" to the path.
- 					tempDest[0] = L'';
-					wcscat_s(tempDest, pathLength, lpref);
+					wcscpy_s(tempDest, pathLength, lpref);
 					wcscat_s(tempDest, pathLength, dropBuf);
 					(CopyFileW(tempDest, currPathW, FALSE))? sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]): ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
 					n++;
@@ -2120,6 +2116,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 }
 BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	PSID Sid = nullptr;
+	LPWSTR StringSid;
 	
 	switch(uMsg)
 	{
@@ -2128,11 +2126,22 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FOUR));
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FIVE));
 	PlaySound(MAKEINTRESOURCE(IDW_CLICK), (HMODULE)GetWindowLong(aboutHwnd, GWLP_HINSTANCE), SND_RESOURCE | SND_ASYNC);
+	if (GetAccountSidW(NULL, &Sid)) DisplayError (aboutHwnd, L"Unable to retrieve account ID", errCode, 0);
+	//When the user clicks the Remove button, we first get the number of selected items
+	ConvertSidToStringSidW(Sid, &StringSid);
+	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	wcscpy_s(currPathW, maxPathFolder, L"B.D. Help for {");
+	wcscat_s(currPathW, maxPathFolder, StringSid);
+	wcscat_s(currPathW, maxPathFolder, L"}");
+	//wcscat_s(tempDest, pathLength, L"$Recycle.Bin\\"); //"Recycler" on XP //originally for recycle fn here
+	SendMessageW (aboutHwnd, WM_SETTEXT, 0, (LPARAM)currPathW);
+	free (currPathW);
+	//SetWindowTextW (aboutHwnd, (wchar_t *)Sid);
 	return true;
 	}
 	break;
 	//case WM_KEYDOWN needs a child control
-	
+
 	case WM_COMMAND:
     switch (LOWORD(wParam))
             {
@@ -2181,6 +2190,11 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 			{
 				EndDialog(aboutHwnd, IDC_OK);
 			}
+
+			break;
+//	default: 
+//          return DefWindowProc(aboutHwnd, uMsg, wParam, lParam); 
+
 	}
 return FALSE;
 }
@@ -2330,8 +2344,7 @@ if (listFolders)
 
 			if (dblclkLevel)
 			{
-				currPathW[0]= L'';
-				wcscat_s(currPathW, maxPathFolder, dw.cFileName);
+				wcscpy_s(currPathW, maxPathFolder, dw.cFileName);
 			}
 			else
 			{
@@ -2377,10 +2390,9 @@ else
 	{
 		listNum = 0;
 		findhandle = TRUE;
-		currPathW[0]=L'';
 		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
 		//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
-		wcscat_s(currPathW, maxPathFolder, dblclkString);
+		wcscpy_s(currPathW, maxPathFolder, dblclkString);
 		wcscat_s(currPathW, maxPathFolder, L"*");
 
 		ds = FindFirstFileW(currPathW, &dw);
@@ -2402,8 +2414,7 @@ else
 			{
 				//|| dw.dwFileAttributes & FILE_ATTRIBUTE_NOT_CONTENT_INDEXED || dw.dwFileAttributes & FILE_ATTRIBUTE_SPARSE_FILE || dw.dwFileAttributes & FILE_ATTRIBUTE_VIRTUAL || dw.dwFileAttributes & FILE_ATTRIBUTE_TEMPORARY || dw.dwFileAttributes & FILE_ATTRIBUTE_OFFLINE || dw.dwFileAttributes & FILE_ATTRIBUTE_COMPRESSED || dw.dwFileAttributes & FILE_ATTRIBUTE_DEVICE
 
-			currPathW[0]= L'';
-			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
+			wcscpy_s(currPathW, maxPathFolder, dw.cFileName);
 			if (listNum < maxDWORD - folderIndex) 
 				{
 					listNum += 1;
@@ -3200,8 +3211,7 @@ else
 			}
 		}
 
-	currPathW[0] = L'';
-	wcscat_s(currPathW, maxPathFolder, dacfoldersW[index-rootFolderCW]);
+	wcscpy_s(currPathW, maxPathFolder, dacfoldersW[index-rootFolderCW]);
 	wchar_t * currPathWtmp;
 	currPathWtmp = currPathW + 7;
 	wcscpy_s(rootDir, pathLength, currPathWtmp);
@@ -3443,17 +3453,12 @@ bool fsDelsub (int i, int j, HWND hwnd)
 	{
 	//do not iterate below trackFTA [i + 1][1]
 
-	pathToDeleteW[0] = L''; // driveIDBaseWNT L"C:\\"
-
 	wcscpy_s(pathToDeleteW, pathLength, driveIDBaseWNT);
 	wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
 
 	if (RemoveDirectoryW (pathToDeleteW))
 			{
-				//clear everything
-				pathsToSave[j][0] = L'';
-				//we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
-							
+				//clear everything -we have only removed the last dir from pathsToSave so remove last dir from folderTreeArray
 
 				folderTreeArray[j][k-1][0] = L'\0';
 
@@ -3464,7 +3469,8 @@ bool fsDelsub (int i, int j, HWND hwnd)
 				if (trackFTA [i][1] != 0)
 				{
 				//rebuild pathsToSave
-					for (int l = 0; (l < k - 1); l++) //extra loop adds the terminator
+					wcscpy_s(pathsToSave[j], pathLength, folderTreeArray[j][0]);
+					for (int l = 1; (l < k - 1); l++) //extra loop adds the terminator
 					{
 						if (l != 0) wcscat_s(pathsToSave[j], pathLength, &separatorFTA);
 						wcscat_s(pathsToSave[j], pathLength, folderTreeArray[j][l]);
@@ -3678,8 +3684,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 				trackFTA[treeLevel][0] +=1;
 
 				// set inits for this branch
-				findPathW[0] = L'';
-				wcscat_s(findPathW, maxPathFolder, folderTreeArray[trackFTA[treeLevel][0]-1][treeLevel]);
+				wcscpy_s(findPathW, maxPathFolder, folderTreeArray[trackFTA[treeLevel][0]-1][treeLevel]);
 				//
 				if (!SetCurrentDirectoryW (findPathW))
 				{
@@ -3753,8 +3758,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 
 			{
 
-				currPathW[0] = L'';
-				wcscat_s(currPathW, maxPathFolder, dw.cFileName);
+				wcscpy_s(currPathW, maxPathFolder, dw.cFileName);
 				wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 
 
