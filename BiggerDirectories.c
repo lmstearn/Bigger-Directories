@@ -570,7 +570,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						InitProc (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
 						// Subclass the Edit control with ValidateProc
-						g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWLP_WNDPROC, (LONG)ValidateProc);
+						g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWLP_WNDPROC, (long long)ValidateProc);
 						switch (errCode)
 						{
 						case 1:
@@ -619,7 +619,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 
 				
-				if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
+				if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, NULL) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
 				{
 					DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
 				}
@@ -2077,7 +2077,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					// prepend "\\?\" to the path.
 					wcscpy_s(tempDest, pathLength, lpref);
 					wcscat_s(tempDest, pathLength, dropBuf);
-					(CopyFileW(tempDest, currPathW, FALSE))? sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]): ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
+					(CopyFileW(tempDest, currPathW, FALSE))? SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]): ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
 					n++;
 					}
 
@@ -2721,7 +2721,7 @@ int ExistRegValue ()
 	subKeyName = (wchar_t *)calloc(260, sizeof(wchar_t));
 	wcscpy_s(subKeyName, 260, L"System\\CurrentControlSet\\Control\\Session Manager");
 	wcscpy_s(valueName, 260, L"PendingFileRenameOperations");
-	if (RegOpenKeyEx (HKEY_LOCAL_MACHINE, subKeyName, 0, KEY_QUERY_VALUE, &hKey) != ERROR_SUCCESS)
+	if (RegOpenKeyExW (HKEY_LOCAL_MACHINE, subKeyName, 0, KEY_QUERY_VALUE, &hKey) != ERROR_SUCCESS)
 	{
 		ErrorExit (L"Could not open Session Manager key!",0);
 	}
@@ -2747,18 +2747,18 @@ int ExistRegValue ()
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
 {
     HANDLE hProcessSnap;
-    PROCESSENTRY32 pe32;
+    PROCESSENTRY32W pe32;
     DWORD result = NULL;
 
     // Take a snapshot of all processes in the system.
     hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (INVALID_HANDLE_VALUE == hProcessSnap) return(FALSE);
 
-    pe32.dwSize = sizeof(PROCESSENTRY32); // <----- IMPORTANT
+    pe32.dwSize = sizeof(PROCESSENTRY32W); // <----- IMPORTANT
 
     // Retrieve information about the first process,
     // and exit if unsuccessful
-    if (!Process32First(hProcessSnap, &pe32))
+    if (!Process32FirstW(hProcessSnap, &pe32))
     {
         CloseHandle(hProcessSnap);          // clean the snapshot object
         DisplayError (hwnd, L"Failed to gather information on system processes", 1, 0);
@@ -2783,7 +2783,7 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
             break;
         }
 
-    } while (Process32Next(hProcessSnap, &pe32));
+    } while (Process32NextW(hProcessSnap, &pe32));
 
     CloseHandle(hProcessSnap);
 
