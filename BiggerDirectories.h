@@ -71,7 +71,7 @@
 
 //G++ compatibility ...
 #define MSGFLT_ALLOW                            (1)
-BOOL (WINAPI * ChangeWindowMessageFilter)(UINT,DWORD) = NULL;
+//BOOL (WINAPI * ChangeWindowMessageFilterEx)(HWND,UINT,DWORD) = NULL;
 
 
 // Next default values for new objects
