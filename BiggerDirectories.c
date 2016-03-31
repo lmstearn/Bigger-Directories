@@ -1477,28 +1477,34 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 													}
 													filePrompt = true;
 													sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
-													break;
-													}
-
-													else
-													{
-													if (DisplayError (hwnd, L"Click Yes to permanently delete selected files", errCode, 1))
-													{
-														wcscpy_s(currPathW, pathLength, dblclkString);
-														wcscat_s(currPathW, pathLength, findPathW);
-														
-													filePrompt = true;
-													}
-													else
-													{
-														break;
-													}
-
 													}
 
 												}
 											else
 												{
+
+
+														if (!ExpandEnvironmentStringsW (L"%USERPROFILE%", tempDest, pathLength))
+														{
+															ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
+															break;
+														}
+														wcscat_s(tempDest, pathLength, L"\\Desktop\\Temp\\");
+														wcscat_s(tempDest, pathLength, findPathW);
+														wcscpy_s(currPathW, pathLength, dblclkString);
+														wcscat_s(currPathW, pathLength, findPathW);
+														
+													if ((errCode = !MoveFileW(currPathW, tempDest)) != 0)
+													{
+														swprintf_s(hrtext, _countof(hrtext), L"Unable to copy file \n\"%s\"", currPathW);
+														DisplayError (hwnd, hrtext, errCode, 0);
+														break;
+													}
+													filePrompt = true;
+													sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
+
+
+
 												}
 
 										}
@@ -1844,7 +1850,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											}
 											else
 											{
-											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Files\0");
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Move Files\0");
 											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 											}
 
@@ -2185,16 +2191,12 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				break;
 
 			break;
-
 	case WM_CLOSE:
 			{
 				EndDialog(aboutHwnd, IDC_OK);
 			}
 
-			break;
-//	default: 
-//          return DefWindowProc(aboutHwnd, uMsg, wParam, lParam); 
-
+	//default: return DefWindowProc(aboutHwnd, uMsg, wParam, lParam); //this really breaks stuff
 	}
 return FALSE;
 }
