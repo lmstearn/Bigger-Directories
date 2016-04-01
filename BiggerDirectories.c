@@ -1400,13 +1400,10 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											if (DisplayError (hwnd, L"Click Yes to permanently delete selected folder and all subfolders. It will not work if they contain files", errCode, 1))
 											{
 
-
-
-											//Alternate Delete
-
-
 											wcscpy_s(currPathW, maxPathFolder, findPathW);
 											wcscat_s(currPathW, maxPathFolder, &separatorFTA);
+
+
 											wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
 
 											treeLevel = 0;
@@ -1450,7 +1447,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										{
 											if (!filePrompt)
 												{
-													if (DisplayError (hwnd, L"Click Yes to move selected files to a Temp folder on the Desktop", errCode, 1))
+													if (DisplayError (hwnd, L"Click Yes to move selected files to a Temp folder on the Desktop. The Temp folder will be created if it does not exist", errCode, 1))
 													{
 														if (!ExpandEnvironmentStringsW (L"%USERPROFILE%", tempDest, pathLength))
 														{
@@ -1471,7 +1468,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 														
 													if ((errCode = !MoveFileW(currPathW, tempDest)) != 0)
 													{
-														swprintf_s(hrtext, _countof(hrtext), L"Unable to copy file \n\"%s\"", currPathW);
+														swprintf_s(hrtext, _countof(hrtext), L"Unable to move file \n\"%s\"", currPathW);
 														DisplayError (hwnd, hrtext, errCode, 0);
 														break;
 													}
@@ -1496,7 +1493,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 														
 													if ((errCode = !MoveFileW(currPathW, tempDest)) != 0)
 													{
-														swprintf_s(hrtext, _countof(hrtext), L"Unable to copy file \n\"%s\"", currPathW);
+														swprintf_s(hrtext, _countof(hrtext), L"Unable to move file \n\"%s\"", currPathW);
 														DisplayError (hwnd, hrtext, errCode, 0);
 														break;
 													}
@@ -1514,8 +1511,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 								}
-								else
-								{
+								else //Del lines from Add
+								{ 
 								for (i = count - 1; i >= 0; i--)
 								{
 									sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
@@ -2050,8 +2047,10 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			case WM_DROPFILES:
 				{
+				HWND hList = GetDlgItem(hwnd, IDC_LIST);
 				wchar_t *dropBuf;
 				int pdest;
+				bool fileExisting;
 				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -2061,7 +2060,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				return 0;
 				}
 				
-				if (DisplayError (hwnd, L"Click Yes to copy selection", errCode, 1))
+				swprintf_s(hrtext, _countof(hrtext), L"Files, not folders are processed. Click Yes to continue moving the selection to the target directory:\n\n %s", dblclkString);
+				if (DisplayError (hwnd, hrtext, errCode, 1))
 					{
 
 
@@ -2070,6 +2070,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					while ( n < count )
 					{
 					if (!DragQueryFileW ((HDROP) wParam, n, dropBuf, pathLength)) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
+					fileExisting = false;
 					pdest = (int)(wcsrchr( dropBuf, separatorFTA ) - dropBuf + 1);
 					if (GetFileAttributesW(dropBuf) == FILE_ATTRIBUTE_DIRECTORY) break;
 					wcscpy_s(currPathW, pathLength, dblclkString);
@@ -2077,7 +2078,18 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					// prepend "\\?\" to the path.
 					wcscpy_s(tempDest, pathLength, lpref);
 					wcscat_s(tempDest, pathLength, dropBuf);
-					if (CopyFileW(tempDest, currPathW, FALSE)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]); else ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
+					if (CopyFileW(tempDest, currPathW, FALSE))
+					{
+						//check if entry already exists
+						for (i = folderIndex; i < (j = SendMessage(hList,LB_GETCOUNT,NULL,NULL)); i++)
+						{
+							sendMessageErr = SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+							if (0 == wcscmp(currPathW, &dropBuf[pdest])) fileExisting = true;
+						}
+						
+						if (!fileExisting) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)&dropBuf[pdest]);
+					} 
+					else ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
 					n++;
 					}
 
@@ -3886,20 +3898,20 @@ void ShellError (HWND aboutHwnd, int nError)
 	wchar_t* str;
 	switch (nError) 
 	{
-	case 0:							str = TEXT("The operating system is out\nof memory or resources"); break;
-	case ERROR_FILE_NOT_FOUND:		str = TEXT("The specified path was not found"); break;
-	case ERROR_PATH_NOT_FOUND:		str = TEXT("The specified file was not found"); break;
-	case ERROR_BAD_FORMAT:			str = TEXT("The .EXE file is invalid\n(non-Win32 .EXE or error in .EXE image)"); break;
-	case SE_ERR_ACCESSDENIED:		str = TEXT("The operating system denied\naccess to the specified file"); break;
-	case SE_ERR_ASSOCINCOMPLETE:	str = TEXT("The filename association is\nincomplete or invalid"); break;
-	case SE_ERR_DDEBUSY:			str = TEXT("The DDE transaction could not\nbe completed because other DDE transactions\nwere being processed"); break;
-	case SE_ERR_DDEFAIL:			str = TEXT("The DDE transaction failed"); break;
-	case SE_ERR_DDETIMEOUT:			str = TEXT("The DDE transaction could not\nbe completed because the request timed out"); break;
-	case SE_ERR_DLLNOTFOUND:		str = TEXT("The specified dynamic-link library was not found"); break;
-	case SE_ERR_NOASSOC:			str = TEXT("There is no application associated\nwith the given filename extension"); break;
-	case SE_ERR_OOM:				str = TEXT("There was not enough memory to complete the operation"); break;
-	case SE_ERR_SHARE:				str = TEXT("A sharing violation occurred");
-	default:						str = TEXT("Unknown Error occurred"); break;
+	case 0:							wcscpy_s(str, maxPathFolder, L"The operating system is out\nof memory or resources"); break;
+	case ERROR_FILE_NOT_FOUND:		wcscpy_s(str, maxPathFolder, L"The specified path was not found"); break;
+	case ERROR_PATH_NOT_FOUND:		wcscpy_s(str, maxPathFolder, L"The specified file was not found"); break;
+	case ERROR_BAD_FORMAT:			wcscpy_s(str, maxPathFolder, L"The .EXE file is invalid\n(non-Win32 .EXE or error in .EXE image)"); break;
+	case SE_ERR_ACCESSDENIED:		wcscpy_s(str, maxPathFolder, L"The operating system denied\naccess to the specified file"); break;
+	case SE_ERR_ASSOCINCOMPLETE:	wcscpy_s(str, maxPathFolder, L"The filename association is\nincomplete or invalid"); break;
+	case SE_ERR_DDEBUSY:			wcscpy_s(str, maxPathFolder, L"The DDE transaction could not\nbe completed because other DDE transactions\nwere being processed"); break;
+	case SE_ERR_DDEFAIL:			wcscpy_s(str, maxPathFolder, L"The DDE transaction failed"); break;
+	case SE_ERR_DDETIMEOUT:			wcscpy_s(str, maxPathFolder, L"The DDE transaction could not\nbe completed because the request timed out"); break;
+	case SE_ERR_DLLNOTFOUND:		wcscpy_s(str, maxPathFolder, L"The specified dynamic-link library was not found"); break;
+	case SE_ERR_NOASSOC:			wcscpy_s(str, maxPathFolder, L"There is no application associated\nwith the given filename extension"); break;
+	case SE_ERR_OOM:				wcscpy_s(str, maxPathFolder, L"There was not enough memory to complete the operation"); break;
+	case SE_ERR_SHARE:				wcscpy_s(str, maxPathFolder, L"A sharing violation occurred"); break;
+	default:						wcscpy_s(str, maxPathFolder, L"Unknown Error occurred"); break;
 	}
 	swprintf_s(hrtext, _countof(hrtext), L"Unable to open hyperlink:\n\n %s", str);
 	DisplayError (aboutHwnd, hrtext, 0, 0);
