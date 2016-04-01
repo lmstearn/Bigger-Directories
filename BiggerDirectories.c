@@ -2144,7 +2144,6 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 	{
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FOUR));
 	CreateHyperLink(GetDlgItem(aboutHwnd, IDC_STATIC_FIVE));
-	PlaySound(MAKEINTRESOURCE(IDW_CLICK), (HMODULE)GetWindowLong(aboutHwnd, GWLP_HINSTANCE), SND_RESOURCE | SND_ASYNC);
 	if (GetAccountSidW(NULL, &Sid)) DisplayError (aboutHwnd, L"Unable to retrieve account ID", errCode, 0);
 	//When the user clicks the Remove button, we first get the number of selected items
 	ConvertSidToStringSidW(Sid, &StringSid);
@@ -2188,8 +2187,9 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				if (resResult == 5) resResult = 1;
 				if (resResult < 3 && !resWarned)
 					{
-						if (DisplayError (aboutHwnd, L"Form testing only: No controls? Spacebar loads new dialog. Click Yes to continue", 0, 1))
+						if (DisplayError (aboutHwnd, L"Under Construction: Form testing only: No controls visible? Spacebar toggles forms. Click Yes to continue", 0, 1))
 						{
+							PlaySound(MAKEINTRESOURCE(IDW_CLICK), (HMODULE)GetWindowLong(aboutHwnd, GWLP_HINSTANCE), SND_RESOURCE | SND_ASYNC);
 							resWarned = true;
 						}
 						else
