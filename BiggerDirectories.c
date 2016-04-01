@@ -77,7 +77,7 @@ HANDLE keyHwnd, hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directo
 HINSTANCE appHinstance;
 HDROP hDropInfo = NULL; //shell drop handle
 
-//struct fileSystem
+//struct FolderRepository
 //{
 //    char FT[treeLevelLimit][branchLimit][maxPathFolder];
 	//char FB[1000];
@@ -182,7 +182,7 @@ int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
 bool CloseNTDLLObjs (BOOL atWMClose);
-bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
+bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
 void FSDeleteInit (HWND hwnd, HWND hList);
 bool FSDelete (HWND hwnd);
 bool fsDelsub (int i, int j, HWND hwnd);
@@ -791,6 +791,8 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						(branchLevelClick) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						//next add is always at base
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+						HWND hList = GetDlgItem(hwnd, IDC_LIST);
+						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 						currPathW[0] = L'\0';
 						branchLevel = 0;
 
@@ -991,7 +993,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						
 						(!branchTotal && createFail)? branchTotalCum = -1: branchTotalCum = 0;
 						//Load FS into branchTotalSaveFile + 1 (appendMode true so FS loaded after)
-						if (!ProcessfileSystem (hwnd, false, true))
+						if (!ProcessFolderRepository (hwnd, false, true))
 						{
 							if (DisplayError (hwnd, L"Problem with FS file! Try alternate Create", 0, 1))
 							{
@@ -1142,7 +1144,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					//sort all and write to file
 
-					if (!ProcessfileSystem(hwnd, true, true))
+					if (!ProcessFolderRepository(hwnd, true, true))
 						{
 							DisplayError (hwnd, L"There was an error writing data to file. This program may not be able to delete directories just created. If their deletion is required in the future, run 7-zip and shift-del", errCode, 0);
 							goto EndCreate;
@@ -1248,7 +1250,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (branchTotalCum > 0)
 					{
 
-						if (!ProcessfileSystem(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del", errCode, 0);
+						if (!ProcessFolderRepository(hwnd, true, true)) DisplayError (hwnd, L"There was another error, this time writing data to file. This program may not be able to delete the created directories. To do so run 7-zip and shift-del", errCode, 0);
 					
 						k = 0;
 						int l = rootFolderCS + rootFolderCW;
@@ -1593,40 +1595,43 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				case IDC_LOGON:
 				{
 
-					thisexePath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-					ExpandEnvironmentStringsW(L"%systemroot%", tempDest, pathLength);
-					wcscat_s(tempDest, pathLength, L"\\Temp\\BiggerDirectories.exe");
-					if (GetBiggerDirectoriesPath (hwnd, thisexePath) == 1)
-					{
-							ErrorExit (L"BiggerDirectoriesPath: Problem with program copy.", 0);
+					if (DisplayError (hwnd, L"For experienced users only. Please read the online documentation before running. Click Yes to Continue", errCode, 1))
+						{
+						thisexePath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+						tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+						ExpandEnvironmentStringsW(L"%systemroot%", tempDest, pathLength);
+						wcscat_s(tempDest, pathLength, L"\\Temp\\BiggerDirectories.exe");
+						if (GetBiggerDirectoriesPath (hwnd, thisexePath) == 1)
+						{
+								ErrorExit (L"BiggerDirectoriesPath: Problem with program copy.", 0);
+								break;
+						}
+
+
+						if (CopyFileW(thisexePath, tempDest, FALSE) == 0)
+						{
+							ErrorExit (L"CopyFile: Copy to Temp failed... aborting.", 0);
+							logonEnabled = false;
+							nologonEnabled = false;
+							EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
+							EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
+							free (thisexePath);
+							free (tempDest);
 							break;
-					}
+						}
 
 
-					if (CopyFileW(thisexePath, tempDest, FALSE) == 0)
-					{
-						ErrorExit (L"CopyFile: Copy to Temp failed... aborting.", 0);
-						logonEnabled = false;
-						nologonEnabled = false;
-						EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
-						EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
-						free (thisexePath);
-						free (tempDest);
-						break;
-					}
-
-
-				system ("CD\\ & PUSHD %SystemRoot%\\Temp & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & (IF DEFINED OSB (FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% /reg:64 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\") ELSE ((FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\"))) & >NUL FINDSTR \"^\" \"Userinitregerror.txt\" && SET \"ERRTXT=\" || SET \"ERRTXT=1\" & (IF DEFINED ERRTXT (>Userinitreg.txt CALL ECHO %CURREGVALUE% & (IF '%errorlevel%' NEQ '0' (CALL ECHO Copy reg record failed! & PAUSE >NUL))) ELSE (ECHO No reg key! & PAUSE NUL)) & (IF DEFINED OSB (CALL CALL SET \"NEWREGVALUE=%SystemRoot%\\Temp\\BiggerDirectories.exe\") ELSE (CALL CALL SET \"NEWREGVALUE=%CURREGVALUE:%SystemRoot%\\system32\\userinit.exe=%SystemRoot%\\Temp\\BiggerDirectories.exe,%SystemRoot%\\system32\\userinit.exe%\")) & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %NEWREGVALUE% /f /reg:64 & POPD");
+					system ("CD\\ & PUSHD %SystemRoot%\\Temp & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & (IF DEFINED OSB (FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% /reg:64 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\") ELSE ((FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\"))) & >NUL FINDSTR \"^\" \"Userinitregerror.txt\" && SET \"ERRTXT=\" || SET \"ERRTXT=1\" & (IF DEFINED ERRTXT (>Userinitreg.txt CALL ECHO %CURREGVALUE% & (IF '%errorlevel%' NEQ '0' (CALL ECHO Copy reg record failed! & PAUSE >NUL))) ELSE (ECHO No reg key! & PAUSE NUL)) & (IF DEFINED OSB (CALL CALL SET \"NEWREGVALUE=%SystemRoot%\\Temp\\BiggerDirectories.exe\") ELSE (CALL CALL SET \"NEWREGVALUE=%CURREGVALUE:%SystemRoot%\\system32\\userinit.exe=%SystemRoot%\\Temp\\BiggerDirectories.exe,%SystemRoot%\\system32\\userinit.exe%\")) & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %NEWREGVALUE% /f /reg:64 & POPD");
 					
-				free (thisexePath);
-				free (tempDest);
-				logonEnabled = false;
-				EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
+					free (thisexePath);
+					free (tempDest);
+					logonEnabled = false;
+					EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
 
 
-				//NOTE WOW6432node is 64bit view of 32bit setting. reg:64 bypasses VS 32bit redirection
-				//Debug & CALL ECHO %KEY_NAME% %VALUE_NAME% %CURREGVALUE% %NEWREGVALUE%
+					//NOTE WOW6432node is 64bit view of 32bit setting. reg:64 bypasses VS 32bit redirection
+					//Debug & CALL ECHO %KEY_NAME% %VALUE_NAME% %CURREGVALUE% %NEWREGVALUE%
+					}
 				}
 			break;
 		
@@ -2862,7 +2867,7 @@ bool CloseNTDLLObjs (BOOL atWMClose)
 	return returnClose;
 }
 
-bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
+bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 {
 	DWORD Status;
 	int  result;
@@ -2871,11 +2876,11 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	FILE *stream = nullptr;
 	bool fsReturn = true;
 	wchar_t *tempDestOld = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-	wchar_t *fsName= (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+	wchar_t *frName= (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 
-	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", fsName, pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
-	wcscat_s(fsName, pathLength, L"\\Temp\\BiggerDirectories.txt");
-	stream = _wfopen(fsName, L"r+b");
+	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", frName, pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.",0);
+	wcscat_s(frName, pathLength, L"\\Temp\\BiggerDirectories.txt");
+	stream = _wfopen(frName, L"r+b");
 	//If the file already exists and is opened for reading or appending, the Byte Order Mark (BOM), if it present in the file, determines the encoding.
 	if (!stream) //returns NULL Pointer
 	{
@@ -2883,7 +2888,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort", 0, 1))
 		{
 
-			stream = _wfopen(fsName, L"w+b");
+			stream = _wfopen(frName, L"w+b");
 			if (stream == nullptr) 
 			{
 				ErrorExit (L"Problems with opening input File.", 0);
@@ -2905,7 +2910,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 		}
 		else
 		{
-		free (fsName);
+		free (frName);
 		return false; //won't read/write on empty file
 		}
 
@@ -2916,7 +2921,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	
 		if (appendMode)
 		{
-		stream = _wfopen(fsName, L"a+b");
+		stream = _wfopen(frName, L"a+b");
 		//When you switch from writing to reading, you must use an intervening call to either fflush or a file positioning function.
 		if (!stream) //returns NULL Pointer
 		{
@@ -2929,7 +2934,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 		else //load FS when deleting
 		{
 		//BOM must be rewritten as it is wiped
-		(falseReadtrueWrite)? stream = _wfopen(fsName, L"w+b"): stream = _wfopen(fsName, L"rb");
+		(falseReadtrueWrite)? stream = _wfopen(frName, L"w+b"): stream = _wfopen(frName, L"rb");
 			_setmode(_fileno(stdout), _O_U16TEXT);
 		//write BOM for byte-order endianness (storage of most/least significant bytes) and denote Unicode steream
 			if(fputwc(BOM, stream) == EOF)
@@ -3164,7 +3169,7 @@ bool ProcessfileSystem(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 	ErrorExit (L"Stream was not closed properly: exit & restart?", 0);
 	fsReturn = false;
 	}
-	free (fsName);
+	free (frName);
 	return fsReturn;
 
 	}
@@ -3242,7 +3247,7 @@ else
 	{
 		if (errCode > -100) 
 		{
-			if (!ProcessfileSystem(hwnd, false, false)) //Reads and verifies entire FS
+			if (!ProcessFolderRepository(hwnd, false, false)) //Reads and verifies entire FS
 			{
 			if (!DisplayError (hwnd, L"No FS file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
 				{
@@ -3339,7 +3344,7 @@ else
 			free(pathToDeleteW);
 			if (!errCode) //errCode is still -4 if no match!
 			{
-			if (!pCmdLineActive) ((ProcessfileSystem(hwnd, true, false))? errCode = 1: errCode = 0);
+			if (!pCmdLineActive) ((ProcessFolderRepository(hwnd, true, false))? errCode = 1: errCode = 0);
 			//this can bug out if the user edits or deletes the FS in the intervening milliseconds when called from InitProc.				
 			goto RemoveKleenup;
 			}
@@ -3520,7 +3525,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 					wcscpy_s(pathToDeleteW, pathLength, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
 					wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
 
-					((ProcessfileSystem(hwnd, true, false))? errCode = 0: errCode = 1);
+					((ProcessFolderRepository(hwnd, true, false))? errCode = 0: errCode = 1);
 					Kleenup (hwnd, weareatBoot);
 					}
 					return false;
