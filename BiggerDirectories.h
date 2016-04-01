@@ -64,6 +64,11 @@
   #endif
 #endif
 
+#ifndef UNICODE
+#define UNICODE
+#elif !defined(_UNICODE)
+#define _UNICODE
+#endif
 
 //serevice pack info
 #define PACKVERSION(major,minor) MAKELONG(minor,major)
