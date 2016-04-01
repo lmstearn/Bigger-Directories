@@ -272,7 +272,7 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	}
 	// Display the error message and exit the process
 
-	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlen((LPCWSTR)lpMsgBuf) + lstrlen((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
+	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlen((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
 	
 	
 	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
@@ -1352,7 +1352,6 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				case IDC_REMOVE:
 				{
 
-					wchar_t * currPathW2;
 					errCode = 0;
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
@@ -2176,7 +2175,7 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				case IDC_STATIC_FIVE:
 				{
 					{
-						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://members.ozemail.com.au/~lmstearn/index.html", NULL, NULL, SW_SHOWNORMAL));
+						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"https://github.com/lmstearn/Bigger-Directories/wiki/Bigger-Directories!", NULL, NULL, SW_SHOWNORMAL));
 					}
 
 				}           
@@ -3900,7 +3899,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 void ShellError (HWND aboutHwnd, int nError)
 {
 	if (nError > 32) return; //no problem
-	wchar_t* str;
+	wchar_t* str= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	switch (nError) 
 	{
 	case 0:							wcscpy_s(str, maxPathFolder, L"The operating system is out\nof memory or resources"); break;
@@ -3919,6 +3918,7 @@ void ShellError (HWND aboutHwnd, int nError)
 	default:						wcscpy_s(str, maxPathFolder, L"Unknown Error occurred"); break;
 	}
 	swprintf_s(hrtext, _countof(hrtext), L"Unable to open hyperlink:\n\n %s", str);
+	free (str);
 	DisplayError (aboutHwnd, hrtext, 0, 0);
  }
 static void CreateHyperLink(HWND hwndControl)
