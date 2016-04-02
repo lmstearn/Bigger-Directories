@@ -183,9 +183,9 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
 bool CloseNTDLLObjs (BOOL atWMClose);
 bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
-void FSDeleteInit (HWND hwnd, HWND hList);
-bool FSDelete (HWND hwnd);
-bool fsDelsub (int i, int j, HWND hwnd);
+void FRDeleteInit (HWND hwnd, HWND hList);
+bool FRDelete (HWND hwnd);
+bool FRDelsub (int i, int j, HWND hwnd);
 int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 // Start of HyperLink URL
 void ShellError (HWND aboutHwnd, int nError);
@@ -562,7 +562,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 								InitProc (hwnd);
 								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-								FSDeleteInit (hwnd, nullptr);
+								FRDeleteInit (hwnd, nullptr);
 								if (rootDir[0] != L'\0') rootDir[0] = L'\0';
 								
 							}
@@ -992,10 +992,10 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 						
 						(!branchTotal && createFail)? branchTotalCum = -1: branchTotalCum = 0;
-						//Load FS into branchTotalSaveFile + 1 (appendMode true so FS loaded after)
+						//Load FR into branchTotalSaveFile + 1 (appendMode true so FR loaded after)
 						if (!ProcessFolderRepository (hwnd, false, true))
 						{
-							if (DisplayError (hwnd, L"Problem with FS file! Try alternate Create", 0, 1))
+							if (DisplayError (hwnd, L"Problem with FR file! Try alternate Create", 0, 1))
 							{
 								free (currPathW);
 								goto AltCreate;
@@ -1366,7 +1366,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
 						if (!dblclkLevel && count == 1 && (index < (rootFolderCS + rootFolderCW)))
 						{
-						FSDeleteInit (hwnd, hList);
+						FRDeleteInit (hwnd, hList);
 						}
 						else
 
@@ -2873,7 +2873,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 	int  jLim;
 	wint_t ch = 0, chOld = 0;
 	FILE *stream = nullptr;
-	bool fsReturn = true;
+	bool frReturn = true;
 	wchar_t *tempDestOld = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 	wchar_t *frName= (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 
@@ -2891,7 +2891,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 			if (stream == nullptr) 
 			{
 				ErrorExit (L"Problems with opening input File.", 0);
-				fsReturn = false;
+				frReturn = false;
 				goto WEOFFOUND;
 
 			}
@@ -2902,7 +2902,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		
 				{
 					ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
-					fsReturn = false;
+					frReturn = false;
 					goto WEOFFOUND;
 				}
 		
@@ -2925,12 +2925,12 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		if (!stream) //returns NULL Pointer
 		{
 		ErrorExit (L"Problems with input File: Cannot append.", 0);
-		fsReturn = false;
+		frReturn = false;
 		goto WEOFFOUND;
 		}
 
 		}
-		else //load FS when deleting
+		else //load F when deleting
 		{
 		//BOM must be rewritten as it is wiped
 		(falseReadtrueWrite)? stream = _wfopen(frName, L"w+b"): stream = _wfopen(frName, L"rb");
@@ -2941,7 +2941,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		
 			{
 				ErrorExit (L"fwprintf: Problems with writing to input File.", 0);
-				fsReturn = false;
+				frReturn = false;
 				goto WEOFFOUND;
 			}
 		}
@@ -3007,7 +3007,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 	if (result)
 	{
 	ErrorExit (L"fseek: Could not rewind!", 0);
-	fsReturn = false;
+	frReturn = false;
 	goto WEOFFOUND;
 	}
 
@@ -3018,7 +3018,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		
 	{
 		DisplayError(hwnd, L"fgetwc: input file does not have BOM", 0, 0);
-		fsReturn = false;
+		frReturn = false;
 		goto WEOFFOUND;
 	}
 
@@ -3074,7 +3074,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 
 
-			if (foundNTDLL && !appendMode)   //only verify entire FS before delete
+			if (foundNTDLL && !appendMode)   //only verify entire FR before delete
 				{
 					wcscpy_s(tempDest, pathLength, driveIDBaseWNT);
 					wcscat_s(tempDest, pathLength, pathsToSave[i]);
@@ -3086,7 +3086,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 						if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) 
 						{
 							ErrorExit (L"RtlNtStatusToDosError: Problem!", 0);
-							fsReturn = false;
+							frReturn = false;
 							goto WEOFFOUND;
 						}
 						Status = RtlNtStatusToDosError (ntStatus);
@@ -3114,7 +3114,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 										trackFTA [i][0] -=1; //Rollback
 										wcscpy_s(pathsToSave[i], pathLength, tempDestOld);
 
-										ErrorExit (L"Cannot verify a file entry in FS: Probably doesn't exist! recommend restarting the program ASAP: ", 1);
+										ErrorExit (L"Cannot verify a file entry in F: Probably doesn't exist! recommend restarting the program ASAP: ", 1);
 										folderTreeArray[i][j][0] = L'\0';
 
 											
@@ -3133,7 +3133,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 						else
 						{
 							ErrorExit (L"DynamicLoader failed: Cannot verify. ", 1);
-							fsReturn = false;
+							frReturn = false;
 							goto WEOFFOUND;
 
 						}
@@ -3166,14 +3166,14 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 	if (fclose (stream))
 	{
 	ErrorExit (L"Stream was not closed properly: exit & restart?", 0);
-	fsReturn = false;
+	frReturn = false;
 	}
 	free (frName);
-	return fsReturn;
+	return frReturn;
 
 	}
 
-void FSDeleteInit (HWND hwnd, HWND hList)
+void FRDeleteInit (HWND hwnd, HWND hList)
 {
 bool cmdlineParmtooLong = false;
 tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -3246,9 +3246,9 @@ else
 	{
 		if (errCode > -100) 
 		{
-			if (!ProcessFolderRepository(hwnd, false, false)) //Reads and verifies entire FS
+			if (!ProcessFolderRepository(hwnd, false, false)) //Reads and verifies entire FR
 			{
-			if (!DisplayError (hwnd, L"No FS file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
+			if (!DisplayError (hwnd, L"No FR file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
 				{
 					free (tempDest);
 					free(pathToDeleteW);
@@ -3276,7 +3276,7 @@ else
 		memset(reorgTmpW, L'\0', sizeof(reorgTmpW));
 
 
-		for (i = branchTotal; (i >= 0); i--) //place paths to delete at end of FS
+		for (i = branchTotal; (i >= 0); i--) //place paths to delete at end of FR
 		{
 
 			if (!wcscmp (rootDir, folderTreeArray[i][0])) //0 if perfect match
@@ -3316,7 +3316,7 @@ else
 		{
 			if (branchTotal == j)
 			{
-				if (DisplayError (hwnd, L"The selected folder is not found in the FS. Click Yes for alternate delete", 0, 1))
+				if (DisplayError (hwnd, L"The selected folder is not found in the F. Click Yes for alternate delete", 0, 1))
 				{
 					free(pathToDeleteW);
 					goto OldDelete;
@@ -3338,13 +3338,13 @@ else
 
 			do
 			{
-			} while (FSDelete (hwnd));
-			//Write remaining FS
+			} while (FRDelete (hwnd));
+			//Write remaining FR
 			free(pathToDeleteW);
 			if (!errCode) //errCode is still -4 if no match!
 			{
 			if (!pCmdLineActive) ((ProcessFolderRepository(hwnd, true, false))? errCode = 1: errCode = 0);
-			//this can bug out if the user edits or deletes the FS in the intervening milliseconds when called from InitProc.				
+			//this can bug out if the user edits or deletes the FR in the intervening milliseconds when called from InitProc.				
 			goto RemoveKleenup;
 			}
 
@@ -3425,12 +3425,12 @@ if (cmdlineParmtooLong)
 return;
 }
 
-bool FSDelete (HWND hwnd)
+bool FRDelete (HWND hwnd)
 {	
 
 if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not branchTotalCum
 	{
-		branchTotal = branchTotalCum; // required for FS Write
+		branchTotal = branchTotalCum; // required for FR Write
 		return false;
 	}
 
@@ -3462,14 +3462,14 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 			{
 				for (j = branchTotal; (j >= branchTotalCum); j--)
 				{
-					if (trackFTA [i][1] == trackFTA [j][0]) return (fsDelsub (i, j, hwnd));
+					if (trackFTA [i][1] == trackFTA [j][0]) return (FRDelsub (i, j, hwnd));
 				}
 			}
 	}
 
 return true; //shouldn't get here though
 }
-bool fsDelsub (int i, int j, HWND hwnd)
+bool FRDelsub (int i, int j, HWND hwnd)
 {
 
 	for (k = (trackFTA [i][1]); (k >= ((i > branchTotalCum)? trackFTA [i - 1][1]: 0)); k--)
@@ -3502,7 +3502,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 				}
 				else
 				{
-				goto FSReorg;
+				goto FRReorg;
 				}
 			
 			}
@@ -3541,7 +3541,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 
 						trackFTA [i][1] = 0;
 						trackFTA [j][0] = 0;
-						goto FSReorg;
+						goto FRReorg;
 						}
 						if (((int)GetLastError() == 145))
 						{
@@ -3573,7 +3573,7 @@ bool fsDelsub (int i, int j, HWND hwnd)
 
 return true;
 
-FSReorg:
+FRReorg:
 errCode = 0;
 
 if (j != branchTotal)
