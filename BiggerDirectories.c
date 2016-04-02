@@ -408,7 +408,7 @@ if (RegisterRawInputDevices(Rid, 1, sizeof(Rid[0])) == FALSE) DisplayError (hwnd
 
 LPCWSTR lpszDllName = L"C:\\Windows\\System32\\ComCtl32.dll";
 DWORD dwVer = dynamicComCtrl(lpszDllName);
-DWORD dwTarget = PACKVERSION(6,0);
+DWORD dwTarget = PACKVERSION(5,2);
 
 if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of ComCtl32.dll", errCode, 0);
 
