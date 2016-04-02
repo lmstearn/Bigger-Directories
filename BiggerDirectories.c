@@ -2168,7 +2168,7 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				{
 				if(HIWORD(wParam) == BN_CLICKED)
 					{
-						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://members.ozemail.com.au/~lmstearn/index.html", NULL, NULL, SW_SHOWNORMAL));
+						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"Final article URL will be: http://www.codeproject.com/Articles/1089681/Bigger-Directories", NULL, NULL, SW_SHOWNORMAL));
 					}
 				}           
 				break;
