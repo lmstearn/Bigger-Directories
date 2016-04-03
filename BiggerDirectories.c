@@ -3192,21 +3192,15 @@ if (errCode != -100) errCode = -4;
 
 if (pCmdLineActive)
 {
-	wchar_t * rootDirPtr = wcschr (rootDir, '\\');
+	wchar_t * rootDirPtr = wcschr (rootDir, '\\'); //strip leading // if exists
 	if (rootDirPtr)
 	{
 		
 		for (i = 0; i < (int)(rootDirPtr - rootDir); i++) rootDirPtr[i] = rootDir[i];
 		rootDirPtr[i] = L'\0';
 		wcscpy_s(rootDir, pathLength, rootDirPtr);
-		pCmdLineActive = false;
 	}
-	else
-	{
-	DisplayError (hwnd, L"Oops! CmdLine not there", errCode, 0);
-	free(pathToDeleteW);
-	goto RemoveKleenup;
-	}
+	pCmdLineActive = false;
 
 	currPathW[0] = L'\0';
 	wcscpy_s(pathToDeleteW, pathLength, rootDir);
@@ -3833,7 +3827,10 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 							return 1;
 							}
 							wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-							currPathWtmp = currPathW + 4;
+
+							currPathWtmp = wcsstr (currPathW, L"\\\\?\\C:");
+							
+							(currPathWtmp)? currPathWtmp = currPathW + 4: currPathWtmp = currPathW;
 							//GetCurrentDirectoryW(maxPathFolder, findPathW);
 							if (RemoveDirectoryW (currPathWtmp))
 							{
