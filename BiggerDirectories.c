@@ -175,7 +175,7 @@ LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
-int SwitchResolution (HWND hwnd, DLGPROC dProc);
+int SwitchResolution (HWND hwnd, BOOL dProc);
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
@@ -619,7 +619,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 
 				
-				if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, NULL) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
+				if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
 				{
 					DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
 				}
@@ -1670,7 +1670,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			case IDC_HALP: //HALP used because tlhelp32 produces a c4005 macro redefinition warning for HELP
 			{
 				resResult = DoSystemParametersInfoStuff(hwnd, false);
-				SwitchResolution (hwnd, AboutDlgProc);
+				SwitchResolution (hwnd, (BOOL) AboutDlgProc);
 			}
 			break;
 			case IDC_LIST:
@@ -2168,7 +2168,7 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				{
 				if(HIWORD(wParam) == BN_CLICKED)
 					{
-						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"Final article URL will be: http://www.codeproject.com/Articles/1089681/Bigger-Directories", NULL, NULL, SW_SHOWNORMAL));
+						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://www.codeproject.com/Tips/1089681/Bigger-Directories", NULL, NULL, SW_SHOWNORMAL));
 					}
 				}           
 				break;
@@ -2203,7 +2203,7 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 					}
 
 
-				SwitchResolution (aboutHwnd, AboutDlgProc);
+				SwitchResolution (aboutHwnd, (BOOL)AboutDlgProc);
 				EndDialog(aboutHwnd, IDC_OK);
 				break;
 
@@ -2265,7 +2265,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	{
 
 		resResult = DoSystemParametersInfoStuff(hwnd, true);
-		SwitchResolution (nullptr, APP_CLASS::s_DlgProc);
+		SwitchResolution (nullptr, (BOOL)APP_CLASS::s_DlgProc);
 	}
 return 0; //never gets here, but suppress C4715 warning
 }
@@ -2492,7 +2492,7 @@ else
 return 0;
 
 }
-int SwitchResolution (HWND hwndParent, DLGPROC dProc)
+int SwitchResolution (HWND hwndParent, BOOL dProc)
 {
 
 if (hwndParent) //About dialogue
@@ -3994,7 +3994,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     {
     case WM_DESTROY:
     {
-        SetWindowLong(hwnd, GWLP_WNDPROC, (LONG)pfnOrigProc);
+        SetWindowLong(hwnd, GWLP_WNDPROC, (long)pfnOrigProc);
         RemoveProp(hwnd, PROP_ORIGINAL_PROC);
 
         HFONT hOrigFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
@@ -4187,3 +4187,62 @@ if(*Sid != NULL)
 
 return errCode;
 }
+int GetDrives(HWND hwnd)
+{
+	DWORD cchBuffer;
+	wchar_t* driveStrings;
+	int driveType, driveCt = 0;
+	PWSTR driveTypeString;
+
+	// Find out how big a buffer we need
+	cchBuffer = GetLogicalDriveStrings(0, NULL);
+
+	driveStrings = (WCHAR*)malloc((cchBuffer + 1) * sizeof(wchar_t));
+	if (driveStrings == NULL)
+	{
+	return -1;
+	}
+
+	// Fetch all drive strings    
+	GetLogicalDriveStrings(cchBuffer, driveStrings);
+
+	// Loop until we find the final '\0'
+	// driveStrings is a double null terminated list of null terminated strings)
+	while (*driveStrings)
+	{
+	// Dump drive information
+	driveType = GetDriveType(driveStrings);
+
+	switch (driveType)
+	{
+	case DRIVE_FIXED:
+	driveTypeString = L"......(Hard disk)";
+	break;
+
+	case DRIVE_CDROM:
+	driveTypeString = L"......   (CD/DVD)";
+	break;
+
+	case DRIVE_REMOVABLE:
+	driveTypeString = L"......(Removable)";
+	break;
+
+	case DRIVE_REMOTE:
+	driveTypeString = L"......  (Network)";
+	break;
+
+	default:
+	driveTypeString = L"......  (Unknown)";
+	break;
+	}
+	SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(driveCt), (LPARAM)driveStrings);
+	// +1 is to move past the null at the end of the string.
+	driveCt +=1;
+	driveStrings += wcslen(driveStrings) + 1;
+
+	}
+
+	free(driveStrings);
+
+	return 0;
+	}
