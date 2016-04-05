@@ -133,10 +133,10 @@ public:
 APP_CLASS();
 
 // This is the static callback that we register
-static INT_PTR CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+static BOOL CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // The static callback recovers the "this" pointer and then calls this member function.
-INT_PTR DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+BOOL DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 };
 
@@ -175,7 +175,7 @@ LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
-int SwitchResolution (HWND hwnd, BOOL dProc);
+int SwitchResolution (HWND hwnd, BOOL (WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
@@ -365,12 +365,10 @@ if (FindProcessId (hwnd, L"explorer.exe", exeHandle) == NULL)
 	}
 else
 	{
-	if (!FindProcessId (hwnd, L"userinit.exe", exeHandle) == NULL)
-	{
-	DisplayError (hwnd, L"Userinit should have ended. Try rebooting before running this (or any other) program", errCode, 0);
-	}
-	//Now to check if I am 64 bit
-
+		if (!FindProcessId (hwnd, L"userinit.exe", exeHandle) == NULL)
+		{
+		DisplayError (hwnd, L"Userinit should have ended. Try rebooting before running this (or any other) program", errCode, 0);
+		}
 
 	BiggerDirectoriesVAR= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", BiggerDirectoriesVAR, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
@@ -383,17 +381,27 @@ else
 		}
 		else
 		{
-			EnableWindow(GetDlgItem(hwnd, IDC_LOGON), true);
+			logonEnabled = true;
+			EnableWindow(GetDlgItem(hwnd, IDC_LOGON), logonEnabled);
 		}
-	nologonEnabled = true;
-	EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
+
+
+		if (ExistRegValue() == 1)
+		{
+			setforDeletion = TRUE;
+			(logonEnabled)? nologonEnabled = false: nologonEnabled = true;
+			EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
+		}
+		else
+		{
+		nologonEnabled = true;
+		EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
+		}
+
 	free(BiggerDirectoriesVAR);
 	}
 	
-	if (ExistRegValue() == 1)
-	{
-		setforDeletion = TRUE;
-	}
+
 
 
 //Raw keyboard for input- need to subclass child controls for keystrokes to work
@@ -509,7 +517,7 @@ LRESULT CALLBACK ValidateProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
 }
 
 
-INT_PTR CALLBACK APP_CLASS::s_DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+BOOL CALLBACK APP_CLASS::s_DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	APP_CLASS *pThis; // our "this" pointer will go here
 
@@ -540,7 +548,7 @@ return FALSE; // returning FALSE means "do the default thing"
 
 
 
-INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
 	errCode = 0;
 	switch(Msg)
@@ -1618,6 +1626,11 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							free (tempDest);
 							break;
 						}
+						else
+						{
+							nologonEnabled = true;
+							EnableWindow(GetDlgItem(hwnd, IDC_NOLOGON), nologonEnabled);
+						}
 
 
 					system ("CD\\ & PUSHD %SystemRoot%\\Temp & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & (IF DEFINED OSB (FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% /reg:64 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\") ELSE ((FOR /F \"USEBACKQ SKIP=2 TOKENS=1-4 DELIMS= \" %G IN (`REG QUERY %KEY_NAME% /v %VALUE_NAME% 2^>Userinitregerror.txt`) DO @SET \"CURREGVALUE=%I%J\"))) & >NUL FINDSTR \"^\" \"Userinitregerror.txt\" && SET \"ERRTXT=\" || SET \"ERRTXT=1\" & (IF DEFINED ERRTXT (>Userinitreg.txt CALL ECHO %CURREGVALUE% & (IF '%errorlevel%' NEQ '0' (CALL ECHO Copy reg record failed! & PAUSE >NUL))) ELSE (ECHO No reg key! & PAUSE NUL)) & (IF DEFINED OSB (CALL CALL SET \"NEWREGVALUE=%SystemRoot%\\Temp\\BiggerDirectories.exe\") ELSE (CALL CALL SET \"NEWREGVALUE=%CURREGVALUE:%SystemRoot%\\system32\\userinit.exe=%SystemRoot%\\Temp\\BiggerDirectories.exe,%SystemRoot%\\system32\\userinit.exe%\")) & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %NEWREGVALUE% /f /reg:64 & POPD");
@@ -1670,7 +1683,7 @@ INT_PTR APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			case IDC_HALP: //HALP used because tlhelp32 produces a c4005 macro redefinition warning for HELP
 			{
 				resResult = DoSystemParametersInfoStuff(hwnd, false);
-				SwitchResolution (hwnd, (BOOL) AboutDlgProc);
+				SwitchResolution (hwnd, AboutDlgProc);
 			}
 			break;
 			case IDC_LIST:
@@ -2203,7 +2216,7 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 					}
 
 
-				SwitchResolution (aboutHwnd, (BOOL)AboutDlgProc);
+				SwitchResolution (aboutHwnd, AboutDlgProc);
 				EndDialog(aboutHwnd, IDC_OK);
 				break;
 
@@ -2265,7 +2278,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	{
 
 		resResult = DoSystemParametersInfoStuff(hwnd, true);
-		SwitchResolution (nullptr, (BOOL)APP_CLASS::s_DlgProc);
+		SwitchResolution (nullptr, APP_CLASS::s_DlgProc);
 	}
 return 0; //never gets here, but suppress C4715 warning
 }
@@ -2492,7 +2505,7 @@ else
 return 0;
 
 }
-int SwitchResolution (HWND hwndParent, BOOL dProc)
+int SwitchResolution (HWND hwndParent, BOOL (WINAPI * dProc)(HWND, UINT, WPARAM, LPARAM))
 {
 
 if (hwndParent) //About dialogue
