@@ -1,3 +1,4 @@
+#include "shlwapi.h"
 #include <stdlib.h> //malloc
 #include <fcntl.h>
 #include <io.h> //setmode
@@ -5,13 +6,13 @@
 #include <windows.h>
 #include <strsafe.h> //safe string copy e.e. StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
-#include "biggerdirectories.h" //my file
+#include "BiggerDirectories.h" //my file
 #include <winternl.h> //NtCreateFile
 #include "winbase.h"
 #include "windef.h"
-#include "shlwapi.h"
 #include "sddl.h"
-
+#include <winbase.h>
+#include <windef.h>
 
 //#include <afxwin.h>
 
@@ -24,8 +25,8 @@
 //#include <ntstrsafe.h>
 
 
-//http://www.cprogramming.com/tutorial/printf-format-strings.html
-//https://msdn.microsoft.com/en-us/library/windows/desktop/aa378137(v=vs.85).aspx
+
+
 
 
 
@@ -39,10 +40,13 @@ wchar_t const *invalidPathName = L":\"/\\|?*<>";
 wchar_t const eolFTA = L'\n';
 wchar_t const separatorFTA = L'\\';
 wchar_t const *lpref = L"\\\\?\\";
-wchar_t const *driveIDBaseW = L"\\\\?\\C:\\";
-wchar_t const *driveIDBaseWNT = L"\\??\\C:\\"; //NtCreateFile wants the wildcard
-char const *driveIDBase = "C:\\";
 wchar_t const APP_CLASS_NAME[]  = L"BiggerDirectories";
+
+wchar_t driveInfo[26];
+wchar_t driveIDBaseW [7] = {L'\\', L'\\', L'?', L'\\', L'C', L':', L'\\'};
+wchar_t driveIDBaseWNT [7]= {L'\\', L'?', L'?', L'\\', L'C', L':', L'\\'}; //NtCreateFile wants the wildcard
+char driveIDBase [3]= {L'C', L':', L'\\'};
+
 UINT const WM_COPYGLOBALDATA = 0x0049; //Drop files filter
 
 wchar_t rootDir [pathLength], dblclkPath [treeLevelLimit + 1][maxPathFolder], dblclkString [pathLength], reorgTmpW[pathLength];//maxPathFolder unless delete fails
@@ -76,6 +80,7 @@ WNDPROC g_pOldProc;
 HANDLE keyHwnd, hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 HINSTANCE appHinstance;
 HDROP hDropInfo = NULL; //shell drop handle
+int GetDrives(HWND hwnd);
 
 //struct FolderRepository
 //{
@@ -170,10 +175,11 @@ APP_CLASS::APP_CLASS(void)
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
-BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
+BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
+void TextinIDC_TEXT (HWND hwnd, bool atDrives);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
 int SwitchResolution (HWND hwnd, BOOL (WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
@@ -203,7 +209,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//hrtext[0] = (wchar_t)LocalAlloc(LPTR, 256*sizeof(wchar_t)); This dynamic allocation NOT required- see below
 		//if (hrtext[0] == NULL) ErrorExit("LocalAlloc");
 		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough but not req'd
-
+		//http://www.cprogramming.com/tutorial/printf-format-strings.html
 		if (errorcode == 0){
 		swprintf_s(hrtext, _countof(hrtext), L"%s.", messageText);
 		}
@@ -286,19 +292,10 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	//ExitProcess(dw);
 }
 
-
 void InitProc(HWND hwnd)
 {
-	TCHAR* pszTxt = TEXT("My Bigger Directory");
-	TCHAR pszDest[arraysize];
+	
 	errCode = 0;
-	
-
-	size_t cbDest = arraysize * sizeof(TCHAR); //the use of size_t implies C++ compile.
-	LPCTSTR pszFormat = TEXT("%s");
-	HRESULT hr = StringCbPrintf(pszDest, cbDest, pszFormat, pszTxt); //swprintf_s
-	
-	
 	//if (foundNTDLL) we can use the better function
 
 	if (!DynamicLoader (true, tempDest)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions..", errCode, 0);
@@ -444,6 +441,7 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
 	memset(pathsToSave, L'\0', sizeof(pathsToSave)); //required for create
 	memset(dblclkPath, L'\0', sizeof(dblclkPath));
+	memset(driveInfo, L'\0', sizeof(driveInfo));
 	SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Add");
 	SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"times.");
 	SetDlgItemInt(hwnd, IDC_NUMBER, 3, FALSE);//set repeat number
@@ -466,42 +464,20 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	//Good:
 	// malloc(sizeof(char) * 5) // Will allocate 5 bytes
 
-	currPath = (char *)calloc(maxPathFolder, sizeof(char));
-	currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	if ((currPath == nullptr) || (currPathW == nullptr))
-	{
-		/* We were not so display a message */
-		errCode = -1;
-		DisplayError (hwnd, L"Could not allocate required memory", errCode, 0);
-		return;
-	}
-
-
-	if (hr == S_OK)
-	{
-		SetDlgItemText(hwnd, IDC_TEXT, pszDest);
-
-	}
-	else
-	{
-
-		DisplayError (hwnd, L"StringCbPrintf didn't work, quitting: code %#08X", (int)hr, 0);
-		return;
-
-	}
+TextinIDC_TEXT (hwnd, 1);
 	
 sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-rootFolderCS = PopulateListBox (hwnd, false, true);
-rootFolderCW = PopulateListBox (hwnd, true, true);
-
+if (!GetDrives(hwnd)) DisplayError (hwnd, L"Could find any Drives", errCode, 0);
 
 //http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
 //https://groups.google.com/forum/#!topic/comp.os.ms-windows.programmer.win32/L7o1PeransU
-if (currPath) free (currPath);
-if (currPathW) free (currPathW);
 if (findPathW) free (findPathW);
 }
-
+LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	//temp windowfor res check.
+}
 
 LRESULT CALLBACK ValidateProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -1728,34 +1704,15 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)currPathW);
 								SetDlgItemTextW(hwnd, IDC_TEXT, currPathW);
 
+
 								// Since we know ahead of time we're only getting one index, there's no need to allocate an array.
-
-								if (dblclkLevel) 
+								switch (dblclkLevel)
 								{
+								case 0:
+									break;
+								case 1:
 
-									if (index <= folderIndex)
-									{
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-										if (index == 0 || index == folderIndex)
-										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-										}
-										else
-										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-										}
-									}
-									else
-									{
 
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Move file\0");
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-
-									}
-
-								}
-								else
-								{
 									if (index >= rootFolderCS + rootFolderCW)
 									{
 										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
@@ -1820,8 +1777,29 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									}
 
 
-								}
 
+									break;
+								default:
+									if (index <= folderIndex)
+									{
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+										if (index == 0 || index == folderIndex)
+										{
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										}
+										else
+										{
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+										}
+									}
+									else
+									{
+
+										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Move file\0");
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+
+									}
+								}
 
 
 
@@ -1955,27 +1933,32 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
 					//do nothing if clicking a file
 
-					
+					currPath = (char *)calloc(maxPathFolder, sizeof(char));
 					currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 					findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-					if ((currPathW == nullptr) || (findPathW == nullptr))
+					if ((currPath == nullptr) || currPathW == nullptr || (findPathW == nullptr))
 					{
 					DisplayError (hwnd, L"Something has gone wrong with memory!", errCode, 0);
 					return 0;
 					}
-					if (dblclkLevel)
-					{
-						if (index >= folderIndex) return 0;
-					}
-					else
-					{
-						if (index >= rootFolderCS + rootFolderCW) goto DblclkEnd;
-					}
-					
-
 
 					sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
-					
+					if (wcsstr(findPathW, L"not ready") || wcsstr(findPathW, L"Unknown")) goto DblclkEnd;;
+
+					switch (dblclkLevel)
+					{
+					case 0:
+						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+						dblclkLevel = 1;
+						goto DblclkEnd;
+						break;
+					case 1:
+						if (index >= rootFolderCS + rootFolderCW) goto DblclkEnd;
+						break;
+					default:
+						if (index >= folderIndex) return 0;
+					}
+
 					wcscpy_s(dblclkString, pathLength, dblclkPath[0]);
 					wcscat_s(dblclkString, pathLength, L"\\");
 
@@ -2020,10 +2003,55 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						dblclkLevel +=1;
 					}
+
 					DblclkEnd:
-					
-					if (dblclkLevel)
-						{
+
+
+					switch (dblclkLevel)
+					{
+					case 0:
+							//DragAcceptFiles (hwnd, FALSE);
+							if (findPathW) free (findPathW);
+							if (currPathW) free (currPathW);
+							if (currPath) free (currPath);
+							InitProc(hwnd);
+							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+							EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
+							//enable buttons
+							return 0;
+						break;
+					case 1:
+							DragAcceptFiles (hwnd, FALSE);
+							rootFolderCS = PopulateListBox (hwnd, false, true);
+							rootFolderCW = PopulateListBox (hwnd, true, true);
+							TextinIDC_TEXT (hwnd, 0);
+							//This is getting worse, now findPathW is nuked in PopulateListBox
+							if (findPathW) free (findPathW);
+							findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+							sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
+							//
+							if ((wcsstr(findPathW, L"DVD") != NULL) || (wcsstr(findPathW, L"not ready") != NULL) || (wcsstr(findPathW, L"Unknown") != NULL))
+									{
+									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+									EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+									EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
+									}
+							else
+									{
+									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+									EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+									EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
+									}
+							if (findPathW) free (findPathW);
+							if (currPathW) free (currPathW);
+							if (currPath) free (currPath);
+
+
+
+							return 0;
+						break;
+					default:
 							DragAcceptFiles(hwnd,TRUE);
 							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 							folderIndex = PopulateListBox (hwnd, true, true);
@@ -2045,16 +2073,9 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 							if (findPathW) free (findPathW);
 							if (currPathW) free (currPathW);
-						}
-					else
-						{
-							DragAcceptFiles(hwnd,FALSE);
-							if (findPathW) free (findPathW);
-							if (currPathW) free (currPathW);
-							InitProc(hwnd);
-							//enable buttons
-							return 0;
-						}
+
+					}
+					
 					}
 					break; //This break for consistency
 				}
@@ -2181,14 +2202,14 @@ BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam
 				{
 				if(HIWORD(wParam) == BN_CLICKED)
 					{
-						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"http://www.codeproject.com/Tips/1089681/Bigger-Directories", NULL, NULL, SW_SHOWNORMAL));
+						ShellError(aboutHwnd, reinterpret_cast <int> (ShellExecuteW(NULL, L"open", L"http://www.codeproject.com/Tips/1089681/Bigger-Directories", NULL, NULL, SW_SHOWNORMAL)));
 					}
 				}           
 				break;
 				case IDC_STATIC_FIVE:
 				{
 					{
-						ShellError(aboutHwnd, (int) ShellExecuteW(NULL, L"open", L"https://github.com/lmstearn/Bigger-Directories/wiki/Bigger-Directories!", NULL, NULL, SW_SHOWNORMAL));
+						ShellError(aboutHwnd, reinterpret_cast <int> (ShellExecuteW(NULL, L"open", L"https://github.com/lmstearn/Bigger-Directories/wiki/Bigger-Directories!", NULL, NULL, SW_SHOWNORMAL)));
 					}
 
 				}           
@@ -2283,12 +2304,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 return 0; //never gets here, but suppress C4715 warning
 }
 
-LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-	return DefWindowProc(hwnd, uMsg, wParam, lParam);
-	//temp windowfor res check.
-}
-
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders)
 {
 BOOL findhandle = TRUE;
@@ -2350,7 +2365,6 @@ if (listFolders)
 				//#define FILE_ATTRIBUTE_ENCRYPTED            0x00004000
 				//#define FILE_ATTRIBUTE_VIRTUAL              0x00010000
 
-			// (wchar_t *)currPathW not necessary here
 				strcpy_s(currPath, maxPathFolder, (char *)driveIDBase);
 				strcat_s(currPath, maxPathFolder, da.cFileName);
 
@@ -2475,6 +2489,29 @@ else
 }
 
 return listNum;
+
+}
+
+void TextinIDC_TEXT (HWND hwnd, bool atDrives)
+{
+	wchar_t *pszTxt0 = L"Dblclick or drag in folder to start"; //fixed allocation
+	wchar_t *pszTxt1 = L"My Bigger Directory Path";
+	wchar_t pszDest[arraysize];
+	HRESULT hr;
+	size_t cbDest = arraysize * sizeof(wchar_t); //the use of size_t implies C++ compile.
+	LPCWSTR pszFormat = L"%s";
+
+
+	(atDrives)? hr = StringCbPrintfW(pszDest, cbDest, pszFormat, pszTxt0): hr = StringCbPrintf(pszDest, cbDest, pszFormat, pszTxt1); //swprintf_s
+	if (hr == S_OK)
+	{
+		SetDlgItemTextW(hwnd, IDC_TEXT, pszDest);
+	}
+	else
+	{
+
+		DisplayError (hwnd, L"StringCbPrintfW didn't work, quitting: code %#08X", (int)hr, 0);
+	}
 
 }
 
@@ -4203,59 +4240,75 @@ return errCode;
 int GetDrives(HWND hwnd)
 {
 	DWORD cchBuffer;
-	wchar_t* driveStrings;
+	wchar_t* driveStrings, *outputString;
 	int driveType, driveCt = 0;
 	PWSTR driveTypeString;
 
 	// Find out how big a buffer we need
-	cchBuffer = GetLogicalDriveStrings(0, NULL);
-
-	driveStrings = (WCHAR*)malloc((cchBuffer + 1) * sizeof(wchar_t));
+	cchBuffer = GetLogicalDriveStringsW(0, NULL);
+	driveStrings = (wchar_t *)calloc((cchBuffer + 1), sizeof(wchar_t));
+	outputString = (wchar_t *)calloc((maxPathFolder), sizeof(wchar_t));
 	if (driveStrings == NULL)
 	{
-	return -1;
+	return 0;
 	}
-
+	
 	// Fetch all drive strings    
-	GetLogicalDriveStrings(cchBuffer, driveStrings);
+	GetLogicalDriveStringsW(cchBuffer, driveStrings);
 
 	// Loop until we find the final '\0'
 	// driveStrings is a double null terminated list of null terminated strings)
-	while (*driveStrings)
+	wchar_t * singleDriveString = driveStrings;
+	while (*singleDriveString)
 	{
 	// Dump drive information
-	driveType = GetDriveType(driveStrings);
+	driveType = GetDriveTypeW(singleDriveString);
 
 	switch (driveType)
 	{
-	case DRIVE_FIXED:
-	driveTypeString = L"......(Hard disk)";
+	case DRIVE_UNKNOWN: //known unknowns
+	driveTypeString = L"                         (Unknown)";
+	driveInfo[driveCt] = L'U';
 	break;
-
-	case DRIVE_CDROM:
-	driveTypeString = L"......   (CD/DVD)";
+	case DRIVE_NO_ROOT_DIR:
+	driveTypeString = L"                  (Disk not ready)";
+	driveInfo[driveCt] = L'N';
 	break;
-
 	case DRIVE_REMOVABLE:
-	driveTypeString = L"......(Removable)";
+	driveTypeString = L"                       (Removable)";
+	driveInfo[driveCt] = L'M';
 	break;
-
+	case DRIVE_FIXED:
+	driveTypeString = L"                       (Hard disk)";
+	driveInfo[driveCt] = L'H';
+	break;
 	case DRIVE_REMOTE:
-	driveTypeString = L"......  (Network)";
+	driveTypeString = L"                         (Network)";
+	driveInfo[driveCt] = L'N';
 	break;
-
-	default:
-	driveTypeString = L"......  (Unknown)";
+	case DRIVE_CDROM:
+	driveTypeString = L"                          (CD/DVD)";
+	driveInfo[driveCt] = L'C';
 	break;
+	case DRIVE_RAMDISK:
+	driveTypeString = L"                          (Ramdisk)";
+	driveInfo[driveCt] = L'R';
+	break;
+	default: //unknown unknowns
+	driveTypeString = L"                        (Unknown*)";
+	driveInfo[driveCt] = L'U';
 	}
-	SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(driveCt), (LPARAM)driveStrings);
+
+	wcscpy_s(outputString, maxPathFolder, singleDriveString);
+	wcscat_s(outputString, maxPathFolder, driveTypeString);
+	sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(driveCt), (LPARAM)outputString);
 	// +1 is to move past the null at the end of the string.
-	driveCt +=1;
-	driveStrings += wcslen(driveStrings) + 1;
+	driveCt += 1;
+	singleDriveString += lstrlenW(singleDriveString) + 1;
 
 	}
+	if (outputString) free(outputString);
+	if (driveStrings) free(driveStrings);
 
-	free(driveStrings);
-
-	return 0;
+	return 1;
 	}

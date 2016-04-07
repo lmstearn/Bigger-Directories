@@ -2,7 +2,7 @@
 // Microsoft Visual C++ generated include file.
 // Used by BiggerDirectories.rc
 //
-#define arraysize                       30
+#define arraysize                       40
 #define IDD_SMALL                       101
 #define IDD_768P                        102
 #define IDD_1080P                       103
