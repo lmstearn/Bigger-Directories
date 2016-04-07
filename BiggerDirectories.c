@@ -41,10 +41,11 @@ wchar_t const separatorFTA = L'\\';
 wchar_t const *lpref = L"\\\\?\\";
 wchar_t const APP_CLASS_NAME[]  = L"BiggerDirectories";
 
-wchar_t driveInfo[26];
-wchar_t driveIDBaseW [7] = {L'\\', L'\\', L'?', L'\\', L'C', L':', L'\\'};
-wchar_t driveIDBaseWNT [7]= {L'\\', L'?', L'?', L'\\', L'C', L':', L'\\'}; //NtCreateFile wants the wildcard
-char driveIDBase [3]= {L'C', L':', L'\\'};
+wchar_t driveInfo[26][2];
+wchar_t driveIDBaseW[7];
+wchar_t driveIDBaseWNT[7];
+char driveIDBase[3];
+wchar_t driveIndex[1];
 
 UINT const WM_COPYGLOBALDATA = 0x0049; //Drop files filter
 
@@ -451,7 +452,15 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 	removeButtonEnabled = true;
-		
+
+
+	wcscpy_s(driveIDBaseW, 8, L"\\\\?\\C:\\");
+	wcscpy_s(driveIDBaseWNT, 8,  L"\\??\\C:\\");
+	strcpy_s(driveIDBase, 4, "C:\\");
+
+
+
+
 	for (j = 0; j < branchLimit; j++)
 		{
 		trackFTA [j][0] = 0; //Initial conditons before search on path
@@ -1947,8 +1956,8 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					switch (dblclkLevel)
 					{
 					case 0:
-						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 						dblclkLevel = 1;
+						driveIndex[0] = driveInfo[index][0];
 						goto DblclkEnd;
 						break;
 					case 1:
@@ -1963,6 +1972,9 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 					if ((0 == wcscmp(findPathW, L"..")))
 					{
+						driveIDBaseW[4] = driveIndex[0];
+						driveIDBaseWNT[4] = driveIndex[0];
+						driveIDBase[0] = (char)driveIndex[0];						
 						dblclkLevel -=1;
 						if (dblclkLevel < 2) goto DblclkEnd;
 							for (i = 1; i < dblclkLevel; i++)
@@ -1992,10 +2004,13 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							dblclkLevel = 0;
 							goto DblclkEnd;
 						}
+						driveIDBaseW[4] = driveInfo[index][0];
+						driveIDBaseWNT[4] = driveInfo[index][0];
+						driveIDBase[4] = (char)driveInfo[index][0];
 						wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
-						wcscpy_s(dblclkString, pathLength, dblclkPath[0]);
+						wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
 						wcscat_s(dblclkString, pathLength, L"\\");
-						for (i = 1; i <= dblclkLevel; i++)
+						for (i = 2; i <= dblclkLevel; i++)
 						{
 						wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 						wcscat_s(dblclkString, pathLength, L"\\");
@@ -2011,43 +2026,45 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					case 0:
 						{
 							//DragAcceptFiles (hwnd, FALSE);
-							if (findPathW) free (findPathW);
-							if (currPathW) free (currPathW);
-							if (currPath) free (currPath);
 							InitProc(hwnd);
 							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 							//enable buttons
-							return 0;
 						}
 						break;
 					case 1:
 						{
-							DragAcceptFiles (hwnd, FALSE);
-							rootFolderCS = PopulateListBox (hwnd, false, true);
-							rootFolderCW = PopulateListBox (hwnd, true, true);
-							TextinIDC_TEXT (hwnd, 0);
 
-							if ((wcsstr(findPathW, L"DVD") != NULL) || (wcsstr(findPathW, L"not ready") != NULL) || (wcsstr(findPathW, L"Unknown") != NULL))
+							if ((driveInfo[index][0] == L'X')) //X: Disk not ready
+							{
+								dblclkLevel = 0;
+								InitProc(hwnd);
+								EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+								EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+								EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
+							}
+							else
+							{
+								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+								DragAcceptFiles (hwnd, FALSE);
+								rootFolderCS = PopulateListBox (hwnd, false, true);
+								rootFolderCW = PopulateListBox (hwnd, true, true);
+								TextinIDC_TEXT (hwnd, 0);
+								//U: Unknown, X: Disk not ready, M: Removable, F: Fixed disk, B: Network, C: CD/DVD, R Ramdisk
+								if ((driveInfo[index][0] != L'C') || (driveInfo[index][0] != L'X') || (driveInfo[index][0] != L'U'))
 									{
 									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 									EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 									EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 									}
-							else
+								else
 									{
 									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 									EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 									EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
 									}
-							if (findPathW) free (findPathW);
-							if (currPathW) free (currPathW);
-							if (currPath) free (currPath);
-
-
-
-							return 0;
+							}
 						}
 						break;
 					default:
@@ -2071,10 +2088,11 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-							if (findPathW) free (findPathW);
-							if (currPathW) free (currPathW);
 						}
 					}
+							if (findPathW) free (findPathW);
+							if (currPathW) free (currPathW);
+							if (currPath) free (currPath);
 					
 					}
 					break; //This break for consistency
@@ -2327,7 +2345,7 @@ if (listFolders)
 	{
 		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
 		//http://stackoverflow.com/questions/32540779/wcscpy-does-not-accept-tchar-in-destination-variable
-		(dblclkLevel)? wcscat_s(currPathW, maxPathFolder, dblclkString): wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
+		(dblclkLevel > 1)? wcscat_s(currPathW, maxPathFolder, dblclkString): wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
 		wcscat_s(currPathW, maxPathFolder, L"*");
 		//findHandle = FindFirstFile(@"\\?\UNC\" + folder_path, out findData
 		ds = FindFirstFileW(currPathW, &dw); //dw points to found folders
@@ -2394,13 +2412,13 @@ if (listFolders)
 			{
 
 
-			if (dblclkLevel)
+			if (dblclkLevel > 1)
 			{
 				wcscpy_s(currPathW, maxPathFolder, dw.cFileName);
 			}
 			else
 			{
-			wcscpy_s(currPathW, maxPathFolder, (wchar_t *)driveIDBaseW);
+			wcscpy_s(currPathW, maxPathFolder, driveIDBaseW);
 			wcscat_s(currPathW, maxPathFolder, dw.cFileName);
 			//compare with dacfolders[rootFolderC] to check for dups
 			wcscat_s(dacfoldersW[listNum], maxPathFolder, currPathW);
@@ -2437,7 +2455,7 @@ else
 
 
 
-	if (dblclkLevel)
+	if (dblclkLevel > 1)
 
 	{
 		listNum = 0;
@@ -4265,40 +4283,40 @@ int GetDrives(HWND hwnd)
 	{
 	// Dump drive information
 	driveType = GetDriveTypeW(singleDriveString);
-
+	driveInfo[driveCt][0] = singleDriveString[0];
 	switch (driveType)
 	{
 	case DRIVE_UNKNOWN: //known unknowns
 	driveTypeString = L"                         (Unknown)";
-	driveInfo[driveCt] = L'U';
+	driveInfo[driveCt][1] = L'U';
 	break;
 	case DRIVE_NO_ROOT_DIR:
 	driveTypeString = L"                  (Disk not ready)";
-	driveInfo[driveCt] = L'N';
+	driveInfo[driveCt][1] = L'X';
 	break;
 	case DRIVE_REMOVABLE:
 	driveTypeString = L"                       (Removable)";
-	driveInfo[driveCt] = L'M';
+	driveInfo[driveCt][1] = L'M';
 	break;
 	case DRIVE_FIXED:
-	driveTypeString = L"                       (Hard disk)";
-	driveInfo[driveCt] = L'H';
+	driveTypeString = L"                      (Fixed disk)";
+	driveInfo[driveCt][1] = L'F';
 	break;
 	case DRIVE_REMOTE:
 	driveTypeString = L"                         (Network)";
-	driveInfo[driveCt] = L'N';
+	driveInfo[driveCt][1] = L'N';
 	break;
 	case DRIVE_CDROM:
 	driveTypeString = L"                          (CD/DVD)";
-	driveInfo[driveCt] = L'C';
+	driveInfo[driveCt][1] = L'C';
 	break;
 	case DRIVE_RAMDISK:
 	driveTypeString = L"                          (Ramdisk)";
-	driveInfo[driveCt] = L'R';
+	driveInfo[driveCt][1] = L'R';
 	break;
 	default: //unknown unknowns
 	driveTypeString = L"                        (Unknown*)";
-	driveInfo[driveCt] = L'U';
+	driveInfo[driveCt][1] = L'U';
 	}
 
 	wcscpy_s(outputString, maxPathFolder, singleDriveString);
