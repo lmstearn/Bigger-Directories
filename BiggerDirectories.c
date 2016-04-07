@@ -11,8 +11,7 @@
 #include "winbase.h"
 #include "windef.h"
 #include "sddl.h"
-#include <winbase.h>
-#include <windef.h>
+
 
 //#include <afxwin.h>
 
@@ -471,7 +470,7 @@ if (!GetDrives(hwnd)) DisplayError (hwnd, L"Could find any Drives", errCode, 0);
 
 //http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
 //https://groups.google.com/forum/#!topic/comp.os.ms-windows.programmer.win32/L7o1PeransU
-if (findPathW) free (findPathW);
+//if (findPathW) free (findPathW); //can't see why this is needed
 }
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
@@ -1965,7 +1964,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if ((0 == wcscmp(findPathW, L"..")))
 					{
 						dblclkLevel -=1;
-						if (!dblclkLevel) goto DblclkEnd;
+						if (dblclkLevel < 2) goto DblclkEnd;
 							for (i = 1; i < dblclkLevel; i++)
 							{
 							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
@@ -2010,6 +2009,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					switch (dblclkLevel)
 					{
 					case 0:
+						{
 							//DragAcceptFiles (hwnd, FALSE);
 							if (findPathW) free (findPathW);
 							if (currPathW) free (currPathW);
@@ -2020,17 +2020,15 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 							//enable buttons
 							return 0;
+						}
 						break;
 					case 1:
+						{
 							DragAcceptFiles (hwnd, FALSE);
 							rootFolderCS = PopulateListBox (hwnd, false, true);
 							rootFolderCW = PopulateListBox (hwnd, true, true);
 							TextinIDC_TEXT (hwnd, 0);
-							//This is getting worse, now findPathW is nuked in PopulateListBox
-							if (findPathW) free (findPathW);
-							findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-							sendMessageErr = SendMessageW(hList, LB_GETTEXT, index, (LPARAM)findPathW);
-							//
+
 							if ((wcsstr(findPathW, L"DVD") != NULL) || (wcsstr(findPathW, L"not ready") != NULL) || (wcsstr(findPathW, L"Unknown") != NULL))
 									{
 									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
@@ -2050,8 +2048,10 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 
 							return 0;
+						}
 						break;
 					default:
+						{
 							DragAcceptFiles(hwnd,TRUE);
 							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 							folderIndex = PopulateListBox (hwnd, true, true);
@@ -2073,7 +2073,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 							if (findPathW) free (findPathW);
 							if (currPathW) free (currPathW);
-
+						}
 					}
 					
 					}
@@ -2314,11 +2314,13 @@ if (listFolders)
 
 	if (widecharNames == 0)
 	{
-		memset(&da, 0, sizeof(WIN32_FIND_DATA));
+		memset(&da, 0, sizeof(WIN32_FIND_DATAA));
 		strcpy_s(currPath, maxPathFolder, driveIDBase);
 
 		strcat_s(currPath, maxPathFolder, "*");
 		ds = FindFirstFileA(currPath, &da);
+		SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(0), (LPARAM)".."); // add .. for return to Drives
+		listNum = 1;
 
 	}
 	else
