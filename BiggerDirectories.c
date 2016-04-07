@@ -41,11 +41,10 @@ wchar_t const separatorFTA = L'\\';
 wchar_t const *lpref = L"\\\\?\\";
 wchar_t const APP_CLASS_NAME[]  = L"BiggerDirectories";
 
-wchar_t driveInfo[26][2];
-wchar_t driveIDBaseW[7];
-wchar_t driveIDBaseWNT[7];
+wchar_t driveInfo[26][2], driveIndex[1];
+wchar_t driveIDBaseW[7], driveIDBaseWNT[7];
 char driveIDBase[3];
-wchar_t driveIndex[1];
+
 
 UINT const WM_COPYGLOBALDATA = 0x0049; //Drop files filter
 
@@ -454,7 +453,7 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	removeButtonEnabled = true;
 
 
-	wcscpy_s(driveIDBaseW, 8, L"\\\\?\\C:\\");
+	wcscpy_s(driveIDBaseW, 8, L"\\\\?\\C:\\"); // 1 for the null terminator
 	wcscpy_s(driveIDBaseWNT, 8,  L"\\??\\C:\\");
 	strcpy_s(driveIDBase, 4, "C:\\");
 
