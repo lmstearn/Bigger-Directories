@@ -1,4 +1,5 @@
 #include "shlwapi.h"
+#include "BiggerDirectories.h" //my file
 #include <stdlib.h> //malloc
 #include <fcntl.h>
 #include <io.h> //setmode
@@ -6,7 +7,6 @@
 #include <windows.h>
 #include <strsafe.h> //safe string copy e.e. StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
-#include "BiggerDirectories.h" //my file
 #include <winternl.h> //NtCreateFile
 #include "winbase.h"
 #include "windef.h"
@@ -1957,6 +1957,9 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					case 0:
 						dblclkLevel = 1;
 						driveIndex[0] = driveInfo[index][0];
+						driveIDBaseW[4] = driveIndex[0];
+						driveIDBaseWNT[4] = driveIndex[0];
+						driveIDBase[0] = (char)driveIndex[0];
 						goto DblclkEnd;
 						break;
 					case 1:
@@ -1966,17 +1969,14 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						if (index >= folderIndex) return 0;
 					}
 
-					wcscpy_s(dblclkString, pathLength, dblclkPath[0]);
+					wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
 					wcscat_s(dblclkString, pathLength, L"\\");
 
 					if ((0 == wcscmp(findPathW, L"..")))
 					{
-						driveIDBaseW[4] = driveIndex[0];
-						driveIDBaseWNT[4] = driveIndex[0];
-						driveIDBase[0] = (char)driveIndex[0];						
 						dblclkLevel -=1;
 						if (dblclkLevel < 2) goto DblclkEnd;
-							for (i = 1; i < dblclkLevel; i++)
+							for (i = 2; i < dblclkLevel; i++)
 							{
 							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 							wcscat_s(dblclkString, pathLength, L"\\");
@@ -2003,9 +2003,6 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							dblclkLevel = 0;
 							goto DblclkEnd;
 						}
-						driveIDBaseW[4] = driveInfo[index][0];
-						driveIDBaseWNT[4] = driveInfo[index][0];
-						driveIDBase[4] = (char)driveInfo[index][0];
 						wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
 						wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
 						wcscat_s(dblclkString, pathLength, L"\\");
@@ -2051,7 +2048,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								rootFolderCW = PopulateListBox (hwnd, true, true);
 								TextinIDC_TEXT (hwnd, 0);
 								//U: Unknown, X: Disk not ready, M: Removable, F: Fixed disk, B: Network, C: CD/DVD, R Ramdisk
-								if ((driveInfo[index][0] != L'C') || (driveInfo[index][0] != L'X') || (driveInfo[index][0] != L'U'))
+								if ((driveIndex[0] != L'C') || (driveIndex[0] != L'X') || (driveIndex[0] != L'U'))
 									{
 									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 									EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
