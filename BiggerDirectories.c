@@ -178,7 +178,7 @@ LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM 
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
-void TextinIDC_TEXT (HWND hwnd, bool atDrives);
+void TextinIDC_TEXT (HWND hwnd);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
 int SwitchResolution (HWND hwnd, BOOL (WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
@@ -431,50 +431,64 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	branchTotal = -1;
 	branchTotalCum = 0;
 	branchTotalCumOld = 0;
-	dblclkLevel = 0;
-	dblclkString[0] = L'\0';
 	resResult = 0;
 	resWarned = false;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
 	memset(dacfoldersW, L'\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
 	memset(pathsToSave, L'\0', sizeof(pathsToSave)); //required for create
-	memset(dblclkPath, L'\0', sizeof(dblclkPath));
-	memset(driveInfo, L'\0', sizeof(driveInfo));
-	SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Add");
-	SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"times.");
-	SetDlgItemInt(hwnd, IDC_NUMBER, 3, FALSE);//set repeat number
-	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
-	EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
-	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-	EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
-	EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
-	EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
-	removeButtonEnabled = true;
-
-
-	wcscpy_s(driveIDBaseW, 8, L"\\\\?\\C:\\"); // 1 for the null terminator
-	wcscpy_s(driveIDBaseWNT, 8,  L"\\??\\C:\\");
-	strcpy_s(driveIDBase, 4, "C:\\");
-
-
-
-
 	for (j = 0; j < branchLimit; j++)
 		{
 		trackFTA [j][0] = 0; //Initial conditons before search on path
 		trackFTA [j][1] = 0;
 		}
+	SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Add");
+	SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"times.");
+	SetDlgItemInt(hwnd, IDC_NUMBER, 3, FALSE);//set repeat number
+
+
+
+	TextinIDC_TEXT (hwnd);
+	EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+	EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+	EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+
+	sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+
+if (dblclkLevel)
+{
+	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
+	EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
+	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+	removeButtonEnabled = true;
+	DragAcceptFiles (hwnd, FALSE);
+
+}
+else
+{
+	memset(driveInfo, L'\0', sizeof(driveInfo));
+	memset(dblclkPath, L'\0', sizeof(dblclkPath));
+	dblclkLevel = 0;
+	dblclkString[0] = L'\0';
+	wcscpy_s(driveIDBaseW, 8, L"\\\\?\\C:\\"); // 1 for the null terminator
+	wcscpy_s(driveIDBaseWNT, 8,  L"\\??\\C:\\");
+	strcpy_s(driveIDBase, 4, "C:\\");
+
+	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
+	EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
+	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+	removeButtonEnabled = false;
+	if (!GetDrives(hwnd)) DisplayError (hwnd, L"Could find any Drives", errCode, 0);
+
+
+}
+
+
 	
 	//Bad:
 	//malloc(sizeof(char *) * 5) // Will allocate 20 or 40 bytes depending on 32 63 bit system
 	//Good:
 	// malloc(sizeof(char) * 5) // Will allocate 5 bytes
-
-TextinIDC_TEXT (hwnd, 1);
-	
-sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-if (!GetDrives(hwnd)) DisplayError (hwnd, L"Could find any Drives", errCode, 0);
 
 //http://stackoverflow.com/questions/1912325/checking-for-null-before-calling-free
 //https://groups.google.com/forum/#!topic/comp.os.ms-windows.programmer.win32/L7o1PeransU
@@ -1355,7 +1369,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						sendMessageErr = SendMessageW(hList, LB_GETCURSEL, (WPARAM)1, (LPARAM)&index); //GETSELITEMS substituted with LB_GETCURSEL for a laugh
 
 						//index = SendMessageW(hList, LB_GETCURSEL, 0, 0L);
-						if (!dblclkLevel && count == 1 && (index < (rootFolderCS + rootFolderCW)))
+						if ((dblclkLevel < 2) && count == 1 && (index < (rootFolderCS + rootFolderCW)))
 						{
 						FRDeleteInit (hwnd, hList);
 						}
@@ -1380,7 +1394,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								sendMessageErr = SendDlgItemMessage(hwnd, IDC_LIST, LB_GETSELITEMS, (WPARAM)count, (LPARAM)(LPINT)selItems);
 
 								// Now we loop through the list and remove each item that was selected, looping backwards, because if we removed items from top to bottom, it would change the indexes of the other items!!!
-								if (dblclkLevel)
+								if (dblclkLevel > 1)
 								{
 									
 									bool filePrompt = false;
@@ -1568,17 +1582,37 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			case IDC_CLEAR:
 				{
 
-					if (dblclkLevel)
-					{
-						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
-						index = 0;
-						folderIndex = 1;
-					}
-					else
-					{
-						InitProc(hwnd);
-					}
+					switch (dblclkLevel)
+						{
+						case 0:
+							{
+								InitProc(hwnd);
+							}
+								break;
+						case 1:
+							{
+								InitProc(hwnd);
+								currPath = (char *)calloc(maxPathFolder, sizeof(char));
+								currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+								if ((currPath == nullptr) || (currPathW == nullptr))
+								{
+								DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
+								return 0;
+								}
+								rootFolderCS = PopulateListBox (hwnd, false, true);
+								rootFolderCW = PopulateListBox (hwnd, true, true);
+								free (currPath);
+								free (currPathW);
+							}
+							   break;
+						default:
+							{
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
+								index = 0;
+								folderIndex = 1;
+							}
+						}
 				}
 			break;
 
@@ -1718,7 +1752,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								case 0:
 									break;
 								case 1:
-
+									{
 
 									if (index >= rootFolderCS + rootFolderCW)
 									{
@@ -1784,27 +1818,29 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									}
 
 
-
+									}
 									break;
 								default:
-									if (index <= folderIndex)
 									{
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
-										if (index == 0 || index == folderIndex)
+										if (index <= folderIndex)
 										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
+											if (index == 0 || index == folderIndex)
+											{
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+											}
+											else
+											{
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+											}
 										}
 										else
 										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+
+											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Move file\0");
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+
 										}
-									}
-									else
-									{
-
-										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Move file\0");
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-
 									}
 								}
 
@@ -1972,7 +2008,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
 					wcscat_s(dblclkString, pathLength, L"\\");
 
-					if ((0 == wcscmp(findPathW, L"..")))
+					if (0 == wcscmp(findPathW, L".."))
 					{
 						dblclkLevel -=1;
 						if (dblclkLevel < 2) goto DblclkEnd;
@@ -2042,11 +2078,10 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							}
 							else
 							{
-								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-								DragAcceptFiles (hwnd, FALSE);
+								InitProc(hwnd);
 								rootFolderCS = PopulateListBox (hwnd, false, true);
 								rootFolderCW = PopulateListBox (hwnd, true, true);
-								TextinIDC_TEXT (hwnd, 0);
+
 								//U: Unknown, X: Disk not ready, M: Removable, F: Fixed disk, B: Network, C: CD/DVD, R Ramdisk
 								if ((driveIndex[0] != L'C') || (driveIndex[0] != L'X') || (driveIndex[0] != L'U'))
 									{
@@ -2508,7 +2543,7 @@ return listNum;
 
 }
 
-void TextinIDC_TEXT (HWND hwnd, bool atDrives)
+void TextinIDC_TEXT (HWND hwnd)
 {
 	wchar_t *pszTxt0 = L"Dblclick or drag in folder to start"; //fixed allocation
 	wchar_t *pszTxt1 = L"My Bigger Directory Path";
@@ -2518,7 +2553,7 @@ void TextinIDC_TEXT (HWND hwnd, bool atDrives)
 	LPCWSTR pszFormat = L"%s";
 
 
-	(atDrives)? hr = StringCbPrintfW(pszDest, cbDest, pszFormat, pszTxt0): hr = StringCbPrintf(pszDest, cbDest, pszFormat, pszTxt1); //swprintf_s
+	(dblclkLevel)? hr = StringCbPrintfW(pszDest, cbDest, pszFormat, pszTxt1): hr = StringCbPrintfW(pszDest, cbDest, pszFormat, pszTxt0); //swprintf_s
 	if (hr == S_OK)
 	{
 		SetDlgItemTextW(hwnd, IDC_TEXT, pszDest);
