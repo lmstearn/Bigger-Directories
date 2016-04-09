@@ -460,6 +460,7 @@ if (dblclkLevel)
 {
 	SendDlgItemMessageW (hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(0), (LPARAM)L".."); // add .. for return to Drives
 	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
+	EnableWindow(GetDlgItem(hwnd, IDC_TEXT), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 	removeButtonEnabled = true;
@@ -476,7 +477,7 @@ else
 	wcscpy_s(driveIDBaseWNT, 8,  L"\\??\\C:\\");
 	wcscpy_s(driveIDBaseAW, 4,  L"C:\\");
 	strcpy_s(driveIDBase, 4, "C:\\");
-
+	EnableWindow(GetDlgItem(hwnd, IDC_TEXT), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
@@ -2227,10 +2228,11 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								if ((tokDest = wcstok_s(NULL, &separatorFTA, &tokStr))== nullptr) break;
 								wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, tokDest);
 							}
-						//dblclkLevel: delicate
+							dblclkLevel -= 1; //Ouch
+						wcscat_s(dblclkPath[1], maxPathFolder, L"\\");
 						wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
 						wcscat_s(dblclkString, pathLength, L"\\");
-						for (i = 2; i < dblclkLevel; i++)
+						for (i = 2; i <= dblclkLevel; i++)
 						{
 						wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 						wcscat_s(dblclkString, pathLength, L"\\");
@@ -2247,7 +2249,8 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 					doFilesFolders(hwnd);
 					}
-
+					EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
+					EnableWindow(GetDlgItem(hwnd, IDC_TEXT), true);
 					}
 
 				}
@@ -3770,7 +3773,6 @@ void doFilesFolders(HWND hwnd)
 		SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
 		SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
 		SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
-		EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
