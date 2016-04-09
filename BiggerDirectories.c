@@ -38,11 +38,11 @@ const wchar_t BOM = L'\xFEFF'; //65279
 wchar_t const *invalidPathName = L":\"/\\|?*<>";
 wchar_t const eolFTA = L'\n';
 wchar_t const separatorFTA = L'\\';
-wchar_t const *lpref = L"\\\\?\\";
+wchar_t const *lPref = L"\\\\?\\";
 wchar_t const APP_CLASS_NAME[]  = L"BiggerDirectories";
 
-wchar_t driveInfo[26][2], driveIndex[1];
-wchar_t driveIDBaseW[7], driveIDBaseWNT[7];
+wchar_t driveInfo[26][2], driveIndex[2];
+wchar_t driveIDBaseW[7], driveIDBaseWNT[7], driveIDBaseAW[3];
 char driveIDBase[3];
 
 
@@ -57,7 +57,7 @@ wchar_t dacfoldersW[branchLimit][MAX_PATH-3], dacfoldersWtmp[branchLimit][maxPat
 wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder], pathsToSave [branchLimit][pathLength];
 
 
-int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld, dblclkLevel;
+int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld, dblclkLevel = 0;
 int i,j,k, errCode;
 int idata, index, folderIndex, listTotal = 0, sendMessageErr = 0;
 int treeLevel, trackFTA[branchLimit][2];
@@ -191,6 +191,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 void FRDeleteInit (HWND hwnd, HWND hList);
 bool FRDelete (HWND hwnd);
 bool FRDelsub (int i, int j, HWND hwnd);
+void doFilesFolders(HWND hwnd);
 int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 // Start of HyperLink URL
 void ShellError (HWND aboutHwnd, int nError);
@@ -457,6 +458,7 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 
 if (dblclkLevel)
 {
+	SendDlgItemMessageW (hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(0), (LPARAM)L".."); // add .. for return to Drives
 	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
 	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
@@ -472,15 +474,16 @@ else
 	dblclkString[0] = L'\0';
 	wcscpy_s(driveIDBaseW, 8, L"\\\\?\\C:\\"); // 1 for the null terminator
 	wcscpy_s(driveIDBaseWNT, 8,  L"\\??\\C:\\");
+	wcscpy_s(driveIDBaseAW, 4,  L"C:\\");
 	strcpy_s(driveIDBase, 4, "C:\\");
 
 	EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 	removeButtonEnabled = false;
+	DragAcceptFiles (hwnd, true);
+	//Drag Drop folders for root drive: WS_EX_ACCEPTFILES for WNDCLASS only
 	if (!GetDrives(hwnd)) DisplayError (hwnd, L"Could find any Drives", errCode, 0);
-
-
 }
 
 
@@ -624,12 +627,10 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 
 				
-				if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
-				{
-					DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
-				}
-				//No Drag Drop for root drive: WS_EX_ACCEPTFILES for WNDCLASS only
-				DragAcceptFiles(hwnd,FALSE);
+			if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
+			{
+				DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
+			}
 				
             }
 		break;
@@ -1771,7 +1772,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
 
-										if (wcsstr(dacfoldersW[index], lpref) == nullptr)
+										if (wcsstr(dacfoldersW[index], lPref) == nullptr)
 											//Check for wide string folder here
 										{
 											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
@@ -1993,26 +1994,39 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					case 0:
 						dblclkLevel = 1;
 						driveIndex[0] = driveInfo[index][0];
+						driveIndex[1] = driveInfo[index][1];
 						driveIDBaseW[4] = driveIndex[0];
 						driveIDBaseWNT[4] = driveIndex[0];
 						driveIDBase[0] = (char)driveIndex[0];
+						driveIDBaseAW[0] = driveIndex[0];
 						goto DblclkEnd;
 						break;
 					case 1:
-						if (index >= rootFolderCS + rootFolderCW) goto DblclkEnd;
+						if (index >= rootFolderCS + rootFolderCW)
+						{	
+							goto DblclkEnd;
+						}
+						else
+							if (index < rootFolderCS)
+							{
+								wcscpy_s(dblclkPath[1], maxPathFolder, driveIDBaseAW);
+							}
+							else
+							{
+								wcscpy_s(dblclkPath[1], maxPathFolder, driveIDBaseW);
+							}	
 						break;
 					default:
 						if (index >= folderIndex) return 0;
 					}
 
 					wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
-					wcscat_s(dblclkString, pathLength, L"\\");
 
 					if (0 == wcscmp(findPathW, L".."))
 					{
 						dblclkLevel -=1;
 						if (dblclkLevel < 2) goto DblclkEnd;
-							for (i = 2; i < dblclkLevel; i++)
+							for (i = 2; i <= dblclkLevel; i++)
 							{
 							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
 							wcscat_s(dblclkString, pathLength, L"\\");
@@ -2039,15 +2053,36 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							dblclkLevel = 0;
 							goto DblclkEnd;
 						}
-						wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
-						wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
-						wcscat_s(dblclkString, pathLength, L"\\");
-						for (i = 2; i <= dblclkLevel; i++)
-						{
-						wcscat_s(dblclkString, pathLength, dblclkPath[i]);
-						wcscat_s(dblclkString, pathLength, L"\\");
-						}
+
 						dblclkLevel +=1;
+						if (dblclkLevel == 2)
+						{
+							wchar_t * dblclkPathtmp;
+							if (index < rootFolderCS)
+								{
+									dblclkPathtmp = findPathW + 3;
+									wcscpy_s(dblclkPath[2], maxPathFolder, dblclkPathtmp);
+								}
+								else
+								{
+									dblclkPathtmp = findPathW + 7;
+									wcscpy_s(dblclkPath[2], maxPathFolder, dblclkPathtmp);
+								}	
+							wcscpy_s(dblclkString, pathLength, findPathW);
+							wcscat_s(dblclkString, pathLength, L"\\");
+						}
+						else
+						{
+							wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, findPathW);
+							wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
+							for (i = 2; i <= dblclkLevel; i++)
+							{
+							wcscat_s(dblclkString, pathLength, dblclkPath[i]);
+							wcscat_s(dblclkString, pathLength, L"\\");
+							}
+
+						}
+						
 					}
 
 					DblclkEnd:
@@ -2083,42 +2118,17 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								rootFolderCW = PopulateListBox (hwnd, true, true);
 
 								//U: Unknown, X: Disk not ready, M: Removable, F: Fixed disk, B: Network, C: CD/DVD, R Ramdisk
-								if ((driveIndex[0] != L'C') || (driveIndex[0] != L'X') || (driveIndex[0] != L'U'))
+								if ((driveIndex[1] == L'C') || (driveIndex[1] == L'X') || (driveIndex[1] == L'U'))
 									{
 									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
-									EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 									EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
-									}
-								else
-									{
-									EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-									EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
-									EnableWindow(GetDlgItem(hwnd, IDC_ADD), true);
 									}
 							}
 						}
 						break;
 					default:
 						{
-							DragAcceptFiles(hwnd,TRUE);
-							SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-							folderIndex = PopulateListBox (hwnd, true, true);
-							sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)0, 0); //remove the '.'
-							folderIndex -=1;
-							//Account for folder/file separator
-							if (PopulateListBox (hwnd, true, false)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_INSERTSTRING, WPARAM(folderIndex), (LPARAM)(L"\0"));
-							//disable buttons
-							SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
-							SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"\0");
-							SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
-							SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
-							SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
-							EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
-							EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
-							EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
-							EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
-							EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
-							EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+							doFilesFolders(hwnd);
 						}
 					}
 							if (findPathW) free (findPathW);
@@ -2147,7 +2157,11 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				return 0;
 				}
 				
-				swprintf_s(hrtext, _countof(hrtext), L"Files, not folders are processed. Click Yes to continue moving the selection to the target directory:\n\n %s", dblclkString);
+
+				if ((dblclkLevel))
+				{
+
+				swprintf_s(hrtext, _countof(hrtext), L"Files, not folders are processed in this window. Click Yes to continue moving the selection to the target directory:\n\n %s", dblclkString);
 				if (DisplayError (hwnd, hrtext, errCode, 1))
 					{
 
@@ -2163,7 +2177,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					wcscpy_s(currPathW, pathLength, dblclkString);
 					wcscat_s(currPathW, pathLength, &dropBuf[pdest]);
 					// prepend "\\?\" to the path.
-					wcscpy_s(tempDest, pathLength, lpref);
+					wcscpy_s(tempDest, pathLength, lPref);
 					wcscat_s(tempDest, pathLength, dropBuf);
 					if (CopyFileW(tempDest, currPathW, FALSE))
 					{
@@ -2181,7 +2195,60 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					}
 
 
+				}
 
+				}
+
+				else //only drag in folders to set path
+				{
+
+
+					if ( DragQueryFileW((HDROP) wParam, 0xFFFFFFFF, 0, 0 ) == 1)
+					{
+					if (!DragQueryFileW ((HDROP) wParam, 0, dropBuf, pathLength)) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
+					pdest = (int)(wcsrchr( dropBuf, separatorFTA ) - dropBuf + 1);
+					if (GetFileAttributesW(dropBuf) == FILE_ATTRIBUTE_DIRECTORY)
+					{
+					if (!SetCurrentDirectoryW (dropBuf)) //objects to L".."
+						{
+							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+						}
+					else
+						{
+							dblclkLevel = 1;
+							wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, lPref);
+							wchar_t *tokStr;
+							wchar_t *tokDest = wcstok_s( dropBuf, &separatorFTA, &tokStr);
+							//tokDest = wcstok_s(NULL, &separatorFTA, &tokStr);
+							wcscat_s(dblclkPath[dblclkLevel], maxPathFolder, tokDest);
+							for (dblclkLevel = 2; dblclkLevel <= treeLevelLimit; dblclkLevel++)
+							{
+
+								if ((tokDest = wcstok_s(NULL, &separatorFTA, &tokStr))== nullptr) break;
+								wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, tokDest);
+							}
+						//dblclkLevel: delicate
+						wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
+						wcscat_s(dblclkString, pathLength, L"\\");
+						for (i = 2; i < dblclkLevel; i++)
+						{
+						wcscat_s(dblclkString, pathLength, dblclkPath[i]);
+						wcscat_s(dblclkString, pathLength, L"\\");
+						}
+						}
+
+					}
+					if (!SetCurrentDirectoryW (dblclkString))
+					{
+						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+						dblclkLevel = 0;
+					}
+					else
+					{
+					doFilesFolders(hwnd);
+					}
+
+					}
 
 				}
 
@@ -2368,7 +2435,6 @@ if (listFolders)
 
 		strcat_s(currPath, maxPathFolder, "*");
 		ds = FindFirstFileA(currPath, &da);
-		SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(0), (LPARAM)".."); // add .. for return to Drives
 		listNum = 1;
 
 	}
@@ -3688,6 +3754,28 @@ if (j != branchTotal)
 pathsToSave [branchTotal][0] = L'\0';
 branchTotal -=1;
 return true;
+}
+void doFilesFolders(HWND hwnd)
+{
+		DragAcceptFiles(hwnd,TRUE);
+		SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+		folderIndex = PopulateListBox (hwnd, true, true);
+		SendDlgItemMessage(hwnd, IDC_LIST, LB_DELETESTRING, 0, 0); //remove the '.'
+		folderIndex -=1;
+		//Account for folder/file separator
+		if (PopulateListBox (hwnd, true, false)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_INSERTSTRING, WPARAM(folderIndex), (LPARAM)(L"\0"));
+		//disable buttons
+		SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
+		SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"\0");
+		SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
+		SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
+		SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
+		EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), false);
+		EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
+		EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+		EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+		EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
+		EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 }
 int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
