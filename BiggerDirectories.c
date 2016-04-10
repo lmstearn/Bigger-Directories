@@ -192,6 +192,7 @@ void FRDeleteInit (HWND hwnd, HWND hList);
 bool FRDelete (HWND hwnd);
 bool FRDelsub (int i, int j, HWND hwnd);
 void doFilesFolders(HWND hwnd);
+bool RePopList (HWND hwnd);
 int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
 // Start of HyperLink URL
 void ShellError (HWND aboutHwnd, int nError);
@@ -1344,7 +1345,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				//free(cumPath);
 					if (errCode == 0) //succeeded
 						{
-						InitProc(hwnd);
+						RePopList (hwnd);
 						removeButtonEnabled = true;
 						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
 						}
@@ -1583,38 +1584,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			case IDC_CLEAR:
 				{
-
-					switch (dblclkLevel)
-						{
-						case 0:
-							{
-								InitProc(hwnd);
-							}
-								break;
-						case 1:
-							{
-								InitProc(hwnd);
-								currPath = (char *)calloc(maxPathFolder, sizeof(char));
-								currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-								if ((currPath == nullptr) || (currPathW == nullptr))
-								{
-								DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
-								return 0;
-								}
-								rootFolderCS = PopulateListBox (hwnd, false, true);
-								rootFolderCW = PopulateListBox (hwnd, true, true);
-								free (currPath);
-								free (currPathW);
-							}
-							   break;
-						default:
-							{
-								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
-								index = 0;
-								folderIndex = 1;
-							}
-						}
+					if (!RePopList (hwnd)) return 0;
 				}
 			break;
 
@@ -3412,17 +3382,17 @@ else
 		{
 			if (!ProcessFolderRepository(hwnd, false, false)) //Reads and verifies entire FR
 			{
-			if (!DisplayError (hwnd, L"No FR file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
+			if (DisplayError (hwnd, L"No FR file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
 				{
 					free (tempDest);
 					free(pathToDeleteW);
-					goto RemoveKleenup;
+					goto OldDelete;
 				}
 			else
 				{
 					free (tempDest);
 					free(pathToDeleteW);
-					goto OldDelete;
+					goto RemoveKleenup;
 				}
 			}
 		}
@@ -3579,7 +3549,7 @@ if (cmdlineParmtooLong)
 			{
 			errCode = 0; //flag okay now
 			listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-			InitProc(hwnd);
+			RePopList (hwnd);
 			}
 			else 
 			{
@@ -3778,6 +3748,41 @@ void doFilesFolders(HWND hwnd)
 		EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+}
+bool RePopList (HWND hwnd)
+{
+switch (dblclkLevel)
+{
+case 0:
+	{
+		InitProc(hwnd);
+	}
+		break;
+case 1:
+	{
+		InitProc(hwnd);
+		currPath = (char *)calloc(maxPathFolder, sizeof(char));
+		currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+		if ((currPath == nullptr) || (currPathW == nullptr))
+		{
+		DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
+		return 0;
+		}
+		rootFolderCS = PopulateListBox (hwnd, false, true);
+		rootFolderCW = PopulateListBox (hwnd, true, true);
+		free (currPath);
+		free (currPathW);
+	}
+		break;
+default:
+	{
+		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
+		index = 0;
+		folderIndex = 1;
+	}
+}
+return 1;
 }
 int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
 
@@ -4019,7 +4024,8 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 							}
 							wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 
-							currPathWtmp = wcsstr (currPathW, L"\\\\?\\C:");
+							
+							currPathWtmp = wcsstr (currPathW, L"\\\\?\\");
 							
 							(currPathWtmp)? currPathWtmp = currPathW + 4: currPathWtmp = currPathW;
 							//GetCurrentDirectoryW(maxPathFolder, findPathW);
