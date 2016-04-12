@@ -1,4 +1,4 @@
-#include "shlwapi.h"
+#include <shlwapi.h>
 #include "BiggerDirectories.h" //my file
 #include <stdlib.h> //malloc
 #include <fcntl.h>
@@ -8,9 +8,9 @@
 #include <strsafe.h> //safe string copy e.e. StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
-#include "winbase.h"
-#include "windef.h"
-#include "sddl.h"
+#include <winbase.h>
+#include <windef.h>
+#include <sddl.h>
 
 
 //#include <afxwin.h>
@@ -222,7 +222,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//change countof sizeof otherwise possible buffer overflow: here index and rootFolderCS gets set to -16843010!
 		if (yesNo)
 		{
-		int msgboxID = MessageBox(hwnd, hrtext, L"Warning", MB_YESNO);
+		int msgboxID = MessageBoxW(hwnd, hrtext, L"Warning", MB_YESNO);
 			if (msgboxID == IDYES) 
 			{
 			return 1;
@@ -234,7 +234,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		}
 		else
 		{
-		MessageBox(hwnd, hrtext, L"Warning", MB_OK);
+		MessageBoxW(hwnd, hrtext, L"Warning", MB_OK);
 		}
 
 		return 0;
@@ -580,7 +580,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						InitProc (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
 						// Subclass the Edit control with ValidateProc
-						g_pOldProc = (WNDPROC)SetWindowLong(TextValidate, GWLP_WNDPROC, (long long)ValidateProc);
+						g_pOldProc = (WNDPROC)SetWindowLongW(TextValidate, GWLP_WNDPROC, (long long)ValidateProc);
 						switch (errCode)
 						{
 						case 1:
@@ -2361,11 +2361,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	
 
 	// Create a new window see https://msdn.microsoft.com/en-us/library/windows/desktop/ff381397(v=vs.85).aspx
-	WNDCLASS ReschkC = { };
+	WNDCLASSW ReschkC = { };
 	ReschkC.lpfnWndProc   = RescheckWindowProc;
 	ReschkC.hInstance     = hInstance;
 	ReschkC.lpszClassName = TEMP_CLASS_NAME;
-	if (!RegisterClass(&ReschkC)) ErrorExit (L"Cannot register Rescheck window!!!?", 0);
+	if (!RegisterClassW(&ReschkC)) ErrorExit (L"Cannot register Rescheck window!!!?", 0);
 
 	HWND hwnd = CreateWindowExW(
 		0,								// Optional window styles.
@@ -3741,7 +3741,7 @@ void doFilesFolders(HWND hwnd)
 		SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
 		SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"\0");
 		SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
-		SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
+		SetDlgItemTextW(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
 		SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
 		EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
@@ -4125,18 +4125,18 @@ static void CreateHyperLink(HWND hwndControl)
         if (pfnOrigProc != _HyperlinkParentProc)
         {
             SetProp(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-            SetWindowLong(hwndParent, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkParentProc);
+            SetWindowLongW(hwndParent, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkParentProc);
         }
     }
 
     // Make sure the control will send notifications.
     DWORD dwStyle = GetWindowLong(hwndControl, GWL_STYLE);
-    SetWindowLong(hwndControl, GWL_STYLE, dwStyle | SS_NOTIFY);
+    SetWindowLongW(hwndControl, GWL_STYLE, dwStyle | SS_NOTIFY);
 
     // Subclass the existing control.
     WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndControl, GWLP_WNDPROC);
     SetProp(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-    SetWindowLong(hwndControl, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkProc);
+    SetWindowLongW(hwndControl, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkProc);
 
     // Create an updated font by adding an underline.
     HFONT hOrigFont = (HFONT)SendMessage(hwndControl, WM_GETFONT, 0, 0);
@@ -4175,7 +4175,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
     }
     case WM_DESTROY:
     {
-        SetWindowLong(hwnd, GWLP_WNDPROC, (LONG)pfnOrigProc);
+        SetWindowLongW(hwnd, GWLP_WNDPROC, (LONG)pfnOrigProc);
         RemoveProp(hwnd, PROP_ORIGINAL_PROC);
         break;
     }
@@ -4191,7 +4191,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     {
     case WM_DESTROY:
     {
-        SetWindowLong(hwnd, GWLP_WNDPROC, (long)pfnOrigProc);
+        SetWindowLongW(hwnd, GWLP_WNDPROC, (long)pfnOrigProc);
         RemoveProp(hwnd, PROP_ORIGINAL_PROC);
 
         HFONT hOrigFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
@@ -4288,9 +4288,9 @@ DWORD dynamicComCtrl(LPCWSTR lpszDllName)
 
 	return dwVersion;
 }
-BOOL GetAccountSidW(LPTSTR SystemName, PSID *Sid)
+BOOL GetAccountSidW(LPWSTR SystemName, PSID *Sid)
 {
-LPTSTR ReferencedDomain=NULL;
+LPWSTR ReferencedDomain=NULL;
 DWORD cbSid=128;    // initial allocation attempt
 DWORD cchReferencedDomain=16; // initial allocation size
 SID_NAME_USE peUse;
@@ -4314,7 +4314,7 @@ if(!GetUserNameW(infoBuf, &bufCharCount))
 }
 
 
-if((ReferencedDomain=(LPTSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * sizeof(TCHAR))) == NULL)
+if((ReferencedDomain=(LPWSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * sizeof(wchar_t))) == NULL)
 {
 	errCode = 3;
 	goto CleanHeap;
@@ -4323,7 +4323,7 @@ if((ReferencedDomain=(LPTSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * 
 // 
 // Obtain the SID of the specified account on the specified system.
 // 
-while(!LookupAccountName(
+while(!LookupAccountNameW(
 SystemName,			//local SystemName is NULL
 infoBuf,			//account to lookup
 *Sid,				// SID of interest
@@ -4344,11 +4344,11 @@ ReferencedDomain,	// domain account was found on
 		goto CleanHeap;
 	}
 
-	if((ReferencedDomain=(LPTSTR)HeapReAlloc(
+	if((ReferencedDomain=(LPWSTR)HeapReAlloc(
 	GetProcessHeap(),
 	0,
 	ReferencedDomain,
-	cchReferencedDomain * sizeof(TCHAR)
+	cchReferencedDomain * sizeof(wchar_t)
 	)) == NULL)
 	{
 		errCode = 5;
