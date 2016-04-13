@@ -140,7 +140,7 @@ APP_CLASS();
 static BOOL CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // The static callback recovers the "this" pointer and then calls this member function.
-BOOL DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+INT_PTR DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 };
 
@@ -151,19 +151,19 @@ APP_CLASS::APP_CLASS(void)
 		switch (resResult)
 	{
 		case 1:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 2:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 3:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 4:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		default:
-			DialogBoxParam(appHinstance, MAKEINTRESOURCE(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 	}
 
@@ -176,7 +176,7 @@ APP_CLASS::APP_CLASS(void)
 //------------------------------------------------------------------------------------------------------------------
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
-BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
 void TextinIDC_TEXT (HWND hwnd);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
@@ -279,13 +279,13 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	}
 	// Display the error message and exit the process
 
-	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlen((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
+	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlenW((LPCWSTR)lpszFunction) + 40) * sizeof(wchar_t));
 	
 	
-	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
+	StringCchPrintfW((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(wchar_t), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
 	wprintf(L"\a");  //audible bell
 	Beep(400,500);
-	MessageBox(nullptr, (LPCWSTR)lpDisplayBuf, TEXT("Error"), MB_OK);
+	MessageBoxW(nullptr, (LPCWSTR)lpDisplayBuf, L"Error", MB_OK);
 
 	LocalFree(lpDisplayBuf);
 	LocalFree(lpMsgBuf);
@@ -2260,7 +2260,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 	}
 	return TRUE;
 }
-BOOL WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	PSID Sid = nullptr;
 	LPWSTR StringSid;
@@ -2662,7 +2662,7 @@ if (hwndParent) //About dialogue
 else 
 {
 
-	WNDCLASSEX RSC_CLASS = { };
+	WNDCLASSEXW RSC_CLASS = { };
 	appHinstance = GetModuleHandle(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
 	
 	if( !GetClassInfoExW( NULL, L"#32770", &RSC_CLASS )) ErrorExit (L"Cannot get App Class!?", 0);
