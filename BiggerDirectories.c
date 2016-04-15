@@ -716,22 +716,36 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							wchar_t *buf1 = (wchar_t *)calloc(2 * len + 1, sizeof(wchar_t));
 							GetDlgItemTextW(hwnd, IDC_TEXT, buf1, 2 * len + 1);
 
-
+							bool allPeriods = true;
 						//validation for terminating space & period
-			
-							for(i = len-1; i >= 0; i--)
+							for (i = len - 1; i >= 0; i--)
 							{
-
-								if (!(wcsncmp(&buf1[i], L" ", 1 )) || !(wcsncmp(&buf1[i], L".", 1)) )
+								if (wcsncmp(&buf1[i], L". ", 1))
 								{
-									wcscpy_s(&buf1[i], i, L"\0");
-									SetDlgItemTextW(hwnd, IDC_TEXT, (wchar_t*)(buf1));
+									allPeriods = false;
 								}
-
-								else
-
+							}
+							if (allPeriods)
+							{
+								free(buf1);
+								goto NoAddSuccess;
+							}
+							else
+							{
+								for (i = len - 1; i >= 0; i--)
 								{
-								break; //all good
+
+									if (!(wcsncmp(&buf1[i], L" ", 1)) || !(wcsncmp(&buf1[i], L".", 1)))
+									{
+										wcscpy_s(&buf1[i], i, L"\0");
+										SetDlgItemTextW(hwnd, IDC_TEXT, (wchar_t*)(buf1));
+									}
+
+									else
+
+									{
+										break; //all good
+									}
 								}
 							}
 						free(buf1);
@@ -1597,7 +1611,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								break;
 						case 1:
 							{
-								InitProc(hwnd);
 								currPath = (char *)calloc(maxPathFolder, sizeof(char));
 								currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 								if ((currPath == nullptr) || (currPathW == nullptr))
@@ -1605,8 +1618,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
 								return 0;
 								}
-								rootFolderCS = PopulateListBox (hwnd, false, true);
-								rootFolderCW = PopulateListBox (hwnd, true, true);
+								InitProc(hwnd);
 								free (currPath);
 								free (currPathW);
 							}
@@ -2278,8 +2290,8 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 					if (!CloseNTDLLObjs(true)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 				}
-			EndDialog(hwnd, 0);
-			_CrtDumpMemoryLeaks();
+				_CrtDumpMemoryLeaks();
+				EndDialog(hwnd, 0);
 			}
 		break;
 
@@ -3351,6 +3363,7 @@ bool cmdlineParmtooLong = false;
 tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t)); // only required for the old RecurseRemovePath
 currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+currPath = (char *)calloc(maxPathFolder, sizeof(char));
 pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 
 if ((tempDest == nullptr) || (findPathW == nullptr) || (currPathW == nullptr) || (pathToDeleteW == nullptr))
@@ -3566,12 +3579,13 @@ if (cmdlineParmtooLong)
 					
 	RemoveKleenup:
 	if (findPathW) free (findPathW);
-	if (currPathW) free (currPathW);
 	rootDir[0] = L'\0';
-	_CrtDumpMemoryLeaks();
 		if (pCmdLineActive)
 		{
 			//ReleaseMutex (hMutex); //problematic??
+			if (currPathW) free(currPathW);
+			if (currPath) free(currPath);
+			_CrtDumpMemoryLeaks();
 			EndDialog(hwnd, 1);
 		}
 
@@ -3581,12 +3595,14 @@ if (cmdlineParmtooLong)
 			{
 			errCode = 0; //flag okay now
 			listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-			InitProc(hwnd);
+			 InitProc(hwnd);
 			}
 			else 
 			{
 			errCode = -100;
 			}
+			if (currPathW) free(currPathW);
+			if (currPath) free(currPath);
 		}
 return;
 }
