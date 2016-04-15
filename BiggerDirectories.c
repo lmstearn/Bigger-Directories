@@ -195,7 +195,7 @@ bool FRDelsub (HWND hwnd);
 void doFilesFolders(HWND hwnd);
 int RecurseRemovePath();
 // Start of HyperLink URL
-void ShellError (HWND aboutHwnd, int nError);
+void ShellError (HWND aboutHwnd, HINSTANCE nError);
 LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CreateHyperLink(HWND hwndControl);
@@ -222,7 +222,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//change countof sizeof otherwise possible buffer overflow: here index and rootFolderCS gets set to -16843010!
 		if (yesNo)
 		{
-		int msgboxID = MessageBox(hwnd, hrtext, L"Warning", MB_YESNO);
+		int msgboxID = MessageBoxW(hwnd, hrtext, L"Warning", MB_YESNO);
 			if (msgboxID == IDYES) 
 			{
 			return 1;
@@ -234,7 +234,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		}
 		else
 		{
-		MessageBox(hwnd, hrtext, L"Warning", MB_OK);
+		MessageBoxW(hwnd, hrtext, L"Warning", MB_OK);
 		}
 
 		return 0;
@@ -279,13 +279,13 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	}
 	// Display the error message and exit the process
 
-	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlen((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
+	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlenW((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
 	
 	
 	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
 	wprintf(L"\a");  //audible bell
 	Beep(400,500);
-	MessageBox(nullptr, (LPCWSTR)lpDisplayBuf, TEXT("Error"), MB_OK);
+	MessageBoxW(nullptr, (LPCWSTR)lpDisplayBuf, L"Error", MB_OK);
 
 	LocalFree(lpDisplayBuf);
 	LocalFree(lpMsgBuf);
@@ -2335,14 +2335,14 @@ INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				{
 				if(HIWORD(wParam) == BN_CLICKED)
 					{
-						ShellError(aboutHwnd, reinterpret_cast <int> (ShellExecuteW(NULL, L"open", L"http://www.codeproject.com/Tips/1089681/Bigger-Directories", NULL, NULL, SW_SHOWNORMAL)));
+						ShellError(aboutHwnd, ShellExecuteW(NULL, L"open", L"http://www.codeproject.com/Tips/1089681/Bigger-Directories", NULL, NULL, SW_SHOWNORMAL));
 					}
 				}           
 				break;
 				case IDC_STATIC_FIVE:
 				{
 					{
-						ShellError(aboutHwnd, reinterpret_cast <int> (ShellExecuteW(NULL, L"open", L"https://github.com/lmstearn/Bigger-Directories/wiki/Bigger-Directories!", NULL, NULL, SW_SHOWNORMAL)));
+						ShellError(aboutHwnd, ShellExecuteW(NULL, L"open", L"https://github.com/lmstearn/Bigger-Directories/wiki/Bigger-Directories!", NULL, NULL, SW_SHOWNORMAL));
 					}
 
 				}           
@@ -2409,7 +2409,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	ReschkC.lpfnWndProc   = RescheckWindowProc;
 	ReschkC.hInstance     = hInstance;
 	ReschkC.lpszClassName = TEMP_CLASS_NAME;
-	if (!RegisterClass(&ReschkC)) ErrorExit (L"Cannot register Rescheck window!!!?", 0);
+	if (!RegisterClassW(&ReschkC)) ErrorExit (L"Cannot register Rescheck window!!!?", 0);
 
 	HWND hwnd = CreateWindowExW(
 		0,								// Optional window styles.
@@ -2706,8 +2706,8 @@ if (hwndParent) //About dialogue
 else 
 {
 
-	WNDCLASSEX RSC_CLASS = { };
-	appHinstance = GetModuleHandle(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
+	WNDCLASSEXW RSC_CLASS = { };
+	appHinstance = GetModuleHandleW(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
 	
 	if( !GetClassInfoExW( NULL, L"#32770", &RSC_CLASS )) ErrorExit (L"Cannot get App Class!?", 0);
 	//The Dialog class is the default Window Class #32770, already registered,
@@ -3789,7 +3789,7 @@ void doFilesFolders(HWND hwnd)
 		SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
 		SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"\0");
 		SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
-		SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
+		SetDlgItemTextW(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
 		SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
 		EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
@@ -4102,11 +4102,11 @@ int RecurseRemovePath()
 				}
 	} //trackFTA[treeLevel][0] = 0
 }
-void ShellError (HWND aboutHwnd, int nError)
+void ShellError (HWND aboutHwnd, HINSTANCE nError)
 {
-	if (nError > 32) return; //no problem
+	if ((int)nError > 32) return; //no problem
 	wchar_t* str= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	switch (nError) 
+	switch ((int)nError)  //reinterpret_cast <int> (
 	{
 	case 0:							wcscpy_s(str, maxPathFolder, L"The operating system is out\nof memory or resources"); break;
 	case ERROR_FILE_NOT_FOUND:		wcscpy_s(str, maxPathFolder, L"The specified path was not found"); break;
@@ -4136,8 +4136,8 @@ static void CreateHyperLink(HWND hwndControl)
         WNDPROC pfnOrigProc = (WNDPROC)GetWindowLongW(hwndParent, GWLP_WNDPROC);
         if (pfnOrigProc != _HyperlinkParentProc)
         {
-            SetProp(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-            SetWindowLongW(hwndParent, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkParentProc);
+            SetPropW(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
+            SetWindowLongW(hwndParent, GWLP_WNDPROC, reinterpret_cast<long>((WNDPROC)_HyperlinkParentProc));
         }
     }
 
@@ -4147,26 +4147,26 @@ static void CreateHyperLink(HWND hwndControl)
 
     // Subclass the existing control.
     WNDPROC pfnOrigProc = (WNDPROC)GetWindowLongW(hwndControl, GWLP_WNDPROC);
-    SetProp(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-    SetWindowLongW(hwndControl, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkProc);
+    SetPropW(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
+    SetWindowLongW(hwndControl, GWLP_WNDPROC, reinterpret_cast<long>((WNDPROC)_HyperlinkProc));
 
     // Create an updated font by adding an underline.
     HFONT hOrigFont = (HFONT)SendMessageW(hwndControl, WM_GETFONT, 0, 0);
-    SetProp(hwndControl, PROP_ORIGINAL_FONT, (HANDLE)hOrigFont);
+    SetPropW(hwndControl, PROP_ORIGINAL_FONT, (HANDLE)hOrigFont);
 
     LOGFONT lf;
     GetObject(hOrigFont, sizeof(lf), &lf);
     lf.lfUnderline = TRUE;
 
     HFONT hFont = CreateFontIndirect(&lf);
-    SetProp(hwndControl, PROP_UNDERLINE_FONT, (HANDLE)hFont);
+    SetPropW(hwndControl, PROP_UNDERLINE_FONT, (HANDLE)hFont);
 
     // Set a flag on the control so we know what color it should be.
-    SetProp(hwndControl, PROP_STATIC_HYPERLINK, (HANDLE)1);
+    SetPropW(hwndControl, PROP_STATIC_HYPERLINK, (HANDLE)1);
 }
 LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    WNDPROC pfnOrigProc = (WNDPROC)GetProp(hwnd, PROP_ORIGINAL_PROC);
+    WNDPROC pfnOrigProc = (WNDPROC)GetPropW(hwnd, PROP_ORIGINAL_PROC);
 
     switch (message)
     {
@@ -4175,7 +4175,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
         HDC hdc = (HDC)wParam;
         HWND hwndCtl = (HWND)lParam;
 
-        BOOL fHyperlink = (NULL != GetProp(hwndCtl, PROP_STATIC_HYPERLINK));
+        BOOL fHyperlink = (NULL != GetPropW(hwndCtl, PROP_STATIC_HYPERLINK));
         if (fHyperlink)
         {
             LRESULT lr = CallWindowProcW(pfnOrigProc, hwnd, message, wParam, lParam);
@@ -4197,7 +4197,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
 
 LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    WNDPROC pfnOrigProc = (WNDPROC)GetProp(hwnd, PROP_ORIGINAL_PROC);
+    WNDPROC pfnOrigProc = (WNDPROC)GetPropW(hwnd, PROP_ORIGINAL_PROC);
 
     switch (message)
     {
@@ -4206,15 +4206,15 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         SetWindowLongW(hwnd, GWLP_WNDPROC, reinterpret_cast<long>(pfnOrigProc));
         RemovePropW(hwnd, PROP_ORIGINAL_PROC);
 
-        HFONT hOrigFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
+        HFONT hOrigFont = (HFONT)GetPropW(hwnd, PROP_ORIGINAL_FONT);
         SendMessageW(hwnd, WM_SETFONT, (WPARAM)hOrigFont, 0);
         RemovePropW(hwnd, PROP_ORIGINAL_FONT);
 
-        HFONT hFont = (HFONT)GetProp(hwnd, PROP_UNDERLINE_FONT);
+        HFONT hFont = (HFONT)GetPropW(hwnd, PROP_UNDERLINE_FONT);
         DeleteObject(hFont);
         RemovePropW(hwnd, PROP_UNDERLINE_FONT);
 
-        RemoveProp(hwnd, PROP_STATIC_HYPERLINK);
+        RemovePropW(hwnd, PROP_STATIC_HYPERLINK);
 
         break;
     }
@@ -4222,7 +4222,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     {
         if (GetCapture() != hwnd)
         {
-            HFONT hFont = (HFONT)GetProp(hwnd, PROP_UNDERLINE_FONT);
+            HFONT hFont = (HFONT)GetPropW(hwnd, PROP_UNDERLINE_FONT);
             SendMessageW(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
             InvalidateRect(hwnd, NULL, FALSE);
             SetCapture(hwnd);
@@ -4237,7 +4237,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 
             if (!PtInRect(&rect, pt))
             {
-                HFONT hFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
+                HFONT hFont = (HFONT)GetPropW(hwnd, PROP_ORIGINAL_FONT);
                 SendMessageW(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
                 InvalidateRect(hwnd, NULL, FALSE);
                 ReleaseCapture();
@@ -4335,7 +4335,7 @@ if((ReferencedDomain=(LPTSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * 
 // 
 // Obtain the SID of the specified account on the specified system.
 // 
-while(!LookupAccountName(
+while(!LookupAccountNameW(
 SystemName,			//local SystemName is NULL
 infoBuf,			//account to lookup
 *Sid,				// SID of interest
