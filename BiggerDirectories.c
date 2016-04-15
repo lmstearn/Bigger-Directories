@@ -174,8 +174,8 @@ APP_CLASS::APP_CLASS(void)
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
-LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
+static LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+static LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
 void TextinIDC_TEXT (HWND hwnd);
