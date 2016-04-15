@@ -174,8 +174,8 @@ APP_CLASS::APP_CLASS(void)
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
-static LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-static LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
+LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
 void TextinIDC_TEXT (HWND hwnd);
@@ -196,8 +196,8 @@ void doFilesFolders(HWND hwnd);
 int RecurseRemovePath();
 // Start of HyperLink URL
 void ShellError (HWND aboutHwnd, HINSTANCE nError);
-LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
-LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+static LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+static LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CreateHyperLink(HWND hwndControl);
 DWORD dynamicComCtrl(LPCWSTR lpszDllName);
 BOOL GetAccountSidW(LPTSTR SystemName, PSID *Sid);
@@ -4164,7 +4164,7 @@ static void CreateHyperLink(HWND hwndControl)
     // Set a flag on the control so we know what color it should be.
     SetPropW(hwndControl, PROP_STATIC_HYPERLINK, (HANDLE)1);
 }
-LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+static LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     WNDPROC pfnOrigProc = (WNDPROC)GetPropW(hwnd, PROP_ORIGINAL_PROC);
 
@@ -4195,7 +4195,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
     return CallWindowProcW(pfnOrigProc, hwnd, message, wParam, lParam);
 }
 
-LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+static LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     WNDPROC pfnOrigProc = (WNDPROC)GetPropW(hwnd, PROP_ORIGINAL_PROC);
 
