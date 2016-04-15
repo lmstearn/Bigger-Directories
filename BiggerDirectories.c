@@ -1,4 +1,4 @@
-#include <shlwapi.h>
+#include "shlwapi.h"
 #include "BiggerDirectories.h" //my file
 #include <stdlib.h> //malloc
 #include <fcntl.h>
@@ -8,9 +8,9 @@
 #include <strsafe.h> //safe string copy e.e. StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
-#include <winbase.h>
-#include <windef.h>
-#include <sddl.h>
+#include "winbase.h"
+#include "windef.h"
+#include "sddl.h"
 
 
 //#include <afxwin.h>
@@ -42,8 +42,8 @@ wchar_t const *lPref = L"\\\\?\\";
 wchar_t const APP_CLASS_NAME[]  = L"BiggerDirectories";
 
 wchar_t driveInfo[26][2], driveIndex[2];
-wchar_t driveIDBaseW[7], driveIDBaseWNT[7], driveIDBaseAW[3];
-char driveIDBase[3];
+wchar_t driveIDBaseW[8], driveIDBaseWNT[8], driveIDBaseAW[4];
+char driveIDBase[4];
 
 
 UINT const WM_COPYGLOBALDATA = 0x0049; //Drop files filter
@@ -137,7 +137,7 @@ public:
 APP_CLASS();
 
 // This is the static callback that we register
-static BOOL CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+static INT_PTR  CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // The static callback recovers the "this" pointer and then calls this member function.
 INT_PTR DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -151,19 +151,19 @@ APP_CLASS::APP_CLASS(void)
 		switch (resResult)
 	{
 		case 1:
-			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 2:
-			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 3:
-			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		case 4:
-			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 		default:
-			DialogBoxParamW(appHinstance, MAKEINTRESOURCE(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
 		break;
 	}
 
@@ -180,7 +180,7 @@ INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
 void TextinIDC_TEXT (HWND hwnd);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
-int SwitchResolution (HWND hwnd, BOOL (WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
+int SwitchResolution (HWND hwnd, INT_PTR(WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd, bool weareatBoot);
 int ExistRegValue ();
@@ -189,11 +189,11 @@ NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
 bool CloseNTDLLObjs (BOOL atWMClose);
 bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
 void FRDeleteInit (HWND hwnd, HWND hList);
+
 bool FRDelete (HWND hwnd);
-bool FRDelsub (int i, int j, HWND hwnd);
+bool FRDelsub (HWND hwnd);
 void doFilesFolders(HWND hwnd);
-bool RePopList (HWND hwnd);
-int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder]);
+int RecurseRemovePath();
 // Start of HyperLink URL
 void ShellError (HWND aboutHwnd, int nError);
 LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -222,7 +222,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//change countof sizeof otherwise possible buffer overflow: here index and rootFolderCS gets set to -16843010!
 		if (yesNo)
 		{
-		int msgboxID = MessageBoxW(hwnd, hrtext, L"Warning", MB_YESNO);
+		int msgboxID = MessageBox(hwnd, hrtext, L"Warning", MB_YESNO);
 			if (msgboxID == IDYES) 
 			{
 			return 1;
@@ -234,7 +234,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		}
 		else
 		{
-		MessageBoxW(hwnd, hrtext, L"Warning", MB_OK);
+		MessageBox(hwnd, hrtext, L"Warning", MB_OK);
 		}
 
 		return 0;
@@ -279,13 +279,13 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	}
 	// Display the error message and exit the process
 
-	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlenW((LPCWSTR)lpszFunction) + 40) * sizeof(wchar_t));
+	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlen((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
 	
 	
-	StringCchPrintfW((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(wchar_t), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
+	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
 	wprintf(L"\a");  //audible bell
 	Beep(400,500);
-	MessageBoxW(nullptr, (LPCWSTR)lpDisplayBuf, L"Error", MB_OK);
+	MessageBox(nullptr, (LPCWSTR)lpDisplayBuf, TEXT("Error"), MB_OK);
 
 	LocalFree(lpDisplayBuf);
 	LocalFree(lpMsgBuf);
@@ -466,7 +466,8 @@ if (dblclkLevel)
 	EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 	removeButtonEnabled = true;
 	DragAcceptFiles (hwnd, FALSE);
-
+	rootFolderCS = PopulateListBox(hwnd, false, true);
+	rootFolderCW = PopulateListBox(hwnd, true, true);
 }
 else
 {
@@ -501,7 +502,7 @@ else
 }
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	return DefWindowProc(hwnd, uMsg, wParam, lParam);
+	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 	//temp windowfor res check.
 }
 
@@ -515,11 +516,11 @@ LRESULT CALLBACK ValidateProc (HWND hwnd, UINT message, WPARAM wParam, LPARAM lP
 			if(wcschr(invalidPathName, chChar)) return 0;
 		break;
       }
-      return CallWindowProc (g_pOldProc, hwnd, message, wParam, lParam);
+      return CallWindowProcW (g_pOldProc, hwnd, message, wParam, lParam);
 }
 
 
-BOOL CALLBACK APP_CLASS::s_DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK APP_CLASS::s_DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	APP_CLASS *pThis; // our "this" pointer will go here
 
@@ -528,12 +529,12 @@ BOOL CALLBACK APP_CLASS::s_DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		// Recover the "this" pointer which was passed as the last parameter to the ...Dialog...Param function.
 		pThis = reinterpret_cast<APP_CLASS*>(lParam);
 		// Put the value in a safe place for future use
-		SetWindowLongPtr(hwnd, DWLP_USER, reinterpret_cast<LONG_PTR>(pThis));
+		SetWindowLongPtrW(hwnd, DWLP_USER, reinterpret_cast<LONG_PTR>(pThis));
 	}
  else
 	{
 		// Recover the "this" pointer from where our WM_INITDIALOG handler stashed it.
-		pThis = reinterpret_cast<APP_CLASS*>( GetWindowLongPtr(hwnd, DWLP_USER));
+		pThis = reinterpret_cast<APP_CLASS*>( GetWindowLongPtrW(hwnd, DWLP_USER));
 	}
 
 	if (pThis)
@@ -550,7 +551,7 @@ return FALSE; // returning FALSE means "do the default thing"
 
 
 
-BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
+INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 {
 	errCode = 0;
 	switch(Msg)
@@ -736,7 +737,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						free(buf1);
 						}
 
-						int len = 2 * (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT)) + 1); //wchar again
+						len = 2 * (GetWindowTextLength(GetDlgItem(hwnd, IDC_TEXT)) + 1); //wchar again
 						if(len > 0)
 						{
 						buf = (wchar_t*)GlobalAlloc(GPTR, len );
@@ -799,7 +800,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						(branchLevelClick) ? EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true) : EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 						//next add is always at base
 						EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
-						HWND hList = GetDlgItem(hwnd, IDC_LIST);
+						hList = GetDlgItem(hwnd, IDC_LIST);
 						listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 						currPathW[0] = L'\0';
 						branchLevel = 0;
@@ -1340,12 +1341,10 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					branchTotalCum = 0;
 				}
 				}
-
-				if (currPathW) free(currPathW);
-				//free(cumPath);
 					if (errCode == 0) //succeeded
 						{
-						RePopList (hwnd);
+						currPath = (char*)calloc(pathLength, sizeof(char));
+						InitProc(hwnd);
 						removeButtonEnabled = true;
 						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
 						}
@@ -1353,6 +1352,10 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 						errCode = 0;
 						}
+						if (currPathW) free(currPathW);
+						if (currPath) free(currPath);
+						//free(cumPath);
+
 				}
 				break;
 
@@ -1430,7 +1433,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 											break;
 											}
-											if (RecurseRemovePath(trackFTA, folderTreeArray))
+											if (RecurseRemovePath())
 												{
 													errCode = 0;
 													DisplayError (hwnd, L"Remove failed", 0, 0);
@@ -1584,7 +1587,38 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			break;
 			case IDC_CLEAR:
 				{
-					if (!RePopList (hwnd)) return 0;
+
+					switch (dblclkLevel)
+						{
+						case 0:
+							{
+								InitProc(hwnd);
+							}
+								break;
+						case 1:
+							{
+								InitProc(hwnd);
+								currPath = (char *)calloc(maxPathFolder, sizeof(char));
+								currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+								if ((currPath == nullptr) || (currPathW == nullptr))
+								{
+								DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
+								return 0;
+								}
+								rootFolderCS = PopulateListBox (hwnd, false, true);
+								rootFolderCW = PopulateListBox (hwnd, true, true);
+								free (currPath);
+								free (currPathW);
+							}
+							   break;
+						default:
+							{
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
+								index = 0;
+								folderIndex = 1;
+							}
+						}
 				}
 			break;
 
@@ -1826,7 +1860,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								sendMessageErr = SendMessageW(hList, LB_GETANCHORINDEX, 0, 0L);
 								
 								int * selItems = (int *)GlobalAlloc(GPTR, sizeof(int) * count);
-								sendMessageErr = SendDlgItemMessage(hwnd, IDC_LIST, LB_GETSELITEMS, count, (LPARAM)(LPINT)selItems);
+								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_GETSELITEMS, count, (LPARAM)(LPINT)selItems);
 								if (dblclkLevel) 
 								{
 										for (i = 0; i < count; i++)
@@ -2085,8 +2119,6 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							else
 							{
 								InitProc(hwnd);
-								rootFolderCS = PopulateListBox (hwnd, false, true);
-								rootFolderCW = PopulateListBox (hwnd, true, true);
 
 								//U: Unknown, X: Disk not ready, M: Removable, F: Fixed disk, B: Network, C: CD/DVD, R Ramdisk
 								if ((driveIndex[1] == L'C') || (driveIndex[1] == L'X') || (driveIndex[1] == L'U'))
@@ -2153,7 +2185,7 @@ BOOL APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (CopyFileW(tempDest, currPathW, FALSE))
 					{
 						//check if entry already exists
-						for (i = folderIndex; i < (j = SendMessage(hList,LB_GETCOUNT,NULL,NULL)); i++)
+						for (i = folderIndex; i < (j = SendMessageW(hList,LB_GETCOUNT,NULL,NULL)); i++)
 						{
 							sendMessageErr = SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
 							if (0 == wcscmp(currPathW, &dropBuf[pdest])) fileExisting = true;
@@ -2316,7 +2348,7 @@ INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 					{
 						if (DisplayError (aboutHwnd, L"Under Construction: Form testing only: No controls visible? Spacebar toggles forms. Click Yes to continue", 0, 1))
 						{
-							PlaySound(MAKEINTRESOURCE(IDW_CLICK), (HMODULE)GetWindowLong(aboutHwnd, GWLP_HINSTANCE), SND_RESOURCE | SND_ASYNC);
+							PlaySoundW(MAKEINTRESOURCEW(IDW_CLICK), (HMODULE)GetWindowLongW(aboutHwnd, GWLP_HINSTANCE), SND_RESOURCE | SND_ASYNC);
 							resWarned = true;
 						}
 						else
@@ -2361,11 +2393,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	
 
 	// Create a new window see https://msdn.microsoft.com/en-us/library/windows/desktop/ff381397(v=vs.85).aspx
-	WNDCLASSW ReschkC = { };
+	WNDCLASS ReschkC = { };
 	ReschkC.lpfnWndProc   = RescheckWindowProc;
 	ReschkC.hInstance     = hInstance;
 	ReschkC.lpszClassName = TEMP_CLASS_NAME;
-	if (!RegisterClassW(&ReschkC)) ErrorExit (L"Cannot register Rescheck window!!!?", 0);
+	if (!RegisterClass(&ReschkC)) ErrorExit (L"Cannot register Rescheck window!!!?", 0);
 
 	HWND hwnd = CreateWindowExW(
 		0,								// Optional window styles.
@@ -2470,7 +2502,7 @@ if (listFolders)
 					break;
 				}
 
-				SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(listNum), (LPARAM)currPath); // wparam cannot exceed 32,767 
+				sendMessageErr = SendDlgItemMessageA(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(listNum), (LPARAM)currPath); // wparam cannot exceed 32,767 
 					
 			}
 			findhandle = FindNextFileA(ds, &da);
@@ -2509,7 +2541,7 @@ if (listFolders)
 		findhandle = FindNextFileW(ds, &dw);
 
 		}
-		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)(rootFolderCS + listNum), (LPARAM)(rootFolderCS + listNum));
+		sendMessageErr = SendDlgItemMessage(hwnd, IDC_LIST, LB_SETITEMDATA, (WPARAM)(rootFolderCS + listNum), (LPARAM)(rootFolderCS + listNum));
 	//(lparam)rootFolderC required for getitemdata
 	//The Notification Code is passed as the HIWORD of wParam, the other half of the parameter that gave us the index of the control identifier in the first place. 
 	//HIWORD is the Upper 16 bits of UINT and LOWORD is the Lower 16 bits of UINT
@@ -2632,7 +2664,7 @@ else
 return 0;
 
 }
-int SwitchResolution (HWND hwndParent, BOOL (WINAPI * dProc)(HWND, UINT, WPARAM, LPARAM))
+int SwitchResolution (HWND hwndParent, INT_PTR (WINAPI * dProc)(HWND, UINT, WPARAM, LPARAM))
 {
 
 if (hwndParent) //About dialogue
@@ -2662,7 +2694,7 @@ if (hwndParent) //About dialogue
 else 
 {
 
-	WNDCLASSEXW RSC_CLASS = { };
+	WNDCLASSEX RSC_CLASS = { };
 	appHinstance = GetModuleHandle(NULL); //same as hInstance: use for application hInstance: (okay for exe not for DLL)
 	
 	if( !GetClassInfoExW( NULL, L"#32770", &RSC_CLASS )) ErrorExit (L"Cannot get App Class!?", 0);
@@ -2675,7 +2707,7 @@ else
 	RSC_CLASS.cbSize        = sizeof(RSC_CLASS);
 	RSC_CLASS.hInstance = appHinstance;
 	RSC_CLASS.lpszClassName = APP_CLASS_NAME;
-	if (!RegisterClassEx(&RSC_CLASS)) ErrorExit (L"Cannot register Application Window!!!?", 0);
+	if (!RegisterClassExW(&RSC_CLASS)) ErrorExit (L"Cannot register Application Window!!!?", 0);
 
 	HWND hwnd = CreateWindowExW(
 		0,												// Optional window styles.
@@ -2691,7 +2723,7 @@ else
 
 APP_CLASS wnd;
 MSG msg;
-while (GetMessage(&msg, NULL, 0, 0))
+while (GetMessageW(&msg, NULL, 0, 0))
 {
 TranslateMessage(&msg);
 DispatchMessage(&msg);
@@ -3382,17 +3414,17 @@ else
 		{
 			if (!ProcessFolderRepository(hwnd, false, false)) //Reads and verifies entire FR
 			{
-			if (DisplayError (hwnd, L"No FR file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
+			if (!DisplayError (hwnd, L"No FR file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
 				{
 					free (tempDest);
 					free(pathToDeleteW);
-					goto OldDelete;
+					goto RemoveKleenup;
 				}
 			else
 				{
 					free (tempDest);
 					free(pathToDeleteW);
-					goto RemoveKleenup;
+					goto OldDelete;
 				}
 			}
 		}
@@ -3520,7 +3552,7 @@ if (cmdlineParmtooLong)
 	ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 	goto RemoveKleenup;
 	}
-	if (RecurseRemovePath(trackFTA, folderTreeArray))
+	if (RecurseRemovePath())
 		{
 			errCode = 0;
 			DisplayError (hwnd, L"Remove failed", 0, 0);
@@ -3549,7 +3581,7 @@ if (cmdlineParmtooLong)
 			{
 			errCode = 0; //flag okay now
 			listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-			RePopList (hwnd);
+			InitProc(hwnd);
 			}
 			else 
 			{
@@ -3596,14 +3628,14 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 			{
 				for (j = branchTotal; (j >= branchTotalCum); j--)
 				{
-					if (trackFTA [i][1] == trackFTA [j][0]) return (FRDelsub (i, j, hwnd));
+					if (trackFTA [i][1] == trackFTA [j][0]) return (FRDelsub (hwnd));
 				}
 			}
 	}
 
 return true; //shouldn't get here though
 }
-bool FRDelsub (int i, int j, HWND hwnd)
+bool FRDelsub (HWND hwnd)
 {
 
 	for (k = (trackFTA [i][1]); (k >= ((i > branchTotalCum)? trackFTA [i - 1][1]: 0)); k--)
@@ -3731,9 +3763,9 @@ return true;
 void doFilesFolders(HWND hwnd)
 {
 		DragAcceptFiles(hwnd,TRUE);
-		SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+		SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
 		folderIndex = PopulateListBox (hwnd, true, true);
-		SendDlgItemMessage(hwnd, IDC_LIST, LB_DELETESTRING, 0, 0); //remove the '.'
+		SendDlgItemMessageW(hwnd, IDC_LIST, LB_DELETESTRING, 0, 0); //remove the '.'
 		folderIndex -=1;
 		//Account for folder/file separator
 		if (PopulateListBox (hwnd, true, false)) sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_INSERTSTRING, WPARAM(folderIndex), (LPARAM)(L"\0"));
@@ -3741,7 +3773,7 @@ void doFilesFolders(HWND hwnd)
 		SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
 		SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"\0");
 		SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
-		SetDlgItemTextW(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
+		SetDlgItemText(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
 		SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
 		EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
@@ -3749,42 +3781,7 @@ void doFilesFolders(HWND hwnd)
 		EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 }
-bool RePopList (HWND hwnd)
-{
-switch (dblclkLevel)
-{
-case 0:
-	{
-		InitProc(hwnd);
-	}
-		break;
-case 1:
-	{
-		InitProc(hwnd);
-		currPath = (char *)calloc(maxPathFolder, sizeof(char));
-		currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-		if ((currPath == nullptr) || (currPathW == nullptr))
-		{
-		DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
-		return 0;
-		}
-		rootFolderCS = PopulateListBox (hwnd, false, true);
-		rootFolderCW = PopulateListBox (hwnd, true, true);
-		free (currPath);
-		free (currPathW);
-	}
-		break;
-default:
-	{
-		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-		sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
-		index = 0;
-		folderIndex = 1;
-	}
-}
-return 1;
-}
-int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder])
+int RecurseRemovePath()
 
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found
 {
@@ -3866,7 +3863,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 						if (RemoveDirectoryW (currPathW))
 						{
 
-						if (RecurseRemovePath(trackFTA, folderTreeArray))
+						if (RecurseRemovePath())
 							{
 							return 1;
 							}
@@ -3906,7 +3903,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 				}
 
 				treeLevel +=1; // up next tree
-					if (RecurseRemovePath(trackFTA, folderTreeArray))
+					if (RecurseRemovePath())
 						{
 						return 1;
 						}
@@ -4024,8 +4021,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 							}
 							wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 
-							
-							currPathWtmp = wcsstr (currPathW, L"\\\\?\\");
+							currPathWtmp = wcsstr (currPathW, L"\\\\?\\C:");
 							
 							(currPathWtmp)? currPathWtmp = currPathW + 4: currPathWtmp = currPathW;
 							//GetCurrentDirectoryW(maxPathFolder, findPathW);
@@ -4057,7 +4053,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 					{
 						trackFTA [treeLevel][1] = 0;  //important
 						treeLevel -=1;
-						if (RecurseRemovePath(trackFTA, folderTreeArray))
+						if (RecurseRemovePath())
 							{
 							return 1;
 							}
@@ -4079,7 +4075,7 @@ int RecurseRemovePath(int trackFTA[branchLimit][2], wchar_t folderTreeArray[bran
 					//if (!GetCurrentDirectoryW(maxPathFolder, findPathW)) ErrorExit("SetCurrentDirectoryW: Non zero", 0);
 					trackFTA [treeLevel][1] = j;
 
-					if (RecurseRemovePath(trackFTA, folderTreeArray))
+					if (RecurseRemovePath())
 					{
 					return 1;
 					}
@@ -4121,7 +4117,7 @@ static void CreateHyperLink(HWND hwndControl)
     HWND hwndParent = GetParent(hwndControl);
     if (NULL != hwndParent)
     {
-        WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndParent, GWLP_WNDPROC);
+        WNDPROC pfnOrigProc = (WNDPROC)GetWindowLongW(hwndParent, GWLP_WNDPROC);
         if (pfnOrigProc != _HyperlinkParentProc)
         {
             SetProp(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
@@ -4130,16 +4126,16 @@ static void CreateHyperLink(HWND hwndControl)
     }
 
     // Make sure the control will send notifications.
-    DWORD dwStyle = GetWindowLong(hwndControl, GWL_STYLE);
+    DWORD dwStyle = GetWindowLongW(hwndControl, GWL_STYLE);
     SetWindowLongW(hwndControl, GWL_STYLE, dwStyle | SS_NOTIFY);
 
     // Subclass the existing control.
-    WNDPROC pfnOrigProc = (WNDPROC)GetWindowLong(hwndControl, GWLP_WNDPROC);
+    WNDPROC pfnOrigProc = (WNDPROC)GetWindowLongW(hwndControl, GWLP_WNDPROC);
     SetProp(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
     SetWindowLongW(hwndControl, GWLP_WNDPROC, (LONG)(WNDPROC)_HyperlinkProc);
 
     // Create an updated font by adding an underline.
-    HFONT hOrigFont = (HFONT)SendMessage(hwndControl, WM_GETFONT, 0, 0);
+    HFONT hOrigFont = (HFONT)SendMessageW(hwndControl, WM_GETFONT, 0, 0);
     SetProp(hwndControl, PROP_ORIGINAL_FONT, (HANDLE)hOrigFont);
 
     LOGFONT lf;
@@ -4166,7 +4162,7 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
         BOOL fHyperlink = (NULL != GetProp(hwndCtl, PROP_STATIC_HYPERLINK));
         if (fHyperlink)
         {
-            LRESULT lr = CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
+            LRESULT lr = CallWindowProcW(pfnOrigProc, hwnd, message, wParam, lParam);
             SetTextColor(hdc, RGB(0, 0, 192));
             return lr;
         }
@@ -4175,12 +4171,12 @@ LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LP
     }
     case WM_DESTROY:
     {
-        SetWindowLongW(hwnd, GWLP_WNDPROC, (LONG)pfnOrigProc);
-        RemoveProp(hwnd, PROP_ORIGINAL_PROC);
+        SetWindowLongW(hwnd, GWLP_WNDPROC, reinterpret_cast<long>(pfnOrigProc));
+        RemovePropW(hwnd, PROP_ORIGINAL_PROC);
         break;
     }
     }
-    return CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
+    return CallWindowProcW(pfnOrigProc, hwnd, message, wParam, lParam);
 }
 
 LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -4191,16 +4187,16 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     {
     case WM_DESTROY:
     {
-        SetWindowLongW(hwnd, GWLP_WNDPROC, (long)pfnOrigProc);
-        RemoveProp(hwnd, PROP_ORIGINAL_PROC);
+        SetWindowLongW(hwnd, GWLP_WNDPROC, reinterpret_cast<long>(pfnOrigProc));
+        RemovePropW(hwnd, PROP_ORIGINAL_PROC);
 
         HFONT hOrigFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
-        SendMessage(hwnd, WM_SETFONT, (WPARAM)hOrigFont, 0);
-        RemoveProp(hwnd, PROP_ORIGINAL_FONT);
+        SendMessageW(hwnd, WM_SETFONT, (WPARAM)hOrigFont, 0);
+        RemovePropW(hwnd, PROP_ORIGINAL_FONT);
 
         HFONT hFont = (HFONT)GetProp(hwnd, PROP_UNDERLINE_FONT);
         DeleteObject(hFont);
-        RemoveProp(hwnd, PROP_UNDERLINE_FONT);
+        RemovePropW(hwnd, PROP_UNDERLINE_FONT);
 
         RemoveProp(hwnd, PROP_STATIC_HYPERLINK);
 
@@ -4211,7 +4207,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         if (GetCapture() != hwnd)
         {
             HFONT hFont = (HFONT)GetProp(hwnd, PROP_UNDERLINE_FONT);
-            SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
+            SendMessageW(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
             InvalidateRect(hwnd, NULL, FALSE);
             SetCapture(hwnd);
         }
@@ -4226,7 +4222,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             if (!PtInRect(&rect, pt))
             {
                 HFONT hFont = (HFONT)GetProp(hwnd, PROP_ORIGINAL_FONT);
-                SendMessage(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
+                SendMessageW(hwnd, WM_SETFONT, (WPARAM)hFont, FALSE);
                 InvalidateRect(hwnd, NULL, FALSE);
                 ReleaseCapture();
             }
@@ -4245,7 +4241,7 @@ LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     }
     }
 
-    return CallWindowProc(pfnOrigProc, hwnd, message, wParam, lParam);
+    return CallWindowProcW(pfnOrigProc, hwnd, message, wParam, lParam);
 }
 DWORD dynamicComCtrl(LPCWSTR lpszDllName)
 {
@@ -4288,9 +4284,9 @@ DWORD dynamicComCtrl(LPCWSTR lpszDllName)
 
 	return dwVersion;
 }
-BOOL GetAccountSidW(LPWSTR SystemName, PSID *Sid)
+BOOL GetAccountSidW(LPTSTR SystemName, PSID *Sid)
 {
-LPWSTR ReferencedDomain=NULL;
+LPTSTR ReferencedDomain=NULL;
 DWORD cbSid=128;    // initial allocation attempt
 DWORD cchReferencedDomain=16; // initial allocation size
 SID_NAME_USE peUse;
@@ -4314,7 +4310,7 @@ if(!GetUserNameW(infoBuf, &bufCharCount))
 }
 
 
-if((ReferencedDomain=(LPWSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * sizeof(wchar_t))) == NULL)
+if((ReferencedDomain=(LPTSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * sizeof(TCHAR))) == NULL)
 {
 	errCode = 3;
 	goto CleanHeap;
@@ -4323,7 +4319,7 @@ if((ReferencedDomain=(LPWSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * 
 // 
 // Obtain the SID of the specified account on the specified system.
 // 
-while(!LookupAccountNameW(
+while(!LookupAccountName(
 SystemName,			//local SystemName is NULL
 infoBuf,			//account to lookup
 *Sid,				// SID of interest
@@ -4344,11 +4340,11 @@ ReferencedDomain,	// domain account was found on
 		goto CleanHeap;
 	}
 
-	if((ReferencedDomain=(LPWSTR)HeapReAlloc(
+	if((ReferencedDomain=(LPTSTR)HeapReAlloc(
 	GetProcessHeap(),
 	0,
 	ReferencedDomain,
-	cchReferencedDomain * sizeof(wchar_t)
+	cchReferencedDomain * sizeof(TCHAR)
 	)) == NULL)
 	{
 		errCode = 5;
