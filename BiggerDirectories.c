@@ -4137,7 +4137,7 @@ static void CreateHyperLink(HWND hwndControl)
         if (pfnOrigProc != _HyperlinkParentProc)
         {
             SetPropW(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-            SetWindowLongW(hwndParent, GWLP_WNDPROC, reinterpret_cast<long>((WNDPROC)_HyperlinkParentProc));
+            SetWindowLongW(hwndParent, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>((WNDPROC)_HyperlinkParentProc));
         }
     }
 
@@ -4148,7 +4148,7 @@ static void CreateHyperLink(HWND hwndControl)
     // Subclass the existing control.
     WNDPROC pfnOrigProc = (WNDPROC)GetWindowLongW(hwndControl, GWLP_WNDPROC);
     SetPropW(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
-    SetWindowLongW(hwndControl, GWLP_WNDPROC, reinterpret_cast<long>((WNDPROC)_HyperlinkProc));
+    SetWindowLongW(hwndControl, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>((WNDPROC)_HyperlinkProc));
 
     // Create an updated font by adding an underline.
     HFONT hOrigFont = (HFONT)SendMessageW(hwndControl, WM_GETFONT, 0, 0);
@@ -4187,7 +4187,7 @@ static LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wPa
     }
     case WM_DESTROY:
     {
-        SetWindowLongW(hwnd, GWLP_WNDPROC, reinterpret_cast<long>(pfnOrigProc));
+        SetWindowLongW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(pfnOrigProc));
         RemovePropW(hwnd, PROP_ORIGINAL_PROC);
         break;
     }
@@ -4203,7 +4203,7 @@ static LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, L
     {
     case WM_DESTROY:
     {
-        SetWindowLongW(hwnd, GWLP_WNDPROC, reinterpret_cast<long>(pfnOrigProc));
+        SetWindowLongW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(pfnOrigProc));
         RemovePropW(hwnd, PROP_ORIGINAL_PROC);
 
         HFONT hOrigFont = (HFONT)GetPropW(hwnd, PROP_ORIGINAL_FONT);
