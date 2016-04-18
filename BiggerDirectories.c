@@ -201,7 +201,7 @@ static LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wPa
 static LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CreateHyperLink(HWND hwndControl);
 DWORD dynamicComCtrl(LPCWSTR lpszDllName);
-BOOL GetAccountSidW(LPTSTR SystemName, PSID *Sid);
+BOOL GetAccountSidW(LPWSTR SystemName, PSID *Sid);
 // End of HyperLink URL
 
 
@@ -4306,7 +4306,7 @@ DWORD dynamicComCtrl(LPCWSTR lpszDllName)
 }
 BOOL GetAccountSidW(LPWSTR SystemName, PSID *Sid)
 {
-LPTSTR ReferencedDomain=NULL;
+LPWSTR ReferencedDomain=NULL;
 DWORD cbSid=128;    // initial allocation attempt
 DWORD cchReferencedDomain=16; // initial allocation size
 SID_NAME_USE peUse;
@@ -4330,7 +4330,7 @@ if(!GetUserNameW(infoBuf, &bufCharCount))
 }
 
 
-if((ReferencedDomain=(LPTSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * sizeof(TCHAR))) == NULL)
+if((ReferencedDomain=(LPWSTR)HeapAlloc(GetProcessHeap(),0,cchReferencedDomain * sizeof(wchar_t))) == NULL)
 {
 	errCode = 3;
 	goto CleanHeap;
@@ -4360,11 +4360,11 @@ ReferencedDomain,	// domain account was found on
 		goto CleanHeap;
 	}
 
-	if((ReferencedDomain=(LPTSTR)HeapReAlloc(
+	if((ReferencedDomain=(LPWSTR)HeapReAlloc(
 	GetProcessHeap(),
 	0,
 	ReferencedDomain,
-	cchReferencedDomain * sizeof(TCHAR)
+	cchReferencedDomain * sizeof(wchar_t)
 	)) == NULL)
 	{
 		errCode = 5;
