@@ -20,6 +20,7 @@
 #include <crtdbg.h>
 
 
+
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
 
@@ -182,7 +183,7 @@ void TextinIDC_TEXT (HWND hwnd);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
 int SwitchResolution (HWND hwnd, INT_PTR(WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
-bool Kleenup (HWND hwnd, bool weareatBoot);
+bool Kleenup (HWND hwnd);
 int ExistRegValue ();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
 NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
@@ -282,7 +283,7 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlenW((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
 	
 	
-	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, lpMsgBuf);
+	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, (LPWSTR)lpMsgBuf);
 	wprintf(L"\a");  //audible bell
 	Beep(400,500);
 	MessageBoxW(nullptr, (LPCWSTR)lpDisplayBuf, L"Error", MB_OK);
@@ -1699,7 +1700,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 			}
 			
-			if (Kleenup (hwnd, weareatBoot))
+			if (Kleenup (hwnd))
 			{
 				logonEnabled = false;
 				nologonEnabled = true;
@@ -2283,7 +2284,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		case WM_CLOSE:
 			{
 			//Cleanup
-			if (weareatBoot) Kleenup (hwnd, weareatBoot);
+			if (weareatBoot) Kleenup (hwnd);
 			 
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 				if (foundNTDLL)
@@ -2392,7 +2393,6 @@ return FALSE;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow)
 {
-
 	
 	if (pCmdLine[0] != L'\0')
 	{
@@ -2844,7 +2844,7 @@ else
 	return 0;
 }
 }
-bool Kleenup (HWND hwnd, bool weareatBoot)
+bool Kleenup (HWND hwnd)
 {
 	STARTUPINFOW lpStartupInfo;
 	PROCESS_INFORMATION lpProcessInfo;
@@ -2896,6 +2896,10 @@ bool Kleenup (HWND hwnd, bool weareatBoot)
 				if (!CreateProcessW(thisexePath, nullptr, nullptr, nullptr, FALSE, NULL, nullptr, nullptr, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"userinit could not be started through this program. Please reboot after closing this program.", 0);
 				//The reg value is restored to userinit before theis point
 				}
+			WaitForSingleObject(lpProcessInfo.hProcess, INFINITE);
+			CloseHandle(lpProcessInfo.hProcess);
+			CloseHandle(lpProcessInfo.hThread);
+
 			if(!MoveFileExW(tempDest,nullptr,MOVEFILE_DELAY_UNTIL_REBOOT))
 			{
 			DisplayError (hwnd, L"Problems with file deletion. Solved with next Disk Cleanup", 0, 0);
@@ -3707,7 +3711,7 @@ bool FRDelsub (HWND hwnd)
 					wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
 
 					((ProcessFolderRepository(hwnd, true, false))? errCode = 0: errCode = 1);
-					Kleenup (hwnd, weareatBoot);
+					Kleenup (hwnd);
 					}
 					return false;
 
@@ -4300,7 +4304,7 @@ DWORD dynamicComCtrl(LPCWSTR lpszDllName)
 
 	return dwVersion;
 }
-BOOL GetAccountSidW(LPTSTR SystemName, PSID *Sid)
+BOOL GetAccountSidW(LPWSTR SystemName, PSID *Sid)
 {
 LPTSTR ReferencedDomain=NULL;
 DWORD cbSid=128;    // initial allocation attempt
