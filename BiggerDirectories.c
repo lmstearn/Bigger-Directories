@@ -283,7 +283,7 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlenW((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
 	
 	
-	StringCchPrintf((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(TCHAR), L"%s failed with error %lu: %s", lpszFunction, dww, (LPWSTR)lpMsgBuf);
+	StringCchPrintfW((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(wchar_t), L"%s failed with error %lu: %s", lpszFunction, dww, (LPWSTR)lpMsgBuf);
 	wprintf(L"\a");  //audible bell
 	Beep(400,500);
 	MessageBoxW(nullptr, (LPCWSTR)lpDisplayBuf, L"Error", MB_OK);
@@ -2405,7 +2405,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	
 
 	// Create a new window see https://msdn.microsoft.com/en-us/library/windows/desktop/ff381397(v=vs.85).aspx
-	WNDCLASS ReschkC = { };
+	WNDCLASSW ReschkC = { };
 	ReschkC.lpfnWndProc   = RescheckWindowProc;
 	ReschkC.hInstance     = hInstance;
 	ReschkC.lpszClassName = TEMP_CLASS_NAME;
@@ -4108,9 +4108,9 @@ int RecurseRemovePath()
 }
 void ShellError (HWND aboutHwnd, HINSTANCE nError)
 {
-	if ((int)nError > 32) return; //no problem
+	if ((LONG_PTR)nError > 32) return; //no problem
 	wchar_t* str= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-	switch ((int)nError)  //reinterpret_cast <int> (
+	switch ((LONG_PTR)nError)  //reinterpret_cast <int> (
 	{
 	case 0:							wcscpy_s(str, maxPathFolder, L"The operating system is out\nof memory or resources"); break;
 	case ERROR_FILE_NOT_FOUND:		wcscpy_s(str, maxPathFolder, L"The specified path was not found"); break;
@@ -4140,7 +4140,7 @@ static void CreateHyperLink(HWND hwndControl)
         WNDPROC pfnOrigProc = (WNDPROC)GetWindowLongW(hwndParent, GWLP_WNDPROC);
         if (pfnOrigProc != _HyperlinkParentProc)
         {
-            SetPropW(hwndParent, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
+            SetPropW(hwndParent, PROP_ORIGINAL_PROC, reinterpret_cast<HANDLE>((LONG_PTR)(pfnOrigProc)));
             SetWindowLongW(hwndParent, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>((WNDPROC)_HyperlinkParentProc));
         }
     }
@@ -4151,22 +4151,22 @@ static void CreateHyperLink(HWND hwndControl)
 
     // Subclass the existing control.
     WNDPROC pfnOrigProc = (WNDPROC)GetWindowLongW(hwndControl, GWLP_WNDPROC);
-    SetPropW(hwndControl, PROP_ORIGINAL_PROC, (HANDLE)pfnOrigProc);
+    SetPropW(hwndControl, PROP_ORIGINAL_PROC, reinterpret_cast<HANDLE>((LONG_PTR)(pfnOrigProc)));
     SetWindowLongW(hwndControl, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>((WNDPROC)_HyperlinkProc));
 
     // Create an updated font by adding an underline.
     HFONT hOrigFont = (HFONT)SendMessageW(hwndControl, WM_GETFONT, 0, 0);
-    SetPropW(hwndControl, PROP_ORIGINAL_FONT, (HANDLE)hOrigFont);
+    SetPropW(hwndControl, PROP_ORIGINAL_FONT, reinterpret_cast<HANDLE>((LONG_PTR)(hOrigFont)));
 
     LOGFONT lf;
     GetObject(hOrigFont, sizeof(lf), &lf);
     lf.lfUnderline = TRUE;
 
     HFONT hFont = CreateFontIndirect(&lf);
-    SetPropW(hwndControl, PROP_UNDERLINE_FONT, (HANDLE)hFont);
+    SetPropW(hwndControl, PROP_UNDERLINE_FONT, reinterpret_cast<HANDLE>((LONG_PTR)(hFont)));
 
     // Set a flag on the control so we know what color it should be.
-    SetPropW(hwndControl, PROP_STATIC_HYPERLINK, (HANDLE)1);
+    SetPropW(hwndControl, PROP_STATIC_HYPERLINK, (HANDLE)(LONG_PTR)1);
 }
 static LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {

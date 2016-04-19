@@ -46,10 +46,10 @@
 
 
 // Start of HyperLink URL //
-#define PROP_ORIGINAL_FONT      TEXT("_Hyperlink_Original_Font_")
-#define PROP_ORIGINAL_PROC      TEXT("_Hyperlink_Original_Proc_")
-#define PROP_STATIC_HYPERLINK   TEXT("_Hyperlink_From_Static_")
-#define PROP_UNDERLINE_FONT     TEXT("_Hyperlink_Underline_Font_")
+#define PROP_ORIGINAL_FONT      L"_Hyperlink_Original_Font_"
+#define PROP_ORIGINAL_PROC      L"_Hyperlink_Original_Proc_"
+#define PROP_STATIC_HYPERLINK   L"_Hyperlink_From_Static_"
+#define PROP_UNDERLINE_FONT     L"_Hyperlink_Underline_Font_"
 // End of HyperLink URL */
 
 #pragma once
