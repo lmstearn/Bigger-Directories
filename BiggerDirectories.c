@@ -5,13 +5,12 @@
 #include <io.h> //setmode
 #include <stdio.h> //sprintf
 #include <windows.h>
-#include <strsafe.h> //safe string copy e.e. StringCchPrintf
+#include <strsafe.h> //safe string copy & StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
 #include "winbase.h"
 #include "windef.h"
 #include "sddl.h"
-
 
 //#include <afxwin.h>
 
@@ -175,6 +174,7 @@ APP_CLASS::APP_CLASS(void)
 //------------------------------------------------------------------------------------------------------------------
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
+//void printStack(void);
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -202,8 +202,9 @@ static LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, L
 static void CreateHyperLink(HWND hwndControl);
 DWORD dynamicComCtrl(LPCWSTR lpszDllName);
 BOOL GetAccountSidW(LPWSTR SystemName, PSID *Sid);
+int GetDrives(HWND hwnd);
+void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved);
 // End of HyperLink URL
-
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 {		//The way this is set up is errorcode is not modifiable here. However if errCode is passed here is always byval and will always revert to zero.
@@ -309,6 +310,7 @@ void InitProc(HWND hwnd)
     {
         	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting", errCode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
+			ReleaseMutex(hMutex);
 			exit (1); //EndDialog will process the rest of the code in the fn.
     }
     am64Bit = true;
@@ -582,7 +584,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						InitProc (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
 						// Subclass the Edit control with ValidateProc
-						g_pOldProc = (WNDPROC)SetWindowLongW(TextValidate, GWLP_WNDPROC, (long long)ValidateProc);
+						g_pOldProc = (WNDPROC)SetWindowLongW(TextValidate, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(ValidateProc));
 						switch (errCode)
 						{
 						case 1:
@@ -1428,10 +1430,8 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											{
 
 											wcscpy_s(currPathW, maxPathFolder, findPathW);
-											wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 
 
-											wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
 
 											treeLevel = 0;
 											trackFTA [0][0] = 0; //Initial conditions before search on path
@@ -1442,7 +1442,9 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											trackFTA [j][0] = 0; //Initial conditons before search on path
 											trackFTA [j][1] = 0;
 											}
-						
+											wcscat_s(currPathW, maxPathFolder, &separatorFTA);
+											wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
+
 											if (!SetCurrentDirectoryW (dblclkString))
 											{
 											ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
@@ -2293,6 +2295,23 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 				_CrtDumpMemoryLeaks();
 				EndDialog(hwnd, 0);
+				__try
+				{
+					_invalid_parameter_handler oldHandler, newHandler;
+					newHandler = (_invalid_parameter_handler)ThisInvalidParameterHandler;
+					oldHandler = _set_invalid_parameter_handler(newHandler);
+					_CrtSetReportMode(_CRT_ASSERT, 0);
+					exit(0);
+				}
+				__except (GetExceptionCode() == EXCEPTION_INVALID_HANDLE ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
+				{
+					// No debugger is attached, so return FALSE 
+					// and continue.
+					DisplayError(hwnd, L"Created Directory Handle not an OS Handle: See Github Issues.", errCode, 0);
+				}
+				
+
+
 			}
 		break;
 
@@ -2305,6 +2324,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 	}
 	return TRUE;
 }
+
 INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	PSID Sid = nullptr;
@@ -2343,7 +2363,7 @@ INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				case IDC_STATIC_FIVE:
 				{
 					{
-						ShellError(aboutHwnd, ShellExecuteW(NULL, L"open", L"https://github.com/lmstearn/Bigger-Directories/wiki/Bigger-Directories!", NULL, NULL, SW_SHOWNORMAL));
+						ShellError(aboutHwnd, ShellExecuteW(NULL, L"open", L"https://github.com/lmstearn/Bigger-Directories/wiki", NULL, NULL, SW_SHOWNORMAL));
 					}
 
 				}           
@@ -3403,11 +3423,11 @@ else
 	memset(dacfoldersWtmp, L'\0', sizeof(dacfoldersWtmp)); //sizeof(dacfoldersW) ok
 	//SHFileOperationW(_Inout_ LPSHFILEOPSTRUCT lpFileOp);
 
-		for (i = 0; i < rootFolderCS; i++)
+		for (i = 1; i < rootFolderCS; i++)
 		{
 			mbstowcs(dacfoldersWtmp[i], dacfolders[i], maxPathFolder);
 			//cumPath = dacfoldersW[i] + 4; // ////?// prefix away: 4 cuts out the //?/
-			if (wcscmp(dacfoldersW[index-rootFolderCW] + 4, dacfoldersWtmp[i]) == 0)
+			if (wcscmp(dacfoldersW[index - 1 - rootFolderCW] + 4, dacfoldersWtmp[i]) == 0)
 			{
 			if (!DisplayError (hwnd, L"This Directory has an \"ANSII\" equivalent. Remove won't work if it contains files. Click Yes to continue", errCode, 1))
 				{
@@ -3417,7 +3437,7 @@ else
 			}
 		}
 
-	wcscpy_s(currPathW, maxPathFolder, dacfoldersW[index-rootFolderCW]);
+	wcscpy_s(currPathW, maxPathFolder, dacfoldersW[index - 1 - rootFolderCW]);
 	wchar_t * currPathWtmp;
 	currPathWtmp = currPathW + 7;
 	wcscpy_s(rootDir, pathLength, currPathWtmp);
@@ -3551,8 +3571,6 @@ if (cmdlineParmtooLong)
 		DisplayError (hwnd, L"Oops, command line too long! Delete won't work. Quit and rerun", 0, 0);
 		goto RemoveKleenup;
 	}
-	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
-	wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
 
 	treeLevel = 0;
 	trackFTA [0][0] = 0; //Initial conditions before search on path
@@ -3563,7 +3581,9 @@ if (cmdlineParmtooLong)
 	trackFTA [i][0] = 0; //Initial conditons before search on path
 	trackFTA [i][1] = 0;
 	}
-						
+	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
+	wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
+
 	if (!SetCurrentDirectoryW (driveIDBaseW))
 	{
 	ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
@@ -4009,7 +4029,7 @@ int RecurseRemovePath()
 
 					if (treeLevel == 1) //Last folder to do!! 
 					{
-						if (dblclkLevel)
+						if (dblclkLevel > 1)
 						{
 
 							if (!SetCurrentDirectoryW (dblclkString)) //objects to L".."
@@ -4475,3 +4495,9 @@ int GetDrives(HWND hwnd)
 
 	return 1;
 	}
+void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved)
+{
+	//wcscpy_s(str, maxPathFolder, L"Unknown Error occurred"); break;
+	swprintf_s(hrtext, _countof(hrtext), L" Invalid parm in function %s. File: %s Line: %d\n", function, file, line);
+	DisplayError(hwnd, hrtext, 0, 0);
+}

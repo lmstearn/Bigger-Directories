@@ -70,9 +70,11 @@
 #define _UNICODE
 #endif
 
-//serevice pack info
+//service pack info
 #define PACKVERSION(major,minor) MAKELONG(minor,major)
 
+//SEH
+#define _CRT_SECURE_NO_WARNINGS
 
 //G++ compatibility ...
 #define MSGFLT_ALLOW                            (1)
