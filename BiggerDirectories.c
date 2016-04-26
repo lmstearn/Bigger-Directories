@@ -1,4 +1,4 @@
-#include "shlwapi.h"
+#include <shlwapi.h>
 #include "BiggerDirectories.h" //my file
 #include <stdlib.h> //malloc
 #include <fcntl.h>
@@ -8,16 +8,15 @@
 #include <strsafe.h> //safe string copy & StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
-#include "winbase.h"
-#include "windef.h"
-#include "sddl.h"
+#include <winbase.h>
+#include <windef.h>
+#include <sddl.h>
 
 //#include <afxwin.h>
 
 #define _CRTDBG_MAP_ALLOC
 #include <stdlib.h>
 #include <crtdbg.h>
-
 
 
 //#include <ntstatus.h>
@@ -1040,7 +1039,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							for (j = 0; (j < trackFTA [i][0] + trackFTA [i][1]) && (folderTreeArray[i][j][0] != L'\0'); j++)
 							{
 								if (j != 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA);
-								if FAILED(StringCchCatW(pathsToSave[i], pathLength, folderTreeArray[i][j]))
+								if (FAILED(StringCchCatW(pathsToSave[i], pathLength, folderTreeArray[i][j])))
 								{
 									for (k = j; (k < trackFTA [i][0] + trackFTA [i][1]) && (folderTreeArray[i][j][0] != L'\0'); k++)
 										{
@@ -2307,7 +2306,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				{
 					// No debugger is attached, so return FALSE 
 					// and continue.
-					DisplayError(hwnd, L"Created Directory Handle not an OS Handle: See Github Issues.", errCode, 0);
+					ErrorExit(L"Created Directory Handle not an OS Handle: This occurs in debug only. See Github Issues.", errCode);
 				}
 				
 
@@ -3092,6 +3091,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 	if (!stream) //returns NULL Pointer
 	{
 
+
 	if (DisplayError (hwnd, L"_wfopen returns NULL: possible first time run? Click yes to create new file, no to abort", 0, 1))
 		{
 
@@ -3118,14 +3118,19 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		else
 		{
 		free (frName);
-		return false; //won't read/write on empty file
+		return false; //user won't read/write on empty file
 		}
 
 
 	}
 	else //file exists
 	{
-	
+		if (fclose(stream)) //cppcheck recommends this
+		{
+			ErrorExit(L"Stream was not closed properly: Recommend restart.", 0);
+			frReturn = false;
+		}
+
 		if (appendMode)
 		{
 		stream = _wfopen(frName, L"a+b");
@@ -3373,7 +3378,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 	if (fclose (stream))
 	{
-	ErrorExit (L"Stream was not closed properly: exit & restart?", 0);
+	ErrorExit (L"Stream was not closed properly: Recommend restart.", 0);
 	frReturn = false;
 	}
 	free (frName);
@@ -3845,7 +3850,7 @@ int RecurseRemovePath()
 
 					if (treeLevel == 0) //Last folder to do!! 
 					{
-						if (dblclkLevel)
+						if (dblclkLevel > 1)
 
 						{
 							if (!SetCurrentDirectoryW (dblclkString)) //objects to L".."
@@ -4059,11 +4064,9 @@ int RecurseRemovePath()
 							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
 							return 1;
 							}
-							wchar_t * currPathWtmp = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+							wchar_t * currPathWtmp;
 
-							currPathWtmp = wcsstr (currPathW, L"\\\\?\\C:");
-							
-							(currPathWtmp)? currPathWtmp = currPathW + 4: currPathWtmp = currPathW;
+							(wcsstr(currPathW, L"\\\\?\\C:"))? currPathWtmp = currPathW + 4: currPathWtmp = currPathW;
 							//GetCurrentDirectoryW(maxPathFolder, findPathW);
 							if (RemoveDirectoryW (currPathWtmp))
 							{
@@ -4431,9 +4434,10 @@ int GetDrives(HWND hwnd)
 	cchBuffer = GetLogicalDriveStringsW(0, NULL);
 	driveStrings = (wchar_t *)calloc((cchBuffer + 1), sizeof(wchar_t));
 	outputString = (wchar_t *)calloc((maxPathFolder), sizeof(wchar_t));
-	if (driveStrings == NULL)
+	if (driveStrings == nullptr || outputString == nullptr)
 	{
-	return 0;
+		DisplayError(hwnd, L"Could not allocate required memory", errCode, 0);
+		return 0;
 	}
 	
 	// Fetch all drive strings    
