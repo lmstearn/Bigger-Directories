@@ -2294,6 +2294,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 				_CrtDumpMemoryLeaks();
 				EndDialog(hwnd, 0);
+#if defined(_WIN64) || defined(_WIN32) ||  defined(__TOS_WIN__) 
 				__try
 				{
 					_invalid_parameter_handler oldHandler, newHandler;
@@ -2308,7 +2309,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					// and continue.
 					ErrorExit(L"Created Directory Handle not an OS Handle: This occurs in debug only. See Github Issues.", errCode);
 				}
-				
+#endif			
 
 
 			}
