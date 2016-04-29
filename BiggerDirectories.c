@@ -4507,6 +4507,6 @@ int GetDrives(HWND hwnd)
 void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved)
 {
 	//wcscpy_s(str, maxPathFolder, L"Unknown Error occurred"); break;
-	swprintf_s(hrtext, _countof(hrtext), L" Invalid parm in function %s. File: %s Line: %d\n", function, file, line);
+	swprintf_s(hrtext, _countof(hrtext), L" Invalid parm in function %s. File: %s Line: %u\n", function, file, line);
 	DisplayError(hwnd, hrtext, 0, 0);
 }
