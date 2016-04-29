@@ -1742,9 +1742,9 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 						int count = SendMessageW(hList, LB_GETSELCOUNT, 0, 0);
 						
-						bool removeTrig = false;
 						if(count != LB_ERR)
 						{
+							bool removeTrig = false;
 							// We only want to continue if one and only one item is
 							// selected.
 
@@ -3819,7 +3819,7 @@ void doFilesFolders(HWND hwnd)
 		SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
 		SetDlgItemTextW(hwnd,IDC_STATIC_ONE, L"\0");
 		SetDlgItemInt(hwnd, IDC_NUMBER, 0, FALSE);
-		SetDlgItemTextW(hwnd, IDC_TEXT, dblclkPath[dblclkLevel-1]);
+		SetDlgItemTextW(hwnd, IDC_TEXT, dblclkPath[dblclkLevel]);
 		SetDlgItemInt(hwnd, IDC_SHOWCOUNT, 0, FALSE);
 		EnableWindow(GetDlgItem(hwnd, IDC_ADD), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
@@ -4433,72 +4433,76 @@ int GetDrives(HWND hwnd)
 
 	// Find out how big a buffer we need
 	cchBuffer = GetLogicalDriveStringsW(0, NULL);
-	driveStrings = (wchar_t *)calloc((cchBuffer + 1), sizeof(wchar_t));
-	outputString = (wchar_t *)calloc((maxPathFolder), sizeof(wchar_t));
-	if (driveStrings == nullptr || outputString == nullptr)
+	if (cchBuffer)
 	{
-		DisplayError(hwnd, L"Could not allocate required memory", errCode, 0);
-		return 0;
+		driveStrings = (wchar_t *)calloc((cchBuffer + 1), sizeof(wchar_t));
+		outputString = (wchar_t *)calloc((maxPathFolder), sizeof(wchar_t));
+		if (driveStrings == nullptr || outputString == nullptr)
+		{
+			DisplayError(hwnd, L"Could not allocate required memory", errCode, 0);
+			return 0;
+		}
+
+		// Fetch all drive strings    
+		GetLogicalDriveStringsW(cchBuffer, driveStrings);
+
+		// Loop until we find the final '\0'
+		// driveStrings is a double null terminated list of null terminated strings)
+		wchar_t * singleDriveString = driveStrings;
+		while (*singleDriveString)
+		{
+			// Dump drive information
+			driveType = GetDriveTypeW(singleDriveString);
+			driveInfo[driveCt][0] = singleDriveString[0];
+			switch (driveType)
+			{
+			case DRIVE_UNKNOWN: //known unknowns
+				driveTypeString = L"                         (Unknown)";
+				driveInfo[driveCt][1] = L'U';
+				break;
+			case DRIVE_NO_ROOT_DIR:
+				driveTypeString = L"                  (Disk not ready)";
+				driveInfo[driveCt][1] = L'X';
+				break;
+			case DRIVE_REMOVABLE:
+				driveTypeString = L"                       (Removable)";
+				driveInfo[driveCt][1] = L'M';
+				break;
+			case DRIVE_FIXED:
+				driveTypeString = L"                      (Fixed disk)";
+				driveInfo[driveCt][1] = L'F';
+				break;
+			case DRIVE_REMOTE:
+				driveTypeString = L"                         (Network)";
+				driveInfo[driveCt][1] = L'N';
+				break;
+			case DRIVE_CDROM:
+				driveTypeString = L"                          (CD/DVD)";
+				driveInfo[driveCt][1] = L'C';
+				break;
+			case DRIVE_RAMDISK:
+				driveTypeString = L"                          (Ramdisk)";
+				driveInfo[driveCt][1] = L'R';
+				break;
+			default: //unknown unknowns
+				driveTypeString = L"                        (Unknown*)";
+				driveInfo[driveCt][1] = L'U';
+			}
+
+			wcscpy_s(outputString, maxPathFolder, singleDriveString);
+			wcscat_s(outputString, maxPathFolder, driveTypeString);
+			sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(driveCt), (LPARAM)outputString);
+			// +1 is to move past the null at the end of the string.
+			driveCt += 1;
+			singleDriveString += lstrlenW(singleDriveString) + 1;
+
+		}
+		if (outputString) free(outputString);
+		if (driveStrings) free(driveStrings);
+
+		return 1;
 	}
-	
-	// Fetch all drive strings    
-	GetLogicalDriveStringsW(cchBuffer, driveStrings);
-
-	// Loop until we find the final '\0'
-	// driveStrings is a double null terminated list of null terminated strings)
-	wchar_t * singleDriveString = driveStrings;
-	while (*singleDriveString)
-	{
-	// Dump drive information
-	driveType = GetDriveTypeW(singleDriveString);
-	driveInfo[driveCt][0] = singleDriveString[0];
-	switch (driveType)
-	{
-	case DRIVE_UNKNOWN: //known unknowns
-	driveTypeString = L"                         (Unknown)";
-	driveInfo[driveCt][1] = L'U';
-	break;
-	case DRIVE_NO_ROOT_DIR:
-	driveTypeString = L"                  (Disk not ready)";
-	driveInfo[driveCt][1] = L'X';
-	break;
-	case DRIVE_REMOVABLE:
-	driveTypeString = L"                       (Removable)";
-	driveInfo[driveCt][1] = L'M';
-	break;
-	case DRIVE_FIXED:
-	driveTypeString = L"                      (Fixed disk)";
-	driveInfo[driveCt][1] = L'F';
-	break;
-	case DRIVE_REMOTE:
-	driveTypeString = L"                         (Network)";
-	driveInfo[driveCt][1] = L'N';
-	break;
-	case DRIVE_CDROM:
-	driveTypeString = L"                          (CD/DVD)";
-	driveInfo[driveCt][1] = L'C';
-	break;
-	case DRIVE_RAMDISK:
-	driveTypeString = L"                          (Ramdisk)";
-	driveInfo[driveCt][1] = L'R';
-	break;
-	default: //unknown unknowns
-	driveTypeString = L"                        (Unknown*)";
-	driveInfo[driveCt][1] = L'U';
-	}
-
-	wcscpy_s(outputString, maxPathFolder, singleDriveString);
-	wcscat_s(outputString, maxPathFolder, driveTypeString);
-	sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, (WPARAM)(driveCt), (LPARAM)outputString);
-	// +1 is to move past the null at the end of the string.
-	driveCt += 1;
-	singleDriveString += lstrlenW(singleDriveString) + 1;
-
-	}
-	if (outputString) free(outputString);
-	if (driveStrings) free(driveStrings);
-
-	return 1;
+	return 0; //No Drives
 	}
 void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved)
 {
