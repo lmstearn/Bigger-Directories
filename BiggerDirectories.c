@@ -184,7 +184,7 @@ int SwitchResolution (HWND hwnd, INT_PTR(WINAPI* dProc)(HWND, UINT, WPARAM, LPAR
 int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
 bool Kleenup (HWND hwnd);
 int ExistRegValue ();
-DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName);
+DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE &hProcessName);
 NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
 bool CloseNTDLLObjs (BOOL atWMClose);
 bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
@@ -370,7 +370,7 @@ else
 		DisplayError (hwnd, L"Userinit should have ended. Try rebooting before running this (or any other) program", errCode, 0);
 		}
 
-	BiggerDirectoriesVAR= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	BiggerDirectoriesVAR = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	if (!ExpandEnvironmentStringsW (L"%SystemRoot%", BiggerDirectoriesVAR, maxPathFolder)) ErrorExit (L"ExpandEnvironmentStringsW failed for some reason.", 0);
 	wcscat_s(BiggerDirectoriesVAR, maxPathFolder, L"\\Temp\\BiggerDirectories.exe");
 
@@ -1694,7 +1694,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
 			if (setforDeletion==TRUE)
 			{
-			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no and check the key's value if unsure whether another program besides this one has marked another file for deletion at reboot", errCode, 1)) break;
+			if (!DisplayError (hwnd, L"The PendingFileRenameOperations key already has data. Please reply no to check the key's value if unsure whether another program besides this one has marked another file for deletion at reboot. Else yes to continue", errCode, 1)) break;
 			
 			//delete the key ExistRegValue
 			system ("REG DELETE \"HKLM\\System\\CurrentControlSet\\Control\\Session Manager\" /v PendingFileRenameOperations /f");
@@ -2899,8 +2899,8 @@ bool Kleenup (HWND hwnd)
 	else
 	{
 
-			system ("CD\\ & PUSHD %SystemRoot%\\Temp & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & SET \"Userinitreg=\" & (IF EXIST Userinitreg.txt CALL SET \"Userinitreg=TRUE\") & (IF DEFINED Userinitreg (FOR /F \"usebackq tokens=1,2* delims=,\" %G IN (\"Userinitreg.txt\") DO SET \"REGVALUE=%G\" & (IF DEFINED OSB (CALL SET \"REGVALUE=%REGVALUE%,\" & CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f /reg:64) ELSE (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f))) ELSE (CALL ECHO Backup reg record does not exist. Was NoLogon already called? & PAUSE >NUL)) & (IF EXIST Userinitregerror.txt (DEL \"Userinitregerror.txt\")) & DEL \"Userinitreg.txt\" & POPD");
-			
+			system ("CD\\ & PUSHD %SystemRoot%\\Temp & REG QUERY \"HKLM\\Hardware\\Description\\System\\CentralProcessor\\0\" | FIND /i \"x86\" >NUL && CALL SET \"OSB=\" || CALL SET \"OSB=64BIT\" & SET KEY_NAME=\"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon\" & SET \"VALUE_NAME=Userinit\" & SET \"Userinitreg=\" & (IF EXIST Userinitreg.txt CALL SET \"Userinitreg=TRUE\") & (IF DEFINED Userinitreg (FOR /F \"usebackq delims=\" %G IN (\"Userinitreg.txt\") DO SET \"REGVALUE=%G\" & (IF DEFINED OSB (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f /reg:64) ELSE (CALL REG ADD %KEY_NAME% /v %VALUE_NAME% /d %REGVALUE% /f))) ELSE (CALL ECHO Backup reg record does not exist. Was NoLogon already called? & PAUSE >NUL)) & (IF EXIST Userinitregerror.txt (DEL \"Userinitregerror.txt\")) & DEL \"Userinitreg.txt\" & POPD");
+			//CALL SET \"REGVALUE=%REGVALUE%,\" not necessary befroe REG ADD as data is saved.
 			if (!ExpandEnvironmentStringsW(L"%systemroot%", tempDest,  pathLength)) ErrorExit (L"ExpandEnvironmentStringsW failed.", 0);
 			wcscpy_s(thisexePath, pathLength, tempDest); //Small hole in logic here
 			wcscat_s(tempDest, pathLength, L"\\Temp\\BiggerDirectories.exe");
@@ -2914,11 +2914,11 @@ bool Kleenup (HWND hwnd)
 
 				SetLastError(ERROR_INVALID_PARAMETER); //https://msdn.microsoft.com/en-us/library/ms682425(VS.85).aspx
 				if (!CreateProcessW(thisexePath, nullptr, nullptr, nullptr, FALSE, NULL, nullptr, nullptr, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"userinit could not be started through this program. Please reboot after closing this program.", 0);
-				//The reg value is restored to userinit before theis point
+				//The reg value is restored to userinit before this point
+				WaitForSingleObject(lpProcessInfo.hProcess, INFINITE);
+				CloseHandle(lpProcessInfo.hProcess);
+				CloseHandle(lpProcessInfo.hThread);
 				}
-			WaitForSingleObject(lpProcessInfo.hProcess, INFINITE);
-			CloseHandle(lpProcessInfo.hProcess);
-			CloseHandle(lpProcessInfo.hThread);
 
 			if(!MoveFileExW(tempDest,nullptr,MOVEFILE_DELAY_UNTIL_REBOOT))
 			{
@@ -2968,7 +2968,7 @@ int ExistRegValue ()
 		// \??\C:\Windows\Temp\BiggerDirectories.exe: nasty multo_sz
 
 }
-DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
+DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE &hProcessName)
 {
     HANDLE hProcessSnap;
     PROCESSENTRY32W pe32;
@@ -2984,7 +2984,7 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
     // and exit if unsuccessful
     if (!Process32FirstW(hProcessSnap, &pe32))
     {
-        CloseHandle(hProcessSnap);          // clean the snapshot object
+		CloseHandle(hProcessSnap);          // clean the snapshot object
         DisplayError (hwnd, L"Failed to gather information on system processes", 1, 0);
         return(NULL);
     }
@@ -2997,10 +2997,10 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE hProcessName)
         if (0 == wcscmp(processName, pe32.szExeFile))
         {
             result = pe32.th32ProcessID;
-			hProcessName = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pe32.th32ProcessID);
-			if(hProcessName == nullptr )
+			hProcessName = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pe32.th32ProcessID);
+			if(!hProcessName)
 				{
-					DisplayError (hwnd, L"Cannot open this process", 1, 0);
+					ErrorExit (L"Cannot open this process", 0);
 					CloseHandle(hProcessSnap);
 					return(NULL);
 				}
