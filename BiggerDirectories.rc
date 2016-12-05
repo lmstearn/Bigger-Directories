@@ -156,7 +156,7 @@ CTEXT           "Del", IDC_STATIC, 360, 155, 40, 20
 CTEXT           "Clear", IDC_STATIC, 360, 180, 40, 20
 CTEXT           "RunAtLogon", IDC_STATIC, 360, 205, 40, 20
 CTEXT           "NoLogon", IDC_STATIC, 360, 230, 40, 20
-CTEXT           "Version: 1.13 Release April 2016", IDC_STATIC, 10, 297, 180, 20
+CTEXT           "Version: 1.14 Release Dec. 2016", IDC_STATIC, 10, 297, 180, 20
 LTEXT           "Code Project", IDC_STATIC_FOUR, 210, 297, 60, 24
 LTEXT           "Github", IDC_STATIC_FIVE, 280, 297, 60, 14
 CTEXT           "(Experimental)", IDC_STATIC, 365, 300, 50, 20
@@ -192,7 +192,7 @@ CTEXT           "Del", IDC_STATIC, 508, 155, 56, 28
 CTEXT           "Clear", IDC_STATIC, 508, 180, 56, 28
 CTEXT           "RunAtLogon", IDC_STATIC, 508, 205, 56, 28
 CTEXT           "NoLogon", IDC_STATIC, 508, 230, 56, 28
-CTEXT           "Version: 1.13 Release April 2016", IDC_STATIC, 14, 418, 254, 28
+CTEXT           "Version: 1.14 Release Dec. 2016", IDC_STATIC, 14, 418, 254, 28
 LTEXT           "Code Project", IDC_STATIC_FOUR, 296, 418, 85, 34
 LTEXT           "Github", IDC_STATIC_FIVE, 395, 418, 85, 20
 CTEXT           "(Experimental)", IDC_STATIC, 515, 422, 71, 28
@@ -228,7 +228,7 @@ CTEXT           "Del", IDC_STATIC, 1016, 436, 113, 56
 CTEXT           "Clear", IDC_STATIC, 1016, 506, 113, 56
 CTEXT           "RunAtLogon", IDC_STATIC, 1016, 577, 113, 56
 CTEXT           "NoLogon", IDC_STATIC, 1016, 647, 113, 56
-CTEXT           "Version: 1.13 Release April 2016", IDC_STATIC, 28, 835, 508, 56
+CTEXT           "Version: 1.14 Release Dec. 2016", IDC_STATIC, 28, 835, 508, 56
 LTEXT           "Code Project", IDC_STATIC_FOUR, 593, 835, 169, 68
 LTEXT           "Github", IDC_STATIC_FIVE, 791, 835, 169, 39
 CTEXT           "(Experimental)", IDC_STATIC, 1031, 844, 141, 56

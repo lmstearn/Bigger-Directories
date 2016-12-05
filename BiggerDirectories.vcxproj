@@ -290,7 +290,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="CaveMantizardum.ico" />
-    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <Media Include="click.wav" />

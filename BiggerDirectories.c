@@ -12,13 +12,10 @@
 #include <windef.h>
 #include <sddl.h>
 
-//#include <afxwin.h>
-
 #define _CRTDBG_MAP_ALLOC
-#include <stdlib.h>
 #include <crtdbg.h>
 
-
+//#include <afxwin.h>
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
 
@@ -70,6 +67,7 @@ bool setforDeletion = false;
 bool removeButtonEnabled = true;
 bool nologonEnabled = false;
 bool logonEnabled = false;
+bool wow64Functions = false;
 BOOL folderNotEmpty = false;
 BOOL weareatBoot = FALSE;
 BOOL am64Bit, exe64Bit;
@@ -88,11 +86,7 @@ int GetDrives(HWND hwnd);
 //};
 
 
-typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
 
-
-
-//typedef int (*NTDLLptr) (int); //Function pointer example, but following is required
 typedef NTSTATUS (__stdcall *NTDLLptr)(
 	OUT PHANDLE FileHandle, 
 	IN ACCESS_MASK DesiredAccess, 
@@ -203,6 +197,10 @@ DWORD dynamicComCtrl(LPCWSTR lpszDllName);
 BOOL GetAccountSidW(LPWSTR SystemName, PSID *Sid);
 int GetDrives(HWND hwnd);
 void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved);
+BOOL RevertWOW64RedirectionIfNecessary(PVOID pOldValue);
+BOOL DisableWOW64RedirectionIfNecessary(PVOID pOldValue);
+BOOL ChangeWindowMsgFilterEx(HWND hwnd, UINT Msg, DWORD action);
+//BOOL GetProcAddresses( HINSTANCE *hLibrary, LPSTR lpszLibrary, INT nCount, ... );
 // End of HyperLink URL
 
 int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
@@ -322,6 +320,8 @@ void InitProc(HWND hwnd)
 			DisplayError (hwnd, L"ENV32BIT: Error: pointer should be 4 bytes. Exiting", errCode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			ReleaseMutex (hMutex);
+			if (currPath) free(currPath);
+			if (currPathW) free(currPathW);
 			exit (1);
 		}
     
@@ -330,13 +330,21 @@ void InitProc(HWND hwnd)
 
 			am64Bit = false;
 			exe64Bit = false;
-			LPFN_ISWOW64PROCESS fnIsWow64Process;
 
-			fnIsWow64Process = (LPFN_ISWOW64PROCESS) GetProcAddress(GetModuleHandleW((L"kernel32")),"IsWow64Process");
+			if (RevertWOW64RedirectionIfNecessary(OldValue))
+			{
+
+			wow64Functions = true;
+
+			typedef BOOL (__stdcall *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
+			LPFN_ISWOW64PROCESS fnIsWow64Process;
+			fnIsWow64Process = (LPFN_ISWOW64PROCESS) GetProcAddress(GetModuleHandleW((L"kernel32.dll")),"IsWow64Process");
 			if(nullptr != fnIsWow64Process)
 				{
 				exe64Bit = fnIsWow64Process(GetCurrentProcess(),&exe64Bit) && exe64Bit;
 				}
+
+			}
 
 		}
 
@@ -345,6 +353,8 @@ void InitProc(HWND hwnd)
 		{
 			DisplayError (hwnd, L"Our own process isn't active!? Must terminate", 1, 0);
 			ReleaseMutex (hMutex);
+			if (currPath) free(currPath);
+			if (currPathW) free(currPathW);
 			exit (1); //EndDialog will process the rest of the code in the fn.
 		}
 }	
@@ -632,9 +642,9 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			}
 
 				
-			if (!(ChangeWindowMessageFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW, nullptr) && ChangeWindowMessageFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW, nullptr)))
+			if (!(ChangeWindowMsgFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW) && ChangeWindowMsgFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW) && ChangeWindowMsgFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW)))
 			{
-				DisplayError (hwnd, L"ChangeWindowMessageFilterEx: Could not allow message", errCode, 0);
+				DisplayError (hwnd, L"ChangeWindowMsgFilterEx: Could not allow message", errCode, 0);
 			}
 				
             }
@@ -1222,7 +1232,10 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 						else
 						{
-							if (Wow64DisableWow64FsRedirection(&OldValue))
+							if (wow64Functions)
+							{
+							if (DisableWOW64RedirectionIfNecessary(&OldValue))
+							//if (Wow64DisableWow64FsRedirection(&OldValue))
 							{
 								if (CreateDirectoryW(currPathW, nullptr)) 
 								{
@@ -1241,12 +1254,39 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								goto EndCreate;
 								}
 							}
-							if (!Wow64RevertWow64FsRedirection(&OldValue))
+							}
+							else
+							{
+								// For 32bit XP machines
+								if (CreateDirectoryA(currPath, nullptr)) 
+								{
+								errCode = 0;
+									if (!SetCurrentDirectoryA(currPath))
+									{
+									errCode = 1;
+									ErrorExit (L"SetCurrentDirectory: Non zero", 0);
+									goto EndCreate;
+									}
+								}
+							else
+								{
+								errCode = 1;
+								ErrorExit (L"CreateDirectory: ", 0);
+								goto EndCreate;
+								}
+
+							}
+
+
+							if (wow64Functions)
+							{
+							if (RevertWOW64RedirectionIfNecessary(&OldValue))
+							//if (!Wow64RevertWow64FsRedirection(&OldValue))
 							{
 							DisplayError (hwnd, L"Problems with redirection", errCode, 0);
 							goto EndCreate;
 							}
-
+							}
 						}
 
 
@@ -2210,9 +2250,10 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					else ErrorExit (L"CopyFile: Copy of dragged file error: ", 0);
 					n++;
 					}
+					currPathW[0] = L'\0';
+					doFilesFolders(hwnd);
 
-
-				}
+					}
 
 				}
 
@@ -2258,7 +2299,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					}
 					if (!SetCurrentDirectoryW (dblclkString))
 					{
-						ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+						ErrorExit (L"SetCurrentDirectoryW: Non zero. Must be a Folder, a shortcut or symlink", 0);
 						dblclkLevel = 0;
 					}
 					else
@@ -2294,7 +2335,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 				_CrtDumpMemoryLeaks();
 				EndDialog(hwnd, 0);
-#if defined(_WIN64) || defined(_WIN32) ||  defined(__TOS_WIN__) 
+				#if defined(_WIN64) || defined(_WIN32) ||  defined(__TOS_WIN__) 
 				__try
 				{
 					_invalid_parameter_handler oldHandler, newHandler;
@@ -2771,7 +2812,6 @@ int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath)
 DWORD result;
 
 
-
     //  Disable redirection immediately prior to the native API
     //  function call.
     
@@ -2779,24 +2819,39 @@ if (exe64Bit)
 {
 		result  = GetModuleFileNameW(nullptr, exePath, MAX_PATH-4);
 	    errCode = (int)GetLastError();
-
 }
 else
 {
-	if( Wow64DisableWow64FsRedirection(&OldValue) ) 
-    {
-	result  = GetModuleFileNameW(nullptr, exePath, MAX_PATH-4);
-    errCode = (int)GetLastError();
+	 
+	if (wow64Functions)
+	{
+		if (DisableWOW64RedirectionIfNecessary(&OldValue))
+		{
+		result  = GetModuleFileNameW(nullptr, exePath, MAX_PATH-4);
+		errCode = (int)GetLastError();
+		}
+		else
+		{
+			DisplayError (hwnd, L"Problems with redirection", errCode, 0);
+			return 1;
+		}
 	}
-	else
+	else // For 32bit XP machines
+	{
+		char *exePathA = (char *)malloc( sizeof (char));
+		size_t i; 
+		wcstombs_s(&i, exePathA, sizeof (char), exePath, sizeof (wchar_t));
+		result = GetModuleFileNameA(nullptr, exePathA, MAX_PATH-4);
+		errCode = (int)GetLastError();
+		free (exePathA);
+	}
+	if (wow64Functions)
+	{
+    if (RevertWOW64RedirectionIfNecessary(&OldValue))
 	{
 		DisplayError (hwnd, L"Problems with redirection", errCode, 0);
 		return 1;
 	}
-    if (!Wow64RevertWow64FsRedirection(&OldValue) ) 
-	{
-		DisplayError (hwnd, L"Problems with redirection", errCode, 0);
-		return 1;
 	}
 }
 
@@ -2867,7 +2922,7 @@ else
 bool Kleenup (HWND hwnd)
 {
 	STARTUPINFOW lpStartupInfo;
-	PROCESS_INFORMATION lpProcessInfo;
+	PROCESS_INFORMATION lpProcessInfo = {0}; //suppresses warning when closed
 
 	ZeroMemory(&lpStartupInfo, sizeof(lpStartupInfo));
 	ZeroMemory (&lpStartupInfo, sizeof(lpStartupInfo));
@@ -2881,6 +2936,8 @@ bool Kleenup (HWND hwnd)
 			DisplayError (hwnd, L"Oops, process path too long!? or non-existent?! Quitting", 0, 0);
 			free (tempDest);
 			free (thisexePath);
+			CloseHandle(lpProcessInfo.hProcess);
+			CloseHandle(lpProcessInfo.hThread);
 			return false;
 		}
 		else
@@ -2890,10 +2947,6 @@ bool Kleenup (HWND hwnd)
 		wcscat_s (tempDest, pathLength, L"\" ");
 		wcscat_s (tempDest, pathLength, pathToDeleteW);
 		if (!CreateProcessW (thisexePath, tempDest, nullptr, nullptr, FALSE, NULL, nullptr, nullptr, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"Oops: Something went wrong. Please restart the program...", 0);
-		free (tempDest);
-		free (thisexePath);
-		CloseHandle(lpProcessInfo.hProcess);
-		CloseHandle(lpProcessInfo.hThread);
 		}
 	}
 	else
@@ -2916,8 +2969,6 @@ bool Kleenup (HWND hwnd)
 				if (!CreateProcessW(thisexePath, nullptr, nullptr, nullptr, FALSE, NULL, nullptr, nullptr, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"userinit could not be started through this program. Please reboot after closing this program.", 0);
 				//The reg value is restored to userinit before this point
 				WaitForSingleObject(lpProcessInfo.hProcess, INFINITE);
-				CloseHandle(lpProcessInfo.hProcess);
-				CloseHandle(lpProcessInfo.hThread);
 				}
 
 			if(!MoveFileExW(tempDest,nullptr,MOVEFILE_DELAY_UNTIL_REBOOT))
@@ -2925,14 +2976,15 @@ bool Kleenup (HWND hwnd)
 			DisplayError (hwnd, L"Problems with file deletion. Solved with next Disk Cleanup", 0, 0);
 			free (tempDest);
 			free (thisexePath);
+			CloseHandle(lpProcessInfo.hProcess);
+			CloseHandle(lpProcessInfo.hThread);
 			return false;
 			}
-			else
-			{
-			free (tempDest);
-			free (thisexePath);
-			}
 	}
+	free (tempDest);
+	free (thisexePath);
+	CloseHandle(lpProcessInfo.hProcess);
+	CloseHandle(lpProcessInfo.hThread);
 	return true;
 }
 int ExistRegValue ()
@@ -4509,4 +4561,115 @@ void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wch
 	//wcscpy_s(str, maxPathFolder, L"Unknown Error occurred"); break;
 	swprintf_s(hrtext, _countof(hrtext), L" Invalid parm in function %s. File: %s Line: %u\n", function, file, line);
 	DisplayError(hwnd, hrtext, 0, 0);
+}
+/*
+//GetProcAddresses
+//Argument1: hLibrary - Handle for the Library Loaded
+//Argument2: lpszLibrary - Library to Load
+//Argument3: nCount - Number of functions to load
+//[Arguments Format]
+//Argument4: Function Address - Function address we want to store
+//Argument5: Function Name -  Name of the function we want
+//[Repeat Format]
+//
+//Returns: FALSE if failure
+//Returns: TRUE if successful
+BOOL GetProcAddresses( HINSTANCE *hLibrary, LPSTR lpszLibrary, INT nCount, ... )
+{
+    va_list va;
+    va_start( va, nCount );
+
+    if ( ( *hLibrary = LoadLibraryA( lpszLibrary ) ) 
+        != NULL )
+    {
+        FARPROC * lpfProcFunction = NULL;
+        LPSTR lpszFuncName = NULL;
+        INT nIdxCount = 0;
+        while ( nIdxCount < nCount )
+        {
+            lpfProcFunction = va_arg( va, FARPROC* );
+            lpszFuncName = va_arg( va, LPSTR );
+            if ( ( *lpfProcFunction = 
+                GetProcAddress( *hLibrary, 
+                    lpszFuncName ) ) == NULL )
+            {
+                lpfProcFunction = NULL;
+                return FALSE;
+            }
+            nIdxCount++;
+        }
+    }
+    else
+    {
+        va_end( va );
+        return FALSE;
+    }
+    va_end( va );
+    return TRUE;
+}
+*/
+BOOL RevertWOW64RedirectionIfNecessary(PVOID pOldValue)
+{
+//XP compatibility for these fns
+//http://stackoverflow.com/questions/40944793/typedef-with-function-pointer-function-does-not-exist?
+
+	typedef BOOL (WINAPI * fnWow64RevertWow64FsRedirection)(PVOID);
+
+    fnWow64RevertWow64FsRedirection pfn =
+        reinterpret_cast<fnWow64RevertWow64FsRedirection>(
+           reinterpret_cast<void*>(
+           GetProcAddress(GetModuleHandle(L"kernel32"),
+                          "Wow64RevertWow64FsRedirection")));
+
+    if (pfn)
+    {
+        // The function exists, so call it through the pointer we obtained.
+        return pfn(pOldValue);
+    }
+    else
+    {
+         return FALSE;
+	}
+}
+BOOL DisableWOW64RedirectionIfNecessary(PVOID pOldValue)
+{
+    typedef BOOL (WINAPI * fnWow64DisableWow64FsRedirection)(PVOID);
+
+    fnWow64DisableWow64FsRedirection pfn =
+        reinterpret_cast<fnWow64DisableWow64FsRedirection>(
+           reinterpret_cast<void*>(
+           GetProcAddress(GetModuleHandle(L"kernel32"),
+                          "Wow64DisableWow64FsRedirection")));
+
+    if (pfn)
+    {
+        return pfn(pOldValue);
+    }
+    else
+    {
+         return FALSE;
+    }
+}
+BOOL ChangeWindowMsgFilterEx(HWND hwnd, UINT Msg, DWORD action)
+{
+
+    typedef BOOL (WINAPI * fnChangeWindowMessageFilterEx)(HWND, UINT, DWORD, PCHANGEFILTERSTRUCT);
+    fnChangeWindowMessageFilterEx pfn =
+        reinterpret_cast<fnChangeWindowMessageFilterEx>(
+           reinterpret_cast<void*>(
+           GetProcAddress(GetModuleHandle(L"user32"),
+                          "ChangeWindowMessageFilterEx")));
+
+    if (!(pfn))
+	//use the old function
+    {
+		action = MSGFLT_ADD;
+		typedef BOOL (WINAPI * fnChangeWindowMessageFilter)( UINT, DWORD);
+    fnChangeWindowMessageFilter pfn =
+        reinterpret_cast<fnChangeWindowMessageFilter>(
+           reinterpret_cast<void*>(
+           GetProcAddress(GetModuleHandle(L"user32"),
+                          "ChangeWindowMessageFilter")));
+    }
+        return pfn(hwnd, Msg, action, nullptr);
 }
