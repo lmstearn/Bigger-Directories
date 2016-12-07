@@ -8,7 +8,7 @@
 #include <strsafe.h> //safe string copy & StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
-#include <winbase.h>
+//#include <winbase.h>
 #include <windef.h>
 #include <sddl.h>
 
@@ -120,7 +120,7 @@ const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
 const wchar_t TEMP_CLASS_NAME[]  = L"ResCheckClass";
-//A pathname MUST be no more than 32, 760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
+//A pathname MUST be no more than 32,760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
 
 
@@ -130,7 +130,7 @@ public:
 APP_CLASS();
 
 // This is the static callback that we register
-static INT_PTR  CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
+static INT_PTR CALLBACK s_DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
 
 // The static callback recovers the "this" pointer and then calls this member function.
 INT_PTR DlgProc(HWND hdlg, UINT uMsg, WPARAM wParam, LPARAM lParam);
@@ -1515,7 +1515,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										{
 											if (!filePrompt)
 												{
-													if (DisplayError (hwnd, L"Click Yes to move selected files to a Temp folder on the Desktop. The Temp folder will be created if it does not exist", errCode, 1))
+													if (DisplayError (hwnd, L"Click Yes to move selected files to a Temp folder on the Desktop. If any of the files in the Temp folder have the same name as the selected, the move will fail. The Temp folder will be created if it does not exist", errCode, 1))
 													{
 														if (!ExpandEnvironmentStringsW (L"%USERPROFILE%", tempDest, pathLength))
 														{
@@ -1544,6 +1544,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 													sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
 													}
 
+												SetDlgItemTextW(hwnd, IDC_TEXT, L"");
 												}
 											else
 												{
@@ -1884,19 +1885,22 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									{
 										if (index <= folderIndex)
 										{
+
 											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Dir\0");
 											if (index == 0 || index == folderIndex)
 											{
+											SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"");
 											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 											}
 											else
 											{
+											SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"Dir:");
 											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 											}
 										}
 										else
 										{
-
+											SetDlgItemTextW(hwnd,IDC_STATIC_ZERO, L"File:");
 											SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Move file\0");
 											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 
@@ -2795,6 +2799,10 @@ else
 		);
 
 APP_CLASS wnd;
+//APP_CLASS* wnd =(APP_CLASS*)malloc(sizeof(APP_CLASS));
+//wnd = new APP_CLASS();
+
+
 MSG msg;
 while (GetMessageW(&msg, NULL, 0, 0))
 {
