@@ -44,6 +44,7 @@
 #define IDW_CLICK                       1024
 #define IDC_STATIC                      -1
 
+#define WIN32_LEAN_AND_MEAN
 
 // Start of HyperLink URL //
 #define PROP_ORIGINAL_FONT      L"_Hyperlink_Original_Font_"
