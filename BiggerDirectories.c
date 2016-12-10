@@ -9,7 +9,7 @@
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
 //#include <winbase.h>
-#include <windef.h>
+//#include <windef.h>
 #include <sddl.h>
 
 #define _CRTDBG_MAP_ALLOC
@@ -119,7 +119,7 @@ NTSTATUS ntStatus;
 const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
-const wchar_t TEMP_CLASS_NAME[]  = L"ResCheckClass";
+const wchar_t TEMP_CLASS_NAME[14]  = L"ResCheckClass";
 //A pathname MUST be no more than 32,760 characters in length. (ULONG) Each pathname component MUST be no more than 255 characters in length (USHORT)
 //wchar_t longPathName=(char)0;  //same as '\0'
 
@@ -308,6 +308,8 @@ void InitProc(HWND hwnd)
         	DisplayError (hwnd, L"ENV64BIT: Error: pointer should be 8 bytes. Exiting", errCode, 0);
 			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 			ReleaseMutex(hMutex);
+			if (currPath) free(currPath);
+			if (currPathW) free(currPathW);
 			exit (1); //EndDialog will process the rest of the code in the fn.
     }
     am64Bit = true;
@@ -357,10 +359,18 @@ void InitProc(HWND hwnd)
 			if (currPathW) free(currPathW);
 			exit (1); //EndDialog will process the rest of the code in the fn.
 		}
-}	
+	}	
 
 	#else
-    //#error "user" gen error won't compile with current settings: "Must define either ENV32BIT or ENV64BIT". 128 bit?
+	{
+			//#error "user" gen error won't compile with current settings: "Must define either ENV32BIT or ENV64BIT". 128 bit?
+			DisplayError (hwnd, L"Not ENV32BIT or ENV64BIT. Exiting", errCode, 0);
+			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
+			ReleaseMutex (hMutex);
+			if (currPath) free(currPath);
+			if (currPathW) free(currPathW);
+			exit (1);
+	}
 	#endif
 
 
@@ -572,7 +582,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			
             {	
 				
-			hMutex = CreateMutex( nullptr, TRUE, TEXT("BiggerDirectories.exe") );
+			hMutex = CreateMutexW( nullptr, TRUE, L"BiggerDirectories.exe" );
 			if (hMutex)
 			{
 			DWORD wait_success = WaitForSingleObject (hMutex, 30 );
@@ -606,11 +616,13 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						break;
 						case 2:
 						{
+							_CrtDumpMemoryLeaks();
 							EndDialog(hwnd, 1);
 						}
 						break;
 						case 3:
 						{
+							_CrtDumpMemoryLeaks();							
 							EndDialog(hwnd, 1);
 						}
 						break;
@@ -2350,11 +2362,10 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 				__except (GetExceptionCode() == EXCEPTION_INVALID_HANDLE ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
 				{
-					// No debugger is attached, so return FALSE 
-					// and continue.
+					// No debugger is attached, so return FALSE and continue.
 					ErrorExit(L"Created Directory Handle not an OS Handle: This occurs in debug only. See Github Issues.", errCode);
 				}
-#endif			
+				#endif			
 
 
 			}
@@ -2440,14 +2451,14 @@ INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				EndDialog(aboutHwnd, IDC_OK);
 				break;
 
-				}
-				break;
+			}
 
 			break;
 	case WM_CLOSE:
 			{
 				EndDialog(aboutHwnd, IDC_OK);
 			}
+			default: return FALSE;
 
 	//default: return DefWindowProc(aboutHwnd, uMsg, wParam, lParam); //this really breaks stuff even with the WM_SETTEXT
 	//probably message deadlock? https://msdn.microsoft.com/en-us/library/ms644927(v=VS.85).aspx#deadlocks

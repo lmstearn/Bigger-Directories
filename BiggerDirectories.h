@@ -78,6 +78,7 @@
 
 //G++ compatibility ...
 #define MSGFLT_ALLOW                            (1)
+#undef MSGFLT_ADD
 #define MSGFLT_ADD                              (1)
 //BOOL (WINAPI * ChangeWindowMessageFilterEx)(HWND,UINT,DWORD) = NULL;
 
