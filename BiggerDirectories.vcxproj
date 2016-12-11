@@ -224,6 +224,7 @@
       <UACUIAccess>false</UACUIAccess>
       <UACExecutionLevel>HighestAvailable</UACExecutionLevel>
       <StackReserveSize>8000000</StackReserveSize>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <Bscmake>
       <SuppressStartupBanner>true</SuppressStartupBanner>

@@ -1,20 +1,17 @@
-#include <shlwapi.h>
-#include "BiggerDirectories.h" //my file
+#include <stdio.h> //sprintf
 #include <stdlib.h> //malloc
 #include <fcntl.h>
 #include <io.h> //setmode
-#include <stdio.h> //sprintf
+#include <shlwapi.h>
+#include <sddl.h>
 #include <windows.h>
 #include <strsafe.h> //safe string copy & StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
-//#include <winbase.h>
-//#include <windef.h>
-#include <sddl.h>
 
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
-
+#include "BiggerDirectories.h" //my file
 //#include <afxwin.h>
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
@@ -85,7 +82,12 @@ int GetDrives(HWND hwnd);
 
 //};
 
-
+#if (NTDDI_VERSION == NTDDI_WINXPSP3)
+typedef struct tagCHANGEFILTERSTRUCT {
+  DWORD cbSize;
+  DWORD ExtStatus;
+} CHANGEFILTERSTRUCT, *PCHANGEFILTERSTRUCT;
+#endif
 
 typedef NTSTATUS (__stdcall *NTDLLptr)(
 	OUT PHANDLE FileHandle, 
@@ -300,8 +302,37 @@ void InitProc(HWND hwnd)
 
 	if (!DynamicLoader (true, tempDest)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions..", errCode, 0);
 
+
+
+	#ifdef _WIN32_WINNT //#if is a directive: see header file
+	#if (NTDDI_VERSION < NTDDI_WINXPSP3)
+	{
+     	if (DisplayError (hwnd, L"This program will not work in any Operating Systems older than XP(SP3). Click Yes to exit.", errCode, 1))
+		{
+			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
+			ReleaseMutex(hMutex);
+			if (currPath) free(currPath);
+			if (currPathW) free(currPathW);
+			exit (1); //EndDialog will process the rest of the code in the fn.
+		}
+	}
+	#endif
+	#else
+
+	{
+		if (DisplayError (hwnd, L"Not Win32: This program may not work in this environment! Click Yes to exit.", errCode, 1));
+		{
+			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
+			ReleaseMutex(hMutex);
+			if (currPath) free(currPath);
+			if (currPathW) free(currPathW);
+			exit (1);
+		}
+	}
+	#endif
+
 	
-	#if defined(ENV64BIT) //#if is a directive: see header file
+	#if defined(ENV64BIT)
 	{
     if (sizeof(void*) != 8)
     {
@@ -310,7 +341,7 @@ void InitProc(HWND hwnd)
 			ReleaseMutex(hMutex);
 			if (currPath) free(currPath);
 			if (currPathW) free(currPathW);
-			exit (1); //EndDialog will process the rest of the code in the fn.
+			exit (1);
     }
     am64Bit = true;
 	exe64Bit = true;
@@ -4689,6 +4720,7 @@ BOOL ChangeWindowMsgFilterEx(HWND hwnd, UINT Msg, DWORD action)
            reinterpret_cast<void*>(
            GetProcAddress(GetModuleHandle(L"user32"),
                           "ChangeWindowMessageFilter")));
+		return pfn(Msg, action);
     }
         return pfn(hwnd, Msg, action, nullptr);
 }

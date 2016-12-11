@@ -56,6 +56,11 @@
 #pragma once
 #pragma comment( lib, "Winmm.lib" )
 
+#ifndef NTDDI_WINXPSP3
+#define NTDDI_WINXPSP3 0x05010300
+#endif 
+
+
 //check properties/c++/preprocessor defs are _Win64
 #if _WIN32 || _WIN64
    #if _WIN64
