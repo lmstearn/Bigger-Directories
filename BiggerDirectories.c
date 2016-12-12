@@ -82,7 +82,7 @@ int GetDrives(HWND hwnd);
 
 //};
 
-#if (NTDDI_VERSION == NTDDI_WINXPSP3)
+#if (NTDDI_VERSION == NTDDI_VISTA || NTDDI_VERSION == NTDDI_VISTASP1 || NTDDI_VERSION == NTDDI_WS08)
 typedef struct tagCHANGEFILTERSTRUCT {
   DWORD cbSize;
   DWORD ExtStatus;
@@ -201,7 +201,7 @@ int GetDrives(HWND hwnd);
 void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wchar_t* function, const wchar_t* file, unsigned int line, uintptr_t pReserved);
 BOOL RevertWOW64RedirectionIfNecessary(PVOID pOldValue);
 BOOL DisableWOW64RedirectionIfNecessary(PVOID pOldValue);
-BOOL ChangeWindowMsgFilterEx(HWND hwnd, UINT Msg, DWORD action);
+BOOL ChangeWindowMsgFilterEx(HWND hwnd, UINT Msg);
 //BOOL GetProcAddresses( HINSTANCE *hLibrary, LPSTR lpszLibrary, INT nCount, ... );
 // End of HyperLink URL
 
@@ -684,12 +684,13 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				ExitProcess(1);
 			}
 
-				
-			if (!(ChangeWindowMsgFilterEx(hwnd, WM_DROPFILES, MSGFLT_ALLOW) && ChangeWindowMsgFilterEx(hwnd, WM_COPYDATA, MSGFLT_ALLOW) && ChangeWindowMsgFilterEx(hwnd, WM_COPYGLOBALDATA, MSGFLT_ALLOW)))
+			#if !(NTDDI_VERSION <= NTDDI_WINXPSP3) //breaks drag & drop
+			if (!(ChangeWindowMsgFilterEx(hwnd, WM_DROPFILES) && ChangeWindowMsgFilterEx(hwnd, WM_COPYDATA) && ChangeWindowMsgFilterEx(hwnd, WM_COPYGLOBALDATA)))
 			{
 				DisplayError (hwnd, L"ChangeWindowMsgFilterEx: Could not allow message", errCode, 0);
 			}
-				
+			#endif
+
             }
 		break;
 
@@ -1073,7 +1074,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						//Load FR into branchTotalSaveFile + 1 (appendMode true so FR loaded after)
 						if (!ProcessFolderRepository (hwnd, false, true))
 						{
-							if (DisplayError (hwnd, L"Problem with FR file! Try alternate Create", 0, 1))
+							if (DisplayError (hwnd, L"Problem with File Repo.! Try alternate Create", 0, 1))
 							{
 								free (currPathW);
 								goto AltCreate;
@@ -3627,7 +3628,7 @@ else
 		{
 			if (branchTotal == j)
 			{
-				if (DisplayError (hwnd, L"The selected folder is not found in the F. Click Yes for alternate delete", 0, 1))
+				if (DisplayError (hwnd, L"The selected folder is not found in the File Repo. Click Yes for alternate delete", 0, 1))
 				{
 					free(pathToDeleteW);
 					goto OldDelete;
@@ -4700,9 +4701,8 @@ BOOL DisableWOW64RedirectionIfNecessary(PVOID pOldValue)
          return FALSE;
     }
 }
-BOOL ChangeWindowMsgFilterEx(HWND hwnd, UINT Msg, DWORD action)
+BOOL ChangeWindowMsgFilterEx(HWND hWnd, UINT uMsg)
 {
-
     typedef BOOL (WINAPI * fnChangeWindowMessageFilterEx)(HWND, UINT, DWORD, PCHANGEFILTERSTRUCT);
     fnChangeWindowMessageFilterEx pfn =
         reinterpret_cast<fnChangeWindowMessageFilterEx>(
@@ -4713,14 +4713,14 @@ BOOL ChangeWindowMsgFilterEx(HWND hwnd, UINT Msg, DWORD action)
     if (!(pfn))
 	//use the old function
     {
-		action = MSGFLT_ADD;
+
 		typedef BOOL (WINAPI * fnChangeWindowMessageFilter)( UINT, DWORD);
     fnChangeWindowMessageFilter pfn =
         reinterpret_cast<fnChangeWindowMessageFilter>(
            reinterpret_cast<void*>(
            GetProcAddress(GetModuleHandle(L"user32"),
                           "ChangeWindowMessageFilter")));
-		return pfn(Msg, action);
+		return pfn(uMsg, MSGFLT_ADD);
     }
-        return pfn(hwnd, Msg, action, nullptr);
+        return pfn(hWnd, uMsg, MSGFLT_ALLOW, NULL);
 }

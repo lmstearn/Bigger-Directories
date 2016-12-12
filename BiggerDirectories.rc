@@ -411,7 +411,7 @@ END
 //
 // DESIGNINFO
 //
-
+//https://msdn.microsoft.com/en-us/library/6t3612sk.aspx
 #ifdef APSTUDIO_INVOKED
 GUIDELINES DESIGNINFO
 BEGIN

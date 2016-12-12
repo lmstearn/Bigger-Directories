@@ -59,6 +59,16 @@
 #ifndef NTDDI_WINXPSP3
 #define NTDDI_WINXPSP3 0x05010300
 #endif 
+#ifndef NTDDI_VISTA
+#define NTDDI_VISTA 0x06000000
+#endif 
+#ifndef NTDDI_VISTASP1
+#define NTDDI_VISTASP1 0x06000100
+#endif 
+#ifndef NTDDI_WS08
+#define NTDDI_WS08 0x06000100
+#endif 
+
 
 
 //check properties/c++/preprocessor defs are _Win64
@@ -86,7 +96,6 @@
 #define MSGFLT_ALLOW                            (1)
 #undef MSGFLT_ADD
 #define MSGFLT_ADD                              (1)
-//BOOL (WINAPI * ChangeWindowMessageFilterEx)(HWND,UINT,DWORD) = NULL;
 
 
 // Next default values for new objects
