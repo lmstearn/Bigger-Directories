@@ -8,15 +8,20 @@
 #define IDD_1080P                       103
 #define IDD_2160P                       104
 #define IDD_4320P                       105
-#define IDD_HELP768P                    106
-#define IDD_HELP1080P                   107
-#define IDD_HELP2160P                   108
-#define IDD_HELP4320P                   109
-#define IDB_PENCIL                      113
-#define IDB_CRAYON                      115
-#define IDB_MARKER                      117
-#define IDB_PEN                         119
-#define IDB_FORK                        121
+#define IDD_SMALLW                      106
+#define IDD_768PW                       106
+#define IDD_1080PW                      107
+#define IDD_2160PW                      108
+#define IDD_4320PW                      109
+#define IDD_HELP768P                    110
+#define IDD_HELP1080P                   111
+#define IDD_HELP2160P                   112
+#define IDD_HELP4320P                   113
+#define IDB_PENCIL                      130
+#define IDB_CRAYON                      132
+#define IDB_MARKER                      134
+#define IDB_PEN                         136
+#define IDB_FORK                        138
 #define IDC_TEXT                        1000
 #define IDC_NUMBER                      1001
 #define IDC_LIST                        1002
@@ -44,7 +49,17 @@
 #define IDW_CLICK                       1024
 #define IDC_STATIC                      -1
 
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+
+//for _TRUNCATE to wrok in _snwprintf_s
+#ifndef _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES
+#define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
+#endif
+#ifndef  _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES_COUNT
+#define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES_COUNT 1
+#endif
 
 // Start of HyperLink URL //
 #define PROP_ORIGINAL_FONT      L"_Hyperlink_Original_Font_"
@@ -55,18 +70,10 @@
 
 #pragma once
 #pragma comment( lib, "Winmm.lib" )
+//#pragma warning(disable: <warning_code>)
 
 #ifndef NTDDI_WINXPSP3
 #define NTDDI_WINXPSP3 0x05010300
-#endif 
-#ifndef NTDDI_VISTA
-#define NTDDI_VISTA 0x06000000
-#endif 
-#ifndef NTDDI_VISTASP1
-#define NTDDI_VISTASP1 0x06000100
-#endif 
-#ifndef NTDDI_WS08
-#define NTDDI_WS08 0x06000100
 #endif 
 
 
@@ -154,3 +161,287 @@
 #endif
 
 #endif //WINDOWS_NTSTATUS_H
+
+
+
+
+
+/*
+The remainder of this header is for the IsWindowsVistaOrGreater function
+...
+...
+...
+
+Copyright (c) Microsoft Corporation. All rights reserved.
+Module Name:
+    winapifamily.h
+Abstract:
+    Master include file for API family partitioning.
+*/
+
+#ifndef _INC_WINAPIFAMILY
+#define _INC_WINAPIFAMILY
+
+#if defined(_MSC_VER) && !defined(MOFCOMP_PASS)
+#pragma once
+#endif // defined(_MSC_VER) && !defined(MOFCOMP_PASS)
+
+/*
+ *  Windows APIs can be placed in a partition represented by one of the below bits.   The 
+ *  WINAPI_FAMILY value determines which partitions are available to the client code.
+ */
+
+#define WINAPI_PARTITION_DESKTOP   0x00000001
+#define WINAPI_PARTITION_APP       0x00000002    
+
+/*
+ * A family may be defined as the union of multiple families. WINAPI_FAMILY should be set
+ * to one of these values.
+ */
+#define WINAPI_FAMILY_APP          WINAPI_PARTITION_APP
+#define WINAPI_FAMILY_DESKTOP_APP  (WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_APP)    
+
+/*
+ * A constant that specifies which code is available to the program's target runtime platform.
+ * By default we use the 'desktop app' family which places no restrictions on the API surface. 
+ * To restrict the API surface to just the App API surface, define WINAPI_FAMILY to WINAPI_FAMILY_APP.
+ */
+#ifndef WINAPI_FAMILY
+#define WINAPI_FAMILY WINAPI_FAMILY_DESKTOP_APP
+#endif
+
+/* Macro to determine if a partition is enabled */
+#define WINAPI_FAMILY_PARTITION(Partition)	((WINAPI_FAMILY & Partition) == Partition)
+
+/* Macro to determine if only one partition is enabled from a set */
+#define WINAPI_FAMILY_ONE_PARTITION(PartitionSet, Partition) ((WINAPI_FAMILY & PartitionSet) == Partition)
+
+/*
+ * Macro examples:
+ *    The following examples are typical macro usage for enabling/restricting access to header code based
+ *    on the target runtime platform. The examples assume a correct setting of the WINAPI_FAMILY macro.
+ *
+ *      App programs:
+ *          Explicitly set WINAPI_FAMILY to WINAPI_PARTITION_APP (cannot access DESKTOP partition)
+ *      Desktop programs:
+ *          Leave WINAPI_FAMILY set to the default above (currently WINAPI_FAMILY_DESKTOP_APP)
+ *
+ *      Note: Other families and partitions may be added in the future.
+ *
+ *
+ * The WINAPI_FAMILY_PARTITION macro:
+ *    Code-block is available to programs that have access to specified partition.
+ *
+ *      Example: Available to App and Desktop programs
+ *          #if WINAPI_FAMILY_PARTITION( WINAPI_PARTITION_APP )
+ *
+ *      Example: Available to Desktop programs
+ *          #if WINAPI_FAMILY_PARTITION( WINAPI_PARTITION_DESKTOP )
+ *
+ *
+ * The WINAPI_FAMILY_ONE_PARTITION macro:
+ *    Code-block is available to programs that have access to specified parition, but not others in the partition set.
+ *
+ *      Example: Available only to App programs
+ *          #if WINAPI_FAMILY_ONE_PARTITION( WINAPI_FAMILY, WINAPI_PARTITION_APP )
+ *
+ *      Example: Available only to Desktop programs
+ *          #if WINAPI_FAMILY_ONE_PARTITION( WINAPI_FAMILY, WINAPI_PARTITION_DESKTOP )
+ *
+ *      Example: Available to App, but not Desktop programs
+ *          #if WINAPI_FAMILY_ONE_PARTITION( WINAPI_FAMILY_DESKTOP_APP, WINAPI_PARTITION_APP )
+ */
+
+#endif  /* !_INC_WINAPIFAMILY */
+/******************************************************************
+*                                                                 *
+*  VersionHelpers.h -- This module defines helper functions to    *
+*                      promote version check with proper          *
+*                      comparisons.                               *
+*                                                                 *
+*  Copyright (c) Microsoft Corp.  All rights reserved.            *
+*                                                                 *
+******************************************************************/
+
+#ifndef _versionhelpers_H_INCLUDED_
+#define _versionhelpers_H_INCLUDED_
+
+#ifndef XP_BUILD
+//#include "winapifamily.h"
+#define _WIN32_WINNT_WIN8                   0x0602
+#else
+#define WINAPI_PARTITION_DESKTOP   (WINAPI_FAMILY == WINAPI_FAMILY_DESKTOP_APP)
+#define WINAPI_FAMILY WINAPI_FAMILY_DESKTOP_APP
+#define WINAPI_FAMILY_PARTITION(Partitions)     (Partitions)
+
+#define _WIN32_WINNT_NT4                    0x0400
+#define _WIN32_WINNT_WIN2K                  0x0500
+#define _WIN32_WINNT_WINXP                  0x0501
+#define _WIN32_WINNT_WS03                   0x0502
+#define _WIN32_WINNT_WIN6                   0x0600
+#define _WIN32_WINNT_VISTA                  0x0600
+#define _WIN32_WINNT_WS08                   0x0600
+#define _WIN32_WINNT_LONGHORN               0x0600
+#define _WIN32_WINNT_WIN7                   0x0601
+#define _WIN32_WINNT_WIN8                   0x0602
+#endif
+
+#ifdef _MSC_VER
+#pragma once
+#endif  // _MSC_VER
+
+#pragma region Application Family
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP)
+
+#include <specstrings.h>    // for _In_, etc.
+
+#if !defined(__midl) && !defined(SORTPP_PASS)
+
+#if (NTDDI_VERSION >= NTDDI_WINXP)
+
+#ifdef __cplusplus
+
+#define VERSIONHELPERAPI inline bool
+
+#else  // __cplusplus
+
+#define VERSIONHELPERAPI FORCEINLINE BOOL
+
+#endif // __cplusplus
+
+#define _WIN32_WINNT_WINBLUE                0x0603
+#define _WIN32_WINNT_WIN10                  0x0A00
+
+typedef NTSTATUS( NTAPI* fnRtlGetVersion )(PRTL_OSVERSIONINFOW lpVersionInformation);
+
+VERSIONHELPERAPI
+IsWindowsVersionOrGreater(WORD wMajorVersion, WORD wMinorVersion, WORD wServicePackMajor)
+{
+    /*OSVERSIONINFOEXW osvi = { sizeof(osvi), 0, 0, 0, 0, {0}, 0, 0 };
+    DWORDLONG        const dwlConditionMask = VerSetConditionMask(
+    VerSetConditionMask(
+    VerSetConditionMask(
+    0, VER_MAJORVERSION, VER_GREATER_EQUAL),
+    VER_MINORVERSION, VER_GREATER_EQUAL),
+    VER_SERVICEPACKMAJOR, VER_GREATER_EQUAL);
+    osvi.dwMajorVersion = wMajorVersion;
+    osvi.dwMinorVersion = wMinorVersion;
+    osvi.wServicePackMajor = wServicePackMajor;
+    return VerifyVersionInfoW(&osvi, VER_MAJORVERSION | VER_MINORVERSION | VER_SERVICEPACKMAJOR, dwlConditionMask) != FALSE;*/
+
+    RTL_OSVERSIONINFOEXW verInfo = { 0 };
+    verInfo.dwOSVersionInfoSize = sizeof( verInfo );
+
+    static auto RtlGetVersion = (fnRtlGetVersion)GetProcAddress( GetModuleHandleW( L"ntdll.dll" ), "RtlGetVersion" );
+
+    if (RtlGetVersion != 0 && RtlGetVersion( (PRTL_OSVERSIONINFOW)&verInfo ) == 0)
+    {
+        if (verInfo.dwMajorVersion > wMajorVersion)
+            return true;
+        else if (verInfo.dwMajorVersion < wMajorVersion)
+            return false;
+
+        if (verInfo.dwMinorVersion > wMinorVersion)
+            return true;
+        else if (verInfo.dwMinorVersion < wMinorVersion)
+            return false;
+
+        if (verInfo.wServicePackMajor >= wServicePackMajor)
+            return true;
+    }
+
+    return false;
+}
+
+VERSIONHELPERAPI
+IsWindowsXPOrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINXP ), LOBYTE( _WIN32_WINNT_WINXP ), 0 );
+}
+
+VERSIONHELPERAPI
+IsWindowsXPSP1OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINXP ), LOBYTE( _WIN32_WINNT_WINXP ), 1 );
+}
+
+VERSIONHELPERAPI
+IsWindowsXPSP2OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINXP ), LOBYTE( _WIN32_WINNT_WINXP ), 2 );
+}
+
+VERSIONHELPERAPI
+IsWindowsXPSP3OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINXP ), LOBYTE( _WIN32_WINNT_WINXP ), 3 );
+}
+
+VERSIONHELPERAPI
+IsWindowsVistaOrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_VISTA ), LOBYTE( _WIN32_WINNT_VISTA ), 0 );
+}
+
+VERSIONHELPERAPI
+IsWindowsVistaSP1OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_VISTA ), LOBYTE( _WIN32_WINNT_VISTA ), 1 );
+}
+
+VERSIONHELPERAPI
+IsWindowsVistaSP2OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_VISTA ), LOBYTE( _WIN32_WINNT_VISTA ), 2 );
+}
+
+VERSIONHELPERAPI
+IsWindows7OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WIN7 ), LOBYTE( _WIN32_WINNT_WIN7 ), 0 );
+}
+
+VERSIONHELPERAPI
+IsWindows7SP1OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WIN7 ), LOBYTE( _WIN32_WINNT_WIN7 ), 1 );
+}
+
+VERSIONHELPERAPI
+IsWindows8OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WIN8 ), LOBYTE( _WIN32_WINNT_WIN8 ), 0 );
+}
+
+VERSIONHELPERAPI
+IsWindows8Point1OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WINBLUE ), LOBYTE( _WIN32_WINNT_WINBLUE ), 0 );
+}
+
+VERSIONHELPERAPI
+IsWindows10OrGreater()
+{
+    return IsWindowsVersionOrGreater( HIBYTE( _WIN32_WINNT_WIN10 ), LOBYTE( _WIN32_WINNT_WIN10 ), 0 );
+}
+
+
+VERSIONHELPERAPI
+IsWindowsServer()
+{
+    OSVERSIONINFOEXW osvi = { sizeof( osvi ), 0, 0, 0, 0, { 0 }, 0, 0, 0, VER_NT_WORKSTATION };
+    DWORDLONG        const dwlConditionMask = VerSetConditionMask( 0, VER_PRODUCT_TYPE, VER_EQUAL );
+
+    return !VerifyVersionInfoW( &osvi, VER_PRODUCT_TYPE, dwlConditionMask );
+}
+
+#endif // NTDDI_VERSION
+
+#endif // defined(__midl)
+
+#endif /* WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP) */
+
+#pragma endregion
+
+#endif // _VERSIONHELPERS_H_INCLUDED_

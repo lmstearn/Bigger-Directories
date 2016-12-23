@@ -5,18 +5,17 @@
 #include <shlwapi.h>
 #include <sddl.h>
 #include <windows.h>
+//#include "VersionHelpers.h"
 #include <strsafe.h> //safe string copy & StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
-
+#include <errno.h>
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #include "BiggerDirectories.h" //my file
 //#include <afxwin.h>
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
-
-
 
 
 
@@ -51,11 +50,12 @@ wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder], pathsToSave [branchLimit][pa
 
 
 int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld, dblclkLevel = 0;
-int i,j,k, errCode;
+int i,j,k, errCode, verifyFail;
 int idata, index, folderIndex, listTotal = 0, sendMessageErr = 0;
 int treeLevel, trackFTA[branchLimit][2];
 int resResult;
 bool resWarned;
+bool wideScr = true;
 bool foundResolution = false;
 bool pCmdLineActive = false;
 bool secondTryDelete = false;
@@ -73,7 +73,6 @@ WNDPROC g_pOldProc;
 HANDLE keyHwnd, hMutex, hdlNtCreateFile, hdlNTOut, exeHandle, ds;     // directory handle
 HINSTANCE appHinstance;
 HDROP hDropInfo = NULL; //shell drop handle
-int GetDrives(HWND hwnd);
 
 //struct FolderRepository
 //{
@@ -82,13 +81,7 @@ int GetDrives(HWND hwnd);
 
 //};
 
-#if (NTDDI_VERSION == NTDDI_VISTA || NTDDI_VERSION == NTDDI_VISTASP1 || NTDDI_VERSION == NTDDI_WS08)
-typedef struct tagCHANGEFILTERSTRUCT {
-  DWORD cbSize;
-  DWORD ExtStatus;
-} CHANGEFILTERSTRUCT, *PCHANGEFILTERSTRUCT;
-#endif
-
+//NTDLLptr is a pointer to a function returning LONG or NTSTATUS
 typedef NTSTATUS (__stdcall *NTDLLptr)(
 	OUT PHANDLE FileHandle, 
 	IN ACCESS_MASK DesiredAccess, 
@@ -114,10 +107,10 @@ typedef ULONG (__stdcall *PFN_RtlNtStatusToDosError) (
 
 
 NTDLLptr foundNTDLL = nullptr; //returns variable here
-UNICODE_STRING fn;
 OBJECT_ATTRIBUTES fileObject;
 IO_STATUS_BLOCK ioStatus;
-NTSTATUS ntStatus;
+NTSTATUS ntStatus = NULL;
+UNICODE_STRING fn;
 const char createFnString[13] = "NtCreateFile"; //one extra for null termination
 const char initUnicodeFnString[21] = "RtlInitUnicodeString";
 const char NtStatusToDosErrorString[22] = "RtlNtStatusToDosError";
@@ -146,16 +139,44 @@ APP_CLASS::APP_CLASS(void)
 		switch (resResult)
 	{
 		case 1:
+			if (wideScr)
+			{
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_4320PW), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
+			else
+			{
 			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_4320P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
 		break;
 		case 2:
+			if (wideScr)
+			{
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_2160PW), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
+			else
+			{
 			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_2160P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
 		break;
 		case 3:
+			if (wideScr)
+			{
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_1080PW), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
+			else
+			{
 			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_1080P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
 		break;
 		case 4:
+			if (wideScr)
+			{
+			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_768PW), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
+			else
+			{
 			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_768P), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
+			}
 		break;
 		default:
 			DialogBoxParamW(appHinstance, MAKEINTRESOURCEW(IDD_SMALL), nullptr, APP_CLASS::s_DlgProc, reinterpret_cast<LPARAM>(this));
@@ -184,11 +205,13 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE &hProcessName)
 NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
 bool CloseNTDLLObjs (BOOL atWMClose);
 bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
+bool CheckAttribs(int jVar, wchar_t &tempDestOld);
 void FRDeleteInit (HWND hwnd, HWND hList);
 
 bool FRDelete (HWND hwnd);
 bool FRDelsub (HWND hwnd);
 void doFilesFolders(HWND hwnd);
+void FRReorg (int jVar, int &brTotal);
 int RecurseRemovePath();
 // Start of HyperLink URL
 void ShellError (HWND aboutHwnd, HINSTANCE nError);
@@ -213,12 +236,12 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough but not req'd
 		//http://www.cprogramming.com/tutorial/printf-format-strings.html
 		if (errorcode == 0){
-		swprintf_s(hrtext, _countof(hrtext), L"%s.", messageText);
+		_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"%s.", messageText);
 		}
 		else //LT 0 my defined error, GT 0 error should be GET_LAST_ERROR
 		{
 		Beep(200,150);
-		swprintf_s(hrtext, _countof(hrtext), L"%s. Error Code:  %d", messageText, errorcode);
+		_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"%s. Error Code:  %d", messageText, errorcode);
 		}
 		//change countof sizeof otherwise possible buffer overflow: here index and rootFolderCS gets set to -16843010!
 		if (yesNo)
@@ -283,7 +306,7 @@ void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage)
 	lpDisplayBuf = (LPVOID)LocalAlloc(LMEM_ZEROINIT, (lstrlenW((LPCWSTR)lpMsgBuf) + lstrlenW((LPCWSTR)lpszFunction) + 40) * sizeof(TCHAR));
 	
 	
-	StringCchPrintfW((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(wchar_t), L"%s failed with error %lu: %s", lpszFunction, dww, (LPWSTR)lpMsgBuf);
+	StringCchPrintfW((LPWSTR)lpDisplayBuf, LocalSize(lpDisplayBuf) / sizeof(wchar_t), L"%s Failed With Error %lu: %s", lpszFunction, dww, (LPWSTR)lpMsgBuf);
 	wprintf(L"\a");  //audible bell
 	Beep(400,500);
 	MessageBoxW(nullptr, (LPCWSTR)lpDisplayBuf, L"Error", MB_OK);
@@ -300,7 +323,7 @@ void InitProc(HWND hwnd)
 	errCode = 0;
 	//if (foundNTDLL) we can use the better function
 
-	if (!DynamicLoader (true, tempDest)) DisplayError (hwnd, L"The long path function has been removed. Using 'short' path functions..", errCode, 0);
+	if (!DynamicLoader (true, tempDest)) DisplayError (hwnd, L"An error occurred. The long path function has been removed. Using 'short' path functions..", errCode, 0);
 
 
 
@@ -622,14 +645,35 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
 						if (pCmdLineActive) 
 							{
-								secondTryDelete = true;
 
+								secondTryDelete = true;
+								currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+								currPath = (char*)calloc(pathLength, sizeof(char));
+								if (currPathW == nullptr || currPath== nullptr )
+									{
+									errCode = -1;
+									DisplayError (hwnd, L"Could not allocate required memory to initialize String", errCode, 0);
+									_CrtDumpMemoryLeaks();
+									EndDialog(hwnd, 1);
+									}
 								InitProc (hwnd);
 								SendDlgItemMessage(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+								if (currPathW) free(currPathW);
+								if (currPath) free(currPath);
 								FRDeleteInit (hwnd, nullptr);
 								if (rootDir[0] != L'\0') rootDir[0] = L'\0';
-								
+
 							}
+
+					currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+					currPath = (char*)calloc(pathLength, sizeof(char));
+					if (currPathW == nullptr || currPath== nullptr )
+						{
+						errCode = -1;
+						DisplayError (hwnd, L"Could not allocate required memory to initialize String", errCode, 0);
+						_CrtDumpMemoryLeaks();
+						EndDialog(hwnd, 1);
+						}
 
 						InitProc (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
@@ -684,12 +728,16 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				ExitProcess(1);
 			}
 
-			#if !(NTDDI_VERSION <= NTDDI_WINXPSP3) //breaks drag & drop
+			if (IsWindowsVistaOrGreater())
+			{
 			if (!(ChangeWindowMsgFilterEx(hwnd, WM_DROPFILES) && ChangeWindowMsgFilterEx(hwnd, WM_COPYDATA) && ChangeWindowMsgFilterEx(hwnd, WM_COPYGLOBALDATA)))
 			{
 				DisplayError (hwnd, L"ChangeWindowMsgFilterEx: Could not allow message", errCode, 0);
 			}
-			#endif
+			}
+						if (currPathW) free(currPathW);
+						if (currPath) free(currPath);
+ 
 
             }
 		break;
@@ -1057,18 +1105,18 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					goto EndCreate;
 					}
 
+				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+				currPath = (char*)calloc(pathLength, sizeof(char));
+				if (currPathW == nullptr || currPath== nullptr )
+					{
+					errCode = -1;
+					DisplayError (hwnd, L"Could not allocate required memory to initialize String", errCode, 0);
+					goto EndCreate;
+					}
 
 
 					if (foundNTDLL)
 					{
-						currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
-						if (currPathW == nullptr)
-							{
-							/* We were not so display a message */
-							errCode = -1;
-							DisplayError (hwnd, L"Could not allocate required memory to initialize String", errCode, 0);
-							goto EndCreate;
-							}
 						
 						(!branchTotal && createFail)? branchTotalCum = -1: branchTotalCum = 0;
 						//Load FR into branchTotalSaveFile + 1 (appendMode true so FR loaded after)
@@ -1076,7 +1124,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							if (DisplayError (hwnd, L"Problem with File Repo.! Try alternate Create", 0, 1))
 							{
-								free (currPathW);
 								goto AltCreate;
 							}
 							else
@@ -1121,10 +1168,10 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										{
 											if (0 == wcscmp(pathsToSave[i], pathsToSave[k]))
 											{
-												pathsToSave[k][0] = L'\0';
-												trackFTA [k][0] = 0;
-												trackFTA [k][1] = 0;
-												for (int l = 0; l < treeLevelLimit; l++) folderTreeArray[k][l][0] = L'\0';
+												pathsToSave[i][0] = L'\0';
+												trackFTA [i][0] = 0;
+												trackFTA [i][1] = 0;
+												for (int l = 0; l < treeLevelLimit; l++) folderTreeArray[i][l][0] = L'\0';
 											} 
 										}
 
@@ -1140,7 +1187,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						
 						for (i = ((createFail)? branchTotalCumOld + 1: 0); i <= branchTotal; i++)
 						{
-
 
 						wcscpy_s(currPathW, pathLength, driveIDBaseWNT); //maxPathFolder too small for destination
 
@@ -1167,6 +1213,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						{
 							ErrorExit (L"RtlNtStatusToDosError: Problem!", 0);
 							errCode = 1;
+							if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 							goto EndCreate;
 						}
 						DWORD Status = RtlNtStatusToDosError (ntStatus);
@@ -1201,10 +1248,11 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 								createFail = true;
 								errCode = 1;
+								if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 								goto EndCreate;
 							}
 						}
-						//SetCurrentDirectory Often fails here at root node with error 32 "used by another process"
+						//SetCurrentDirectory oft fails here at root node with error 32 "used by another process"
 						if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 						}
 
@@ -1214,6 +1262,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 							errCode = 1;
 							createFail = true;
 							ErrorExit (L"DynamicLoader failed: Cannot create!", 1);
+							if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 							goto EndCreate;
 						}
 					} //trackFTA condition
@@ -1233,21 +1282,11 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				AltCreate:
 
-				currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-
-				if (currPathW == nullptr)
-					{
-					/* We were not so display a message */
-					errCode = -1;
-					DisplayError (hwnd, L"Could not allocate required memory to initialize String", errCode, 0);
-					goto EndCreate;
-					}
-
-
 				//Another loop & variables for recursive create here
 				for (i = rootFolderCS + rootFolderCW; i < listTotal; i++)
 				{
 				sendMessageErr = SendMessageW(hList, LB_GETTEXT, i, (LPARAM)currPathW);
+				sendMessageErr = SendMessageA(hList, LB_GETTEXT, i, (LPARAM)currPath);
 				//check for double click https://msdn.microsoft.com/en-us/library/windows/desktop/bb775153(v=vs.85).aspx 
 
 
@@ -1351,8 +1390,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				EndCreate:
 				if (foundNTDLL)
 				{
-					if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
-
+				hdlNTOut = 0; //This has already been closed but is not zeroed so a system blob still has it
 				if (createFail)
 				{
 					//Write the first successful block, but if second error don't write same stuff again
@@ -1443,7 +1481,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				}
 					if (errCode == 0) //succeeded
 						{
-						currPath = (char*)calloc(pathLength, sizeof(char));
 						InitProc(hwnd);
 						removeButtonEnabled = true;
 						EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), removeButtonEnabled);
@@ -1462,6 +1499,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 				case IDC_REMOVE:
 				{
+
 
 					errCode = 0;
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
@@ -1580,7 +1618,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 														
 													if ((errCode = !MoveFileW(currPathW, tempDest)) != 0)
 													{
-														swprintf_s(hrtext, _countof(hrtext), L"Unable to move file \n\"%s\"", currPathW);
+														_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Unable to move file \n\"%s\"", currPathW);
 														DisplayError (hwnd, hrtext, errCode, 0);
 														break;
 													}
@@ -1606,7 +1644,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 														
 													if ((errCode = !MoveFileW(currPathW, tempDest)) != 0)
 													{
-														swprintf_s(hrtext, _countof(hrtext), L"Unable to move file \n\"%s\"", currPathW);
+														_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Unable to move file \n\"%s\"", currPathW);
 														DisplayError (hwnd, hrtext, errCode, 0);
 														break;
 													}
@@ -1641,6 +1679,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								
 																
 								trackFTA [branchTotal][1] -= 1;
+
 								if (index <= branchLevelClick - branchLevelClickOld)
 									{
 									if (branchLevelClick) branchLevelClick -= 1;
@@ -1662,9 +1701,10 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								}
 
 
-
-
-								GlobalFree(selItems);
+							if (currPathW) free (currPathW);
+							if (tempDest) free (tempDest);
+							if (findPathW) free(findPathW);
+							GlobalFree(selItems);
 
 							}
 							else
@@ -1673,10 +1713,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								DisplayError (hwnd, L"No items selected", errCode, 0);
 							}
 
-							if (currPathW) free (currPathW);
-							if (tempDest) free (tempDest);
-							if (findPathW) free(findPathW);
-							errCode = 0;
+						errCode = 0;
 						}
 					}
 					else
@@ -1689,35 +1726,29 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			case IDC_CLEAR:
 				{
 
-					switch (dblclkLevel)
+				if (dblclkLevel < 2)
+				{
+						currPath = (char *)calloc(maxPathFolder, sizeof(char));
+						currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+						if ((currPath == nullptr) || (currPathW == nullptr))
 						{
-						case 0:
-							{
-								InitProc(hwnd);
-							}
-								break;
-						case 1:
-							{
-								currPath = (char *)calloc(maxPathFolder, sizeof(char));
-								currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
-								if ((currPath == nullptr) || (currPathW == nullptr))
-								{
-								DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
-								return 0;
-								}
-								InitProc(hwnd);
-								free (currPath);
-								free (currPathW);
-							}
-							   break;
-						default:
-							{
-								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
-								sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
-								index = 0;
-								folderIndex = 1;
-							}
+						DisplayError (hwnd, L"Something has gone wrong with memory", errCode, 0);
+						return 0;
 						}
+						InitProc(hwnd);
+						free (currPath);
+						free (currPathW);
+				}
+
+				else
+				{
+						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_RESETCONTENT, 0, 0);
+						sendMessageErr = SendDlgItemMessageW(hwnd, IDC_LIST, LB_ADDSTRING, 0, (LPARAM)(L".."));
+						index = 0;
+						folderIndex = 1;
+				}
+
+
 				}
 			break;
 
@@ -2266,7 +2297,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				if ((dblclkLevel))
 				{
 
-				swprintf_s(hrtext, _countof(hrtext), L"Files, not folders are processed in this window. Click Yes to continue moving the selection to the target directory:\n\n %s", dblclkString);
+				_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Files, not folders are processed in this window. Click Yes to continue moving the selection to the target directory:\n\n %s", dblclkString);
 				if (DisplayError (hwnd, hrtext, errCode, 1))
 					{
 
@@ -2376,21 +2407,17 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 			//Cleanup
 			if (weareatBoot) Kleenup (hwnd);
 			 
-			if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 				if (foundNTDLL)
 				{
 					if (!CloseNTDLLObjs(true)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
 				}
-				_CrtDumpMemoryLeaks();
-				EndDialog(hwnd, 0);
-				#if defined(_WIN64) || defined(_WIN32) ||  defined(__TOS_WIN__) 
+				#if defined(_WIN64) || defined(_WIN32) ||  defined(__TOS_WIN__)
 				__try
 				{
 					_invalid_parameter_handler oldHandler, newHandler;
 					newHandler = (_invalid_parameter_handler)ThisInvalidParameterHandler;
 					oldHandler = _set_invalid_parameter_handler(newHandler);
 					_CrtSetReportMode(_CRT_ASSERT, 0);
-					exit(0);
 				}
 				__except (GetExceptionCode() == EXCEPTION_INVALID_HANDLE ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH)
 				{
@@ -2398,7 +2425,9 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					ErrorExit(L"Created Directory Handle not an OS Handle: This occurs in debug only. See Github Issues.", errCode);
 				}
 				#endif			
-
+				_CrtDumpMemoryLeaks();
+				EndDialog(hwnd, 0);
+				if (IsWindowsVistaOrGreater()) if (exeHandle != INVALID_HANDLE_VALUE) CloseHandle(exeHandle);
 
 			}
 		break;
@@ -2511,6 +2540,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine
 	}
 	//else
 	
+	_invalid_parameter_handler oldHandler, newHandler;
+	newHandler = (_invalid_parameter_handler)ThisInvalidParameterHandler;
+	oldHandler = _set_invalid_parameter_handler(newHandler);
+	_CrtSetReportMode(_CRT_ASSERT, 0); // Disable the message box for assertions.  
+
 
 	// Create a new window see https://msdn.microsoft.com/en-us/library/windows/desktop/ff381397(v=vs.85).aspx
 	WNDCLASSW ReschkC = { };
@@ -2759,7 +2793,7 @@ void TextinIDC_TEXT (HWND hwnd)
 
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad)
 {
-	HMONITOR hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+	HMONITOR hMon = MonitorFromWindow(GetDesktopWindow(), MONITOR_DEFAULTTOPRIMARY);
 	MONITORINFO monInfo;
 	monInfo.cbSize = sizeof(MONITORINFO);
 
@@ -2771,10 +2805,14 @@ int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad)
 
 if (GetMonitorInfo (hMon, &monInfo))
 {
+	
+	if ((float)abs(monInfo.rcMonitor.right - monInfo.rcMonitor.left) / (float)abs(monInfo.rcMonitor.top - monInfo.rcMonitor.bottom) < 1.5) wideScr = false;
+
+
 	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 5000) return 1;
 	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 3000) return 2;
 	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 2000) return 3;
-	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 600) return 4;
+	if ((monInfo.rcMonitor.right - monInfo.rcMonitor.left) > 850) return 4;
 	else return 5;
 }
 else
@@ -3135,16 +3173,40 @@ NTDLLptr DynamicLoader (bool progInit, wchar_t * fileObjVar)
 			fileObject.Attributes = OBJ_CASE_INSENSITIVE;
 			//RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress((HMODULE)hdlNtCreateFile, NtStatusToDosErrorString);
 			PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
-			if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) return nullptr;
-
+			if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) foundNTDLL = NULL;
 			}
 			else
 			{
+			wchar_t rtlSourceStr[maxPathFolder];
+			int retVal = false;
+			retVal = wcsncpy_s (rtlSourceStr, _countof(rtlSourceStr),fileObjVar, _TRUNCATE);
+			if (retVal == STRUNCATE || retVal == 0)
+			{
+			fn.Buffer = rtlSourceStr;
+			fn.Length = _countof (rtlSourceStr);
+			fn.MaximumLength = sizeof (rtlSourceStr);
+
 			//init Unicode string
 			PFN_RtlInitUnicodeString RtlInitUnicodeString;
-			if( !(RtlInitUnicodeString = (PFN_RtlInitUnicodeString) GetProcAddress( (HMODULE)hdlNtCreateFile, initUnicodeFnString )) ) return nullptr;
+			if (RtlInitUnicodeString = (PFN_RtlInitUnicodeString) GetProcAddress( (HMODULE)hdlNtCreateFile, initUnicodeFnString ))
+			{
 			RtlInitUnicodeString(&fn, fileObjVar);
-			fileObject.ObjectName = &fn; //Ntdll.dll
+			InitializeObjectAttributes (&fileObject, &fn, OBJ_CASE_INSENSITIVE | OBJ_OPENIF, NULL, NULL);
+			}
+			else
+			{
+			FreeLibrary ((HMODULE) hdlNtCreateFile);
+			foundNTDLL = NULL;
+			fileObject.ObjectName = NULL;
+			}
+			}
+			else
+			{
+			FreeLibrary ((HMODULE) hdlNtCreateFile);
+			foundNTDLL = NULL;
+			fileObject.ObjectName = NULL;
+			}
+
 			}
 		}
 	else
@@ -3158,16 +3220,21 @@ return foundNTDLL;
 bool CloseNTDLLObjs (BOOL atWMClose)
 {
 	bool returnClose = true;
+if (atWMClose)
+{
 	memset(&ioStatus, 0, sizeof(ioStatus));
 	memset(&fileObject, 0, sizeof(fileObject));
-
-	if (!atWMClose && hdlNTOut) 
+}
+else
+{
+	if (hdlNTOut) 
 	{
 		if (CloseHandle (hdlNTOut) == (ERROR_INVALID_HANDLE)) returnClose = false;
 		fileObject.Length = sizeof(fileObject);
 		fileObject.Attributes = OBJ_CASE_INSENSITIVE;
+		fileObject.ObjectName = NULL;
 	}
-
+}
 	if (hdlNtCreateFile)
 	{
 		if (!FreeLibrary ((HMODULE)hdlNtCreateFile)) returnClose = false; 
@@ -3180,8 +3247,7 @@ bool CloseNTDLLObjs (BOOL atWMClose)
 bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode)
 {
 	DWORD Status;
-	int  result;
-	int  jLim;
+	int result, jLim = 0;
 	wint_t ch = 0, chOld = 0;
 	FILE *stream = nullptr;
 	bool frReturn = true;
@@ -3316,7 +3382,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 	else //read from file
   	{
-	
+	verifyFail = 0;
 	ch = 1;
 	(appendMode)? i = branchTotal + 1: i = 0;
 	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the beginning of the file */
@@ -3378,15 +3444,15 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 			trackFTA [i][0] = j; //track the nesting level for validation
 			if (ch == eolFTA) break;
-			if (j != 0)
+			if (j == 0)
+				{
+					wcscpy_s(tempDestOld, pathLength, driveIDBaseWNT);
+				}
+			else
 				{
 					wcscpy_s(tempDestOld, pathLength, pathsToSave[i]);
 					wcscat_s(pathsToSave[i], pathLength, &separatorFTA); //tacking them back on: what a waste doing it this way
 				}
-			else
-			{
-				wcscpy_s(tempDestOld, pathLength, driveIDBaseWNT);
-			}
 			wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][j]);
 
 
@@ -3397,7 +3463,8 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 					wcscat_s(tempDest, pathLength, pathsToSave[i]);
 					if (DynamicLoader (false, tempDest))
 					{
-						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, &fileObject, &ioStatus, nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT, nullptr, 0);
+						//Do NOT query file with FILE_OPEN_REPARSE_POINT!
+						ntStatus = foundNTDLL (&hdlNTOut, FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES, &fileObject, &ioStatus, 0, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_DELETE | FILE_SHARE_READ | FILE_SHARE_WRITE, FILE_OPEN, FILE_DIRECTORY_FILE, nullptr, 0);
 
 						PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 						if( !(RtlNtStatusToDosError = (PFN_RtlNtStatusToDosError) GetProcAddress( (HMODULE)hdlNtCreateFile, NtStatusToDosErrorString )) ) 
@@ -3412,6 +3479,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 							{
 							case 0: //NT_SUCCESS
 								{
+
 								}
 							break;
 							case 1: //NT_INFORMATION
@@ -3424,26 +3492,10 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 							break;
 							case 3://NT_ERROR
 								{
-									//GetFileAttributesW is good to go else it's FltCancellableWaitForSingleObject
-									if (GetFileAttributesW(tempDest) == INVALID_FILE_ATTRIBUTES) //The status_wait_one is always reached after creation
-									{
-										//(Status is often invalid parm 0X00000057 from prevoious call)
-										trackFTA [i][0] -=1; //Rollback
-										wcscpy_s(pathsToSave[i], pathLength, tempDestOld);
-
-										ErrorExit (L"Cannot verify a file entry in F: Probably doesn't exist! recommend restarting the program ASAP: ", 1);
-										folderTreeArray[i][j][0] = L'\0';
-
-											
-										//wind forward to EOL
-										for (k = 0; ((k  < (pathLength)) && (ch!= eolFTA)); k++)
-										{
-											ch = fgetwc(stream);
-											chOld = ch;
-										}
-										
-									}
+									verifyFail = static_cast <int> (Status);
 								}
+							break;
+							default:
 							break;
 							}
 						}
@@ -3459,14 +3511,107 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 				}//FoundNTdll
 
 
-
+			jLim = j; //for verify
 
  			}
 
-			
 
 		branchTotalSaveFile = i;
+		if (verifyFail)
+		{
+
+		//Status can be invalid parm 0X00000057 ERROR_INVALID_PARAMETER from previous call
+		// Also can be 0x00000087 ERROR_IS_SUBSTED: 
+
+		if (verifyFail == 57 || verifyFail == 87)
+		{
+		if (GetFileAttributesW(tempDest) == INVALID_FILE_ATTRIBUTES) //The status_wait_one is always reached after creation
+			{
+				_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Cannot verify a directory entry in the FR (Are you running XP?): If the following directory is to be deleted, a reboot may be required to clear: \n\n %s", tempDest);
+			}
+			else
+			{
+				_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Cannot verify the directory entry in the FR: Try restarting Bigger Directories to delete the following directory: \n\n %s", tempDest);
+			}
+			for (k = 0; ((k  < (pathLength)) && (ch!= eolFTA)); k++)
+			{
+				ch = fgetwc(stream);
+				chOld = ch;
+			}
+			ErrorExit (hrtext, 1);
+		}
+		else
+		{
+			//GetFileAttributesW is good to go else it's FltCancellableWaitForSingleObject: The status_wait_one on Get_Last_Error is the error before this (dir creation?)- nothing to do with this- it's related to the mutex
+		if (GetFileAttributesW(tempDest) != INVALID_FILE_ATTRIBUTES)
+		{
+			_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Cannot verify a directory entry in the FR: If it exists, its attributes cannot be read by BD on this thread- else the FR entry is corrupt & continuing will ensure its removal: \n\n %s", tempDest);
+			if (DisplayError (hwnd, hrtext, errCode, 1))		
+			{
+
+				if (jLim > 0) //trackFTA [i][0] is the same as jLim
+				{
+				folderTreeArray[i][jLim][0] = L'\0';
+				//Check if lower branches of the tree are valid, but NOT anything lower than trackFTA [i][1] + 1
+
+				wcscpy_s(tempDestOld, pathLength, driveIDBaseWNT);
+				wcscpy_s(pathsToSave[i], pathLength, folderTreeArray[i][0]);
+				if (CheckAttribs (0, *tempDestOld)) 
+				{
+					for (j = 1; (j < jLim); j++)
+					{
+						if (!CheckAttribs (j, *tempDestOld)) break;
+					}
+				}
+
+
+
+
+
+
+				}
+				else
+				{
+				//Erase record
+				(i)? trackFTA [i][0] -=1: trackFTA [0][0] = 0; //Rollup all
+				FRReorg (i, branchTotalSaveFile);
+				//Must go to next i
+				}
+
+				verifyFail = 0;
+				
+
+			}
+			else
+			{
+				for (k = 0; ((k  < (pathLength)) && (ch!= eolFTA)); k++)
+				{
+					ch = fgetwc(stream);
+					chOld = ch;
+				}
+				break;
+			}
+		}
+		else
+		{
+		//wind forward to EOL
+			for (k = 0; ((k  < (pathLength)) && (ch!= eolFTA)); k++)
+			{
+				ch = fgetwc(stream);
+				chOld = ch;
+			}
+			_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Cannot verify the directory entry in the FR: Try restarting Bigger Directories: \n\n %s ", tempDest);
+			ErrorExit (hrtext, 1);
+
+		break;
+
+		}
+		}
+
+		}
+
 		i += 1;
+
 		} while ((i < branchLimit) && (ch != WEOF));
 
 	} 
@@ -3474,11 +3619,16 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 	WEOFFOUND:
 	free (tempDestOld);
-	if (foundNTDLL && !appendMode && !falseReadtrueWrite) //cleanup
+
+	if (!falseReadtrueWrite && !appendMode) //cleanup
 	{
-		if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
+	hdlNTOut = 0;
+		if (foundNTDLL)
+		{
+			if (!CloseNTDLLObjs(false)) DisplayError (hwnd, L"NtCreateFile: Objects failed to close", errCode, 0);
+		}
 	}
-		// Close stream if it is not NULL 
+	// Close stream if it is not NULL 
 
 	if (fclose (stream))
 	{
@@ -3489,6 +3639,24 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 	return frReturn;
 
 	}
+bool CheckAttribs(int jVar, wchar_t &testPath)
+{
+	wcscpy_s(tempDest, pathLength, pathsToSave[i]);
+	wcscat_s(&testPath, pathLength, folderTreeArray[i][jVar]);
+
+	if (GetFileAttributesW(&testPath) == INVALID_FILE_ATTRIBUTES)
+	{
+		folderTreeArray[i][jVar][0] = L'\0';
+		wcscpy_s(pathsToSave[i], pathLength, tempDest);
+		trackFTA[i][0] = jVar - 1;
+		branchTotal -= jVar - 1;
+		return false;
+	}
+	wcscat_s(pathsToSave[i], pathLength, &separatorFTA);
+	wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][jVar]);
+	wcscat_s(&testPath, pathLength, &separatorFTA);
+	return true;
+}
 
 void FRDeleteInit (HWND hwnd, HWND hList)
 {
@@ -3558,7 +3726,16 @@ else
 	{
 		if (errCode > -100) 
 		{
-			if (!ProcessFolderRepository(hwnd, false, false)) //Reads and verifies entire FR
+			if (ProcessFolderRepository(hwnd, false, false)) //Reads and verifies entire FR
+			{
+				if (verifyFail)
+				{
+					free (tempDest);
+					free(pathToDeleteW);
+					goto RemoveKleenup;
+				}
+			}
+			else
 			{
 			if (!DisplayError (hwnd, L"No FR file! Cannot tell whether directory was created by this program. Click Yes for alternate delete", 0, 1))
 				{
@@ -3687,9 +3864,10 @@ if (cmdlineParmtooLong)
 
 	for (i = 1; i < branchLimit; i++)
 	{
-	trackFTA [i][0] = 0; //Initial conditons before search on path
+	trackFTA [i][0] = 0;
 	trackFTA [i][1] = 0;
 	}
+	
 	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
 	wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
 
@@ -3728,7 +3906,7 @@ if (cmdlineParmtooLong)
 			{
 			errCode = 0; //flag okay now
 			listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
-			 InitProc(hwnd);
+			InitProc(hwnd);
 			}
 			else 
 			{
@@ -3748,7 +3926,6 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 		branchTotal = branchTotalCum; // required for FR Write
 		return false;
 	}
-
 
 
 
@@ -3773,6 +3950,7 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 
 	for (i = branchTotal; (i >= branchTotalCum); i--)
 	{
+
 		//delete the bottom folder of pathsToSave[i] whose first strings correspond to rootDir in the order of trackFTA [i][1] 
 			{
 				for (j = branchTotal; (j >= branchTotalCum); j--)
@@ -3791,8 +3969,10 @@ bool FRDelsub (HWND hwnd)
 	{
 	//do not iterate below trackFTA [i + 1][1]
 
-	wcscpy_s(pathToDeleteW, pathLength, driveIDBaseWNT);
+
+	wcscpy_s(pathToDeleteW, pathLength, IsWindowsVistaOrGreater()? driveIDBaseWNT: driveIDBaseWNT);
 	wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
+
 
 	if (RemoveDirectoryW (pathToDeleteW))
 			{
@@ -3804,20 +3984,27 @@ bool FRDelsub (HWND hwnd)
 				trackFTA [j][0] -=1;
 
 
-				if (trackFTA [i][1] != 0)
+				if (trackFTA [i][1] == 0)
 				{
-				//rebuild pathsToSave
-					wcscpy_s(pathsToSave[j], pathLength, folderTreeArray[j][0]);
-					for (int l = 1; (l < k - 1); l++) //extra loop adds the terminator
-					{
-						if (l != 0) wcscat_s(pathsToSave[j], pathLength, &separatorFTA);
-						wcscat_s(pathsToSave[j], pathLength, folderTreeArray[j][l]);
-					}
-
+				errCode = 0;
+				FRReorg (1, branchTotal);
+				return true;
 				}
 				else
 				{
-				goto FRReorg;
+					if (trackFTA [i][1] < 0)
+					{
+					DisplayError (hwnd, L"Something went wrong with the deletion.", 0, 0);
+					return false;
+					}
+					//rebuild pathsToSave
+					wcscpy_s(pathsToSave[j], pathLength, folderTreeArray[j][0]);
+					for (int l = 1; (l < k - 1); l++) //extra loop adds the terminator
+					{
+						wcscat_s(pathsToSave[j], pathLength, &separatorFTA);
+						wcscat_s(pathsToSave[j], pathLength, folderTreeArray[j][l]);
+					}
+
 				}
 			
 			}
@@ -3849,14 +4036,17 @@ bool FRDelsub (HWND hwnd)
 				{
 					if (((int)GetLastError() == 2) || ((int)GetLastError() == 3)) //cannot find file or path specified
 						{
-						//The entry in pathsToSave must have a duplicate elsewhere: nuke the current one:
+						//The entry in pathsToSave must have a duplicate elsewhere which has already been removed.: nuke the current one:
 						pathsToSave[j][0] = L'\0';
-								
+						errCode = (int)GetLastError();		
 						folderTreeArray[j][0][0] = L'\0';
 
 						trackFTA [i][1] = 0;
 						trackFTA [j][0] = 0;
-						goto FRReorg;
+						errCode = (int)GetLastError();
+						FRReorg (j, branchTotal);
+						return true;
+
 						}
 						if (((int)GetLastError() == 145))
 						{
@@ -3884,17 +4074,16 @@ bool FRDelsub (HWND hwnd)
 			}
 
 	}
-	//k loop
+//k loop
 
 return true;
-
-FRReorg:
-errCode = 0;
-
-if (j != branchTotal)
+}
+void FRReorg (int jVar, int &brTotal)
+{
+if (jVar != brTotal)
 	{
 //Move everything down to fill slot
-	for (k = j + 1; (k <= branchTotal); k++)
+	for (k = jVar + 1; (k <= brTotal); k++)
 	{
 		for (int l = 0; (l < trackFTA [k][0]); l++)
 			{
@@ -3904,10 +4093,10 @@ if (j != branchTotal)
 		trackFTA [k-1][0] = trackFTA [k][0];
 		wcscpy_s(pathsToSave[k-1], pathLength, pathsToSave[k]); 
 	}
-	}	
-pathsToSave [branchTotal][0] = L'\0';
-branchTotal -=1;
-return true;
+	}
+//folderTreeArray[branchTotal][0] taken care of
+pathsToSave [brTotal][0] = L'\0';
+brTotal -=1;
 }
 void doFilesFolders(HWND hwnd)
 {
