@@ -13,6 +13,7 @@
 #define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 #include "BiggerDirectories.h" //my file
+
 //#include <afxwin.h>
 //#include <ntstatus.h>
 //#include <ntstrsafe.h>
@@ -23,6 +24,7 @@
 
 
 wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
+wchar_t hrWarn[8] = L"Warning";
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATAA da;
 int const pathLength = 32759, maxDWORD = 32767, maxPathFolder = MAX_PATH - 3, treeLevelLimit = 2000, branchLimit = 1000;
@@ -31,6 +33,7 @@ wchar_t const *invalidPathName = L":\"/\\|?*<>";
 wchar_t const eolFTA = L'\n';
 wchar_t const separatorFTA = L'\\';
 wchar_t const *lPref = L"\\\\?\\";
+//wchar_t const * hrWarn = L"Warning";
 wchar_t const APP_CLASS_NAME[]  = L"BiggerDirectories";
 
 wchar_t driveInfo[26][2], driveIndex[2];
@@ -45,8 +48,8 @@ wchar_t *pathToDeleteW, *currPathW, *findPathW, *tempDest, *thisexePath, *Bigger
 char *currPath;
 //http://stackoverflow.com/questions/2516096/fastest-way-to-zero-out-a-2d-array-in-c
 char dacfolders[branchLimit][MAX_PATH-3]; //[32768 / 257] [ MAX_PATH- 3] double array char is triple array
-wchar_t dacfoldersW[branchLimit][MAX_PATH-3], dacfoldersWtmp[branchLimit][maxPathFolder], folderTreeArray[branchLimit + 1][treeLevelLimit + 1][maxPathFolder] = { NULL };
-wchar_t reorgTmpWFS[treeLevelLimit][maxPathFolder], pathsToSave [branchLimit][pathLength];
+wchar_t dacfoldersW[branchLimit][MAX_PATH-3], dacfoldersWtmp[branchLimit][maxPathFolder], folderTreeArray[branchLimit][treeLevelLimit + 1][maxPathFolder] = { NULL };
+wchar_t reorgTmpWFS[treeLevelLimit + 1][maxPathFolder], pathsToSave [branchLimit][pathLength];
 
 
 int rootFolderCS, rootFolderCW, branchLevel, branchTotal, branchLevelCum, branchLevelClickOld, branchLevelClick, branchTotalSaveFile, branchLevelInc, branchLevelIncCum, branchSaveI, branchTotalCum, branchTotalCumOld, dblclkLevel = 0;
@@ -65,7 +68,6 @@ bool removeButtonEnabled = true;
 bool nologonEnabled = false;
 bool logonEnabled = false;
 bool wow64Functions = false;
-BOOL folderNotEmpty = false;
 BOOL weareatBoot = FALSE;
 BOOL am64Bit, exe64Bit;
 PVOID OldValue = nullptr; //Redirection
@@ -106,7 +108,7 @@ typedef ULONG (__stdcall *PFN_RtlNtStatusToDosError) (
 //PFN_RtlNtStatusToDosError RtlNtStatusToDosError;
 
 
-NTDLLptr foundNTDLL = nullptr; //returns variable here
+NTDLLptr foundNTDLL = nullptr; //points to return of NTStatus
 OBJECT_ATTRIBUTES fileObject;
 IO_STATUS_BLOCK ioStatus;
 NTSTATUS ntStatus = NULL;
@@ -191,30 +193,34 @@ APP_CLASS::APP_CLASS(void)
 // Protos...
 //------------------------------------------------------------------------------------------------------------------
 //void printStack(void);
+int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo);
+void ErrorExit (LPCWSTR lpszFunction, DWORD NTStatusMessage);
+void InitProc(HWND hwnd);
 LRESULT CALLBACK RescheckWindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 LRESULT CALLBACK ValidateProc(HWND, UINT, WPARAM, LPARAM); //subclass
 INT_PTR WINAPI AboutDlgProc(HWND aboutHwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
-int PopulateListBox (HWND hwnd, BOOL widecharNames, BOOL listFolders);
-void TextinIDC_TEXT (HWND hwnd);
+int PopulateListBox(HWND hwnd, BOOL widecharNames, BOOL listFolders);
+void TextinIDC_TEXT(HWND hwnd);
 int DoSystemParametersInfoStuff(HWND hwnd, bool progLoad);
-int SwitchResolution (HWND hwnd, INT_PTR(WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
-int GetBiggerDirectoriesPath (HWND hwnd, wchar_t *exePath);
-bool Kleenup (HWND hwnd);
-int ExistRegValue ();
+int SwitchResolution(HWND hwnd, INT_PTR(WINAPI* dProc)(HWND, UINT, WPARAM, LPARAM));
+int GetBiggerDirectoriesPath(HWND hwnd, wchar_t *exePath);
+bool Kleenup(HWND hwnd);
+int ExistRegValue();
 DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE &hProcessName);
-NTDLLptr DynamicLoader (bool progInit, wchar_t *fileObjVar);
-bool CloseNTDLLObjs (BOOL atWMClose);
+NTDLLptr DynamicLoader(bool progInit, wchar_t *fileObjVar);
+bool CloseNTDLLObjs(BOOL atWMClose);
 bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode);
 bool CheckAttribs(int jVar, wchar_t &tempDestOld);
-void FRDeleteInit (HWND hwnd, HWND hList);
 
-bool FRDelete (HWND hwnd);
-bool FRDelsub (HWND hwnd);
+void FRDeleteInit(HWND hwnd, HWND hList);
+bool FRDelete(HWND hwnd);
+bool FRDelsub(HWND hwnd);
 void doFilesFolders(HWND hwnd);
-void FRReorg (int jVar, int &brTotal);
+void FRReorg(int jVar, int &brTotal);
+void OldDeleteInit(HWND hwnd);
 int RecurseRemovePath();
 // Start of HyperLink URL
-void ShellError (HWND aboutHwnd, HINSTANCE nError);
+void ShellError(HWND aboutHwnd, HINSTANCE nError);
 static LRESULT CALLBACK _HyperlinkParentProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static LRESULT CALLBACK _HyperlinkProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CreateHyperLink(HWND hwndControl);
@@ -235,18 +241,20 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		//if (hrtext[0] == NULL) ErrorExit("LocalAlloc");
 		//hrtext[0] = NULL;  or	//*hrtext = NULL; //simple enough but not req'd
 		//http://www.cprogramming.com/tutorial/printf-format-strings.html
-		if (errorcode == 0){
+
+		if (errorcode == 0)
+		{
 		_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"%s.", messageText);
 		}
 		else //LT 0 my defined error, GT 0 error should be GET_LAST_ERROR
 		{
-		Beep(200,150);
+		if (!Beep(200,150)) MessageBoxW(hwnd, L"Beep function failed!", hrWarn, MB_OK);
 		_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"%s. Error Code:  %d", messageText, errorcode);
 		}
 		//change countof sizeof otherwise possible buffer overflow: here index and rootFolderCS gets set to -16843010!
 		if (yesNo)
 		{
-		int msgboxID = MessageBoxW(hwnd, hrtext, L"Warning", MB_YESNO);
+		int msgboxID = MessageBoxW(hwnd, hrtext, hrWarn, MB_YESNO);
 			if (msgboxID == IDYES) 
 			{
 			return 1;
@@ -258,7 +266,7 @@ int DisplayError (HWND hwnd, LPCWSTR messageText, int errorcode, int yesNo)
 		}
 		else
 		{
-		MessageBoxW(hwnd, hrtext, L"Warning", MB_OK);
+		MessageBoxW(hwnd, hrtext, hrWarn, MB_OK);
 		}
 
 		return 0;
@@ -515,7 +523,7 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	memset(dacfoldersW, L'\0', sizeof(dacfoldersW));
 	memset(folderTreeArray, L'\0', sizeof(folderTreeArray)); //required for remove function
 	memset(pathsToSave, L'\0', sizeof(pathsToSave)); //required for create
-	for (j = 0; j < branchLimit; j++)
+	for (j = 0; j <= branchLimit; j++)
 		{
 		trackFTA [j][0] = 0; //Initial conditons before search on path
 		trackFTA [j][1] = 0;
@@ -905,7 +913,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					//update branchTotal: always 0 for the first branch
 
 					//populate after the save file contents
-						if (branchTotal < branchLimit - 1)
+						if (branchTotal < branchLimit)
 						{
 						branchTotal +=1;
 						}
@@ -944,7 +952,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						}
 
 						//clear redundant branches
-						for (j = branchLevelClick + branchLevel; j < treeLevelLimit; j++)
+						for (j = branchLevelClick + branchLevel; j <= treeLevelLimit; j++)
 						{
 						folderTreeArray[branchTotal][j][0] = L'\0';
 						}
@@ -1171,7 +1179,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 												pathsToSave[i][0] = L'\0';
 												trackFTA [i][0] = 0;
 												trackFTA [i][1] = 0;
-												for (int l = 0; l < treeLevelLimit; l++) folderTreeArray[i][l][0] = L'\0';
+												for (int l = 0; l <= treeLevelLimit; l++) folderTreeArray[i][l][0] = L'\0';
 											} 
 										}
 
@@ -1558,7 +1566,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 											trackFTA [0][0] = 0; //Initial conditions before search on path
 											trackFTA [0][1] = 1;
 
-											for (j = 1; j < branchLimit; j++)
+											for (j = 1; j <= branchLimit; j++)
 											{
 											trackFTA [j][0] = 0; //Initial conditons before search on path
 											trackFTA [j][1] = 0;
@@ -3011,10 +3019,12 @@ else
 bool Kleenup (HWND hwnd)
 {
 	STARTUPINFOW lpStartupInfo;
-	PROCESS_INFORMATION lpProcessInfo = {0}; //suppresses warning when closed
+	PROCESS_INFORMATION lpProcessInfo; // = {0} not recommended -suppresses warning when closed
 
-	ZeroMemory(&lpStartupInfo, sizeof(lpStartupInfo));
-	ZeroMemory (&lpStartupInfo, sizeof(lpStartupInfo));
+	ZeroMemory(&lpStartupInfo, sizeof(lpStartupInfo)); //zeros all members
+	lpStartupInfo.cb = sizeof(lpStartupInfo);
+	ZeroMemory(&lpProcessInfo, sizeof(lpProcessInfo));
+
 	thisexePath = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 	tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 
@@ -3411,7 +3421,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		//we are reading so last null condition mandatory
 		
 			if (ch == eolFTA) ch = 1;	//ugly
-			for (j = 0; (j < treeLevelLimit) && (ch != eolFTA); j++)
+			for (j = 0; (j <= treeLevelLimit) && (ch != eolFTA); j++)
 			{
 			if (chOld == separatorFTA) chOld = 1;
 			//populate folderTreeArray- using getline method (or "template function") might be more efficent
@@ -3434,6 +3444,8 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 						
 			if (ch == eolFTA)
 			{
+				//must sanitise
+				folderTreeArray[i][j][k] = L'\0';
 				break;
 			}
 			else
@@ -3457,7 +3469,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 
 
-			if (foundNTDLL && !appendMode)   //only verify entire FR before delete
+			if (foundNTDLL && !appendMode)   //verify entire FR before create, delete
 				{
 					wcscpy_s(tempDest, pathLength, driveIDBaseWNT);
 					wcscat_s(tempDest, pathLength, pathsToSave[i]);
@@ -3515,8 +3527,6 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
  			}
 
-
-		branchTotalSaveFile = i;
 		if (verifyFail)
 		{
 
@@ -3543,7 +3553,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		else
 		{
 			//GetFileAttributesW is good to go else it's FltCancellableWaitForSingleObject: The status_wait_one on Get_Last_Error is the error before this (dir creation?)- nothing to do with this- it's related to the mutex
-		if (GetFileAttributesW(tempDest) != INVALID_FILE_ATTRIBUTES)
+		if (GetFileAttributesW(tempDest) == INVALID_FILE_ATTRIBUTES)
 		{
 			_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Cannot verify a directory entry in the FR: If it exists, its attributes cannot be read by BD on this thread- else the FR entry is corrupt & continuing will ensure its removal: \n\n %s", tempDest);
 			if (DisplayError (hwnd, hrtext, errCode, 1))		
@@ -3553,29 +3563,41 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 				{
 				folderTreeArray[i][jLim][0] = L'\0';
 				//Check if lower branches of the tree are valid, but NOT anything lower than trackFTA [i][1] + 1
+				for (j = 0; (j <= treeLevelLimit); j++) pathsToSave[i][j] = L'\0';
 
 				wcscpy_s(tempDestOld, pathLength, driveIDBaseWNT);
-				wcscpy_s(pathsToSave[i], pathLength, folderTreeArray[i][0]);
-				if (CheckAttribs (0, *tempDestOld)) 
-				{
-					for (j = 1; (j < jLim); j++)
+				
+					if (CheckAttribs (0, *tempDestOld)) 
 					{
-						if (!CheckAttribs (j, *tempDestOld)) break;
+						for (j = 1; (j < jLim); j++)
+						{
+							if (!CheckAttribs (j, *tempDestOld)) break;
+						}
 					}
-				}
 
-
-
-
+					else
+					{
+						//Zero entire branch & reset current i
+						for (j = 1; (j <= treeLevelLimit); j++)
+						{
+						folderTreeArray[i][j][0] = L'\0';
+						pathsToSave[i][j] = L'\0';
+						}
+						i -= 1;
+					}
 
 
 				}
 				else
 				{
-				//Erase record
-				(i)? trackFTA [i][0] -=1: trackFTA [0][0] = 0; //Rollup all
-				FRReorg (i, branchTotalSaveFile);
-				//Must go to next i
+				//reset current i
+				for (j = 1; (j <= treeLevelLimit); j++)
+				{
+				folderTreeArray[i][j][0] = L'\0';
+				pathsToSave[i][j] = L'\0';
+				}
+
+				i -= 1;
 				}
 
 				verifyFail = 0;
@@ -3609,7 +3631,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		}
 
 		}
-
+		branchTotalSaveFile = i;
 		i += 1;
 
 		} while ((i < branchLimit) && (ch != WEOF));
@@ -3649,10 +3671,9 @@ bool CheckAttribs(int jVar, wchar_t &testPath)
 		folderTreeArray[i][jVar][0] = L'\0';
 		wcscpy_s(pathsToSave[i], pathLength, tempDest);
 		trackFTA[i][0] = jVar - 1;
-		branchTotal -= jVar - 1;
 		return false;
 	}
-	wcscat_s(pathsToSave[i], pathLength, &separatorFTA);
+	if (jVar > 0) wcscat_s(pathsToSave[i], pathLength, &separatorFTA);
 	wcscat_s(pathsToSave[i], pathLength, folderTreeArray[i][jVar]);
 	wcscat_s(&testPath, pathLength, &separatorFTA);
 	return true;
@@ -3666,6 +3687,7 @@ findPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t)); // only required 
 currPathW = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 currPath = (char *)calloc(maxPathFolder, sizeof(char));
 pathToDeleteW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
+
 
 if ((tempDest == nullptr) || (findPathW == nullptr) || (currPathW == nullptr) || (pathToDeleteW == nullptr))
 	{
@@ -3827,6 +3849,11 @@ else
 
 			do
 			{
+				if (errCode == 145) // When electing to continue on non-empty directory. This will leave an invalid entry in the FR.
+				{
+					free(pathToDeleteW);
+					OldDeleteInit (hwnd);
+				}
 			} while (FRDelete (hwnd));
 			//Write remaining FR
 			free(pathToDeleteW);
@@ -3850,41 +3877,16 @@ else
 
 OldDelete:
 
-	
+
 if (cmdlineParmtooLong)
 	{
 		errCode = 0;
 		DisplayError (hwnd, L"Oops, command line too long! Delete won't work. Quit and rerun", 0, 0);
 		goto RemoveKleenup;
 	}
+else
+	OldDeleteInit (hwnd);
 
-	treeLevel = 0;
-	trackFTA [0][0] = 0; //Initial conditions before search on path
-	trackFTA [0][1] = 1;
-
-	for (i = 1; i < branchLimit; i++)
-	{
-	trackFTA [i][0] = 0;
-	trackFTA [i][1] = 0;
-	}
-	
-	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
-	wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
-
-	if (!SetCurrentDirectoryW (driveIDBaseW))
-	{
-	ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
-	goto RemoveKleenup;
-	}
-	if (RecurseRemovePath())
-		{
-			errCode = 0;
-			DisplayError (hwnd, L"Remove failed", 0, 0);
-		}
-	else
-		{
-			errCode = 1;
-		}
 
 
 					
@@ -4034,33 +4036,30 @@ bool FRDelsub (HWND hwnd)
 				}
 				else
 				{
-					if (((int)GetLastError() == 2) || ((int)GetLastError() == 3)) //cannot find file or path specified
+					errCode = (int)GetLastError();
+					if ((errCode == 2) || (errCode == 3)) //cannot find file or path specified
 						{
 						//The entry in pathsToSave must have a duplicate elsewhere which has already been removed.: nuke the current one:
 						pathsToSave[j][0] = L'\0';
-						errCode = (int)GetLastError();		
 						folderTreeArray[j][0][0] = L'\0';
-
 						trackFTA [i][1] = 0;
 						trackFTA [j][0] = 0;
-						errCode = (int)GetLastError();
 						FRReorg (j, branchTotal);
 						return true;
 
 						}
-						if (((int)GetLastError() == 145))
+						if ((errCode == 145))
 						{
-							if (folderNotEmpty)
-
+							if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when an FR entry is modified ny another program or the folder contains new folders or files. Click Yes to try Alternate deletion: ", 0, 1))
 							{
-								DisplayError (hwnd, L"Cannot remove Folder: Retry or rerun & retry", 0, 0);
-								folderNotEmpty = false;
+								errCode == 145; //The messagebox call is actually overwriting the variable?
+								return true;
 							}
 							else
 							{
-								if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when a subfolder is deleted outside of this program. Click Yes to continue deletion", 0, 1)) folderNotEmpty = true;
+								errCode = 0;
+								return false;
 							}
-							return !folderNotEmpty;
 						}
 					else
 						{
@@ -4119,6 +4118,37 @@ void doFilesFolders(HWND hwnd)
 		EnableWindow(GetDlgItem(hwnd, IDC_CREATE), false);
 		EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
 }
+void OldDeleteInit(HWND hwnd)
+{
+
+	treeLevel = 0;
+	trackFTA [0][0] = 0; //Initial conditions before search on path
+	trackFTA [0][1] = 1;
+
+	for (i = 1; i <= branchLimit; i++)
+	{
+	trackFTA [i][0] = 0;
+	trackFTA [i][1] = 0;
+	}
+	
+	wcscat_s(currPathW, maxPathFolder, &separatorFTA);
+	wcscpy_s(folderTreeArray[0][0], maxPathFolder, currPathW);
+
+	if (!SetCurrentDirectoryW (driveIDBaseW))
+	{
+	ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+	return;
+	}
+	if (RecurseRemovePath())
+		{
+			errCode = 0;
+			DisplayError (hwnd, L"Remove failed", 0, 0);
+		}
+	else
+		{
+			errCode = 1;
+		}
+}
 int RecurseRemovePath()
 
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found
@@ -4148,8 +4178,8 @@ int RecurseRemovePath()
 						{
 							if (!SetCurrentDirectoryW (dblclkString)) //objects to L".."
 							{
-							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
-							return 1;
+								ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+								return 1;
 							}
 							if (RemoveDirectoryW (currPathW))
 							{
@@ -4425,7 +4455,7 @@ int RecurseRemovePath()
 void ShellError (HWND aboutHwnd, HINSTANCE nError)
 {
 	if ((LONG_PTR)nError > 32) return; //no problem
-	wchar_t* str= (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
+	wchar_t* str = (wchar_t *)calloc(maxPathFolder, sizeof(wchar_t));
 	switch ((LONG_PTR)nError)  //reinterpret_cast <int> (
 	{
 	case 0:							wcscpy_s(str, maxPathFolder, L"The operating system is out\nof memory or resources"); break;
@@ -4727,6 +4757,7 @@ int GetDrives(HWND hwnd)
 	cchBuffer = GetLogicalDriveStringsW(0, NULL);
 	if (cchBuffer)
 	{
+		driveTypeString = (PWSTR)calloc((cchBuffer + 1), 74);
 		driveStrings = (wchar_t *)calloc((cchBuffer + 1), sizeof(wchar_t));
 		outputString = (wchar_t *)calloc((maxPathFolder), sizeof(wchar_t));
 		if (driveStrings == nullptr || outputString == nullptr)
@@ -4749,35 +4780,43 @@ int GetDrives(HWND hwnd)
 			switch (driveType)
 			{
 			case DRIVE_UNKNOWN: //known unknowns
-				driveTypeString = L"                         (Unknown)";
+				//driveTypeString = L"                         (Unknown)";
+				wcscpy_s(driveTypeString, 74, L"                         (Unknown)");
 				driveInfo[driveCt][1] = L'U';
 				break;
 			case DRIVE_NO_ROOT_DIR:
-				driveTypeString = L"                  (Disk not ready)";
+				wcscpy_s(driveTypeString, 74, L"                   (Disk not ready)");
+				//driveTypeString = L"                   (Disk not ready)";
 				driveInfo[driveCt][1] = L'X';
 				break;
 			case DRIVE_REMOVABLE:
-				driveTypeString = L"                       (Removable)";
+				wcscpy_s(driveTypeString, 74, L"                        (Removable)");
+				//driveTypeString = L"                        (Removable)";
 				driveInfo[driveCt][1] = L'M';
 				break;
 			case DRIVE_FIXED:
-				driveTypeString = L"                      (Fixed disk)";
+				wcscpy_s(driveTypeString, 74, L"                       (Fixed disk)");
+				//driveTypeString = L"                       (Fixed disk)";
 				driveInfo[driveCt][1] = L'F';
 				break;
 			case DRIVE_REMOTE:
-				driveTypeString = L"                         (Network)";
+				wcscpy_s(driveTypeString, 74, L"                          (Network)");
+				//driveTypeString = L"                          (Network)";
 				driveInfo[driveCt][1] = L'N';
 				break;
 			case DRIVE_CDROM:
-				driveTypeString = L"                          (CD/DVD)";
+				wcscpy_s(driveTypeString, 74, L"                           (CD/DVD)");
+				//driveTypeString = L"                           (CD/DVD)";
 				driveInfo[driveCt][1] = L'C';
 				break;
 			case DRIVE_RAMDISK:
-				driveTypeString = L"                          (Ramdisk)";
+				wcscpy_s(driveTypeString, 74, L"                          (Ramdisk)");
+				//driveTypeString = L"                          (Ramdisk)";
 				driveInfo[driveCt][1] = L'R';
 				break;
 			default: //unknown unknowns
-				driveTypeString = L"                        (Unknown*)";
+				wcscpy_s(driveTypeString, 74, L"                         (Unknown*)");
+				//driveTypeString = L"                         (Unknown*)";
 				driveInfo[driveCt][1] = L'U';
 			}
 
@@ -4789,6 +4828,7 @@ int GetDrives(HWND hwnd)
 			singleDriveString += lstrlenW(singleDriveString) + 1;
 
 		}
+		if (driveTypeString) free(driveTypeString);
 		if (outputString) free(outputString);
 		if (driveStrings) free(driveStrings);
 
@@ -4802,52 +4842,7 @@ void ThisInvalidParameterHandler(HWND hwnd, const wchar_t* expression, const wch
 	swprintf_s(hrtext, _countof(hrtext), L" Invalid parm in function %s. File: %s Line: %u\n", function, file, line);
 	DisplayError(hwnd, hrtext, 0, 0);
 }
-/*
-//GetProcAddresses
-//Argument1: hLibrary - Handle for the Library Loaded
-//Argument2: lpszLibrary - Library to Load
-//Argument3: nCount - Number of functions to load
-//[Arguments Format]
-//Argument4: Function Address - Function address we want to store
-//Argument5: Function Name -  Name of the function we want
-//[Repeat Format]
-//
-//Returns: FALSE if failure
-//Returns: TRUE if successful
-BOOL GetProcAddresses( HINSTANCE *hLibrary, LPSTR lpszLibrary, INT nCount, ... )
-{
-    va_list va;
-    va_start( va, nCount );
 
-    if ( ( *hLibrary = LoadLibraryA( lpszLibrary ) ) 
-        != NULL )
-    {
-        FARPROC * lpfProcFunction = NULL;
-        LPSTR lpszFuncName = NULL;
-        INT nIdxCount = 0;
-        while ( nIdxCount < nCount )
-        {
-            lpfProcFunction = va_arg( va, FARPROC* );
-            lpszFuncName = va_arg( va, LPSTR );
-            if ( ( *lpfProcFunction = 
-                GetProcAddress( *hLibrary, 
-                    lpszFuncName ) ) == NULL )
-            {
-                lpfProcFunction = NULL;
-                return FALSE;
-            }
-            nIdxCount++;
-        }
-    }
-    else
-    {
-        va_end( va );
-        return FALSE;
-    }
-    va_end( va );
-    return TRUE;
-}
-*/
 BOOL RevertWOW64RedirectionIfNecessary(PVOID pOldValue)
 {
 //XP compatibility for these fns
@@ -4892,7 +4887,8 @@ BOOL DisableWOW64RedirectionIfNecessary(PVOID pOldValue)
 }
 BOOL ChangeWindowMsgFilterEx(HWND hWnd, UINT uMsg)
 {
-    typedef BOOL (WINAPI * fnChangeWindowMessageFilterEx)(HWND, UINT, DWORD, PCHANGEFILTERSTRUCT);
+    
+	typedef BOOL (WINAPI * fnChangeWindowMessageFilterEx)(HWND, UINT, DWORD, PCHANGEFILTERSTRUCT);
     fnChangeWindowMessageFilterEx pfn =
         reinterpret_cast<fnChangeWindowMessageFilterEx>(
            reinterpret_cast<void*>(
