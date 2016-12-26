@@ -517,6 +517,7 @@ if((dwVer < dwTarget) && !rootFolderCW) DisplayError (hwnd, L"Old version of Com
 	branchTotal = -1;
 	branchTotalCum = 0;
 	branchTotalCumOld = 0;
+	branchLevelIncCum = 0; //in case !foundNTDLL
 	resResult = 0;
 	resWarned = false;
 	memset(dacfolders, '\0', sizeof(dacfolders));  //'\0' is NULL L'\0' is for C++ but we are compiling in Unicode anyway
@@ -624,8 +625,7 @@ INT_PTR CALLBACK APP_CLASS::s_DlgProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 	if (pThis)
 	{
 
-		// Now that we have recovered our "this" pointer, let the
-		// member function finish the job.
+		// Now that we have recovered our "this" pointer, let the member function finish the job.
 		return pThis->DlgProc(hwnd, uMsg, wParam, lParam);
 	}
 
@@ -977,7 +977,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					}
 					else
 					{
-					DisplayError (hwnd, L"NTDLL not found: Only one nested path is made with CREATE", errCode, 0);
+					DisplayError (hwnd, L"NTDLL not found: Only a nested path on a single branch is made with CREATE.", errCode, 0);
 					EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 					EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
 					}
@@ -1003,7 +1003,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					branchLevelIncCum = 0;
 					HWND hList = GetDlgItem(hwnd, IDC_LIST);
 					EnableWindow(GetDlgItem(hwnd, IDC_DOWN), true);
-					if (branchLevelClick == branchLevel + branchLevelClickOld ) EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
+					if (branchLevelClick == branchLevel + branchLevelClickOld) EnableWindow(GetDlgItem(hwnd, IDC_UP), false);
 
 
 					for (i = branchTotal; i >= ((createFail)? branchTotalCumOld + 1: 0); i--)
@@ -1676,32 +1676,40 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 								{
 									sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
 								}
-								
-								branchLevelCum -= 1;
-								branchLevel -= 1;
-								if (!branchLevelIncCum) branchLevelIncCum = branchLevel;
-								if (branchLevelInc) branchLevelInc -= 1;
-								
-								index =  index + 1 - (rootFolderCS + rootFolderCW + branchLevelCum - branchLevel);
+								if (foundNTDLL)
+									{
+									branchLevelCum -= 1;
+
+									if (index >= rootFolderCS + rootFolderCW + branchLevelCum - branchLevel + 1)
+									{
+										branchLevel -= 1; //decrement last added branch if selected
+									}
+
+									
+									if (!branchLevelIncCum) branchLevelIncCum = branchLevel;
+									if (branchLevelInc) branchLevelInc -= 1;
+
+									index =  index + 1 - (rootFolderCS + rootFolderCW + branchLevelCum - branchLevel);
 
 								
 																
-								trackFTA [branchTotal][1] -= 1;
+									trackFTA [branchTotal][1] -= 1;
 
-								if (index <= branchLevelClick - branchLevelClickOld)
-									{
-									if (branchLevelClick) branchLevelClick -= 1;
-									trackFTA [branchTotal][0] -= 1;
-									}
-								if (branchLevelClick)
-									{
-									EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
-									}
-								else 
-									{
-										removeButtonEnabled = true; //Last branch removed
-										EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+									if (index <= branchLevelClick - branchLevelClickOld)
+										{
+										if (branchLevelClick) branchLevelClick -= 1;
+										trackFTA [branchTotal][0] -= 1;
+										}
+									if (branchLevelClick)
+										{
 										EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+										}
+									else 
+										{
+											removeButtonEnabled = true; //Last branch removed
+											EnableWindow(GetDlgItem(hwnd, IDC_DOWN), false);
+											EnableWindow(GetDlgItem(hwnd, IDC_UP), true);
+										}
 									}
 								sendMessageErr = SendMessageW(hList, LB_SETSEL, (WPARAM)FALSE, (LPARAM)(-1));
 								sendMessageErr = SendMessageW(hList, LB_SETTOPINDEX, (WPARAM)((rootFolderCS + rootFolderCW + branchLevelIncCum)), 0);
@@ -1901,13 +1909,28 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 									if (index >= rootFolderCS + rootFolderCW)
 									{
 										SetWindowTextW(GetDlgItem(hwnd, IDC_REMOVE), L"Del Line\0");
-										if (index >= listTotal - branchLevel)
-										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
-										}
+										if (foundNTDLL)
+											{
+											if (index >= listTotal - branchLevel)
+											{
+											EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+											}
+											else
+											{
+												if (branchLevelIncCum)
+												{
+												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+												}
+												else //This is broken- fair bit of coding to delete older branches
+												{
+												EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
+												}
+											
+											}
+											}
 										else
 										{
-										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), false);
+										EnableWindow(GetDlgItem(hwnd, IDC_REMOVE), true);
 										}
 									}
 									else
@@ -3389,12 +3412,11 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 
 
-
 	else //read from file
   	{
 	verifyFail = 0;
 	ch = 1;
-	(appendMode)? i = branchTotal + 1: i = 0;
+
 	result = fseek(stream, 0L, SEEK_SET);  /* moves the pointer to the beginning of the file */
 	//rewind(stream); //does the same?
 	if (result)
@@ -3414,6 +3436,9 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 		frReturn = false;
 		goto WEOFFOUND;
 	}
+
+(!folderTreeArray[0][0][0])? i = 0 : (appendMode)? i = branchTotal + 1: i = 0;
+
 
 
 		do
@@ -3790,7 +3815,7 @@ else
 		for (i = branchTotal; (i >= 0); i--) //place paths to delete at end of FR
 		{
 
-			if (!wcscmp (rootDir, folderTreeArray[i][0])) //0 if perfect match
+			if (!wcscmp (rootDir, folderTreeArray[i][0])) //0 if perfect match which applies multiple branches from the same rootDir
 			{
 				if (i < j)
 				{
@@ -3839,7 +3864,7 @@ else
 
 				}
 			}
-			branchTotalCum = j + 1;
+			branchTotalCum = j + 1; //j is branchTotalSaveFile
 		}
 		else
 		{
@@ -3849,10 +3874,10 @@ else
 
 			do
 			{
-				if (errCode == 145) // When electing to continue on non-empty directory. This will leave an invalid entry in the FR.
+				if (verifyFail == 145) // When electing to continue on non-empty directory. This will leave an invalid entry in the FR.
 				{
-					free(pathToDeleteW);
 					OldDeleteInit (hwnd);
+					verifyFail = 0;
 				}
 			} while (FRDelete (hwnd));
 			//Write remaining FR
@@ -3861,8 +3886,8 @@ else
 			{
 			if (!pCmdLineActive) ((ProcessFolderRepository(hwnd, true, false))? errCode = 1: errCode = 0);
 			//this can bug out if the user edits or deletes the FR in the intervening milliseconds when called from InitProc.				
-			goto RemoveKleenup;
 			}
+			goto RemoveKleenup;
 
 	}
 	else
@@ -3939,7 +3964,7 @@ if (branchTotal == branchTotalCum - 1) //branchTotal is decremented here, not br
 
 	for (i = branchTotalCum + 1; (i <= branchTotal); i++)
 		{ 
-		int tmp = trackFTA [i][1]; //insertion sort
+		int tmp = trackFTA [i][1]; //insertion sort in descending order: doesn't apply if single stem (rootDir is unique)
 			for (j = i; ((j > branchTotalCum) && (tmp < trackFTA [j-1][1])); j--)
 			{
 				trackFTA [j][1] = trackFTA [j-1][1];
@@ -3989,7 +4014,7 @@ bool FRDelsub (HWND hwnd)
 				if (trackFTA [i][1] == 0)
 				{
 				errCode = 0;
-				FRReorg (1, branchTotal);
+				FRReorg (j, branchTotal);
 				return true;
 				}
 				else
@@ -4039,20 +4064,23 @@ bool FRDelsub (HWND hwnd)
 					errCode = (int)GetLastError();
 					if ((errCode == 2) || (errCode == 3)) //cannot find file or path specified
 						{
-						//The entry in pathsToSave must have a duplicate elsewhere which has already been removed.: nuke the current one:
+						//The entry in pathsToSave must have a duplicate elsewhere which has already been removed: nuke the current one.
 						pathsToSave[j][0] = L'\0';
 						folderTreeArray[j][0][0] = L'\0';
 						trackFTA [i][1] = 0;
 						trackFTA [j][0] = 0;
+						errCode = 0;
 						FRReorg (j, branchTotal);
 						return true;
 
 						}
-						if ((errCode == 145))
+					else
+					{
+						if (errCode == 145)
 						{
 							if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when an FR entry is modified ny another program or the folder contains new folders or files. Click Yes to try Alternate deletion: ", 0, 1))
 							{
-								errCode == 145; //The messagebox call is actually overwriting the variable?
+								verifyFail = 145; //The messagebox call is actually overwriting the errCode variable so try verifyFail?
 								return true;
 							}
 							else
@@ -4061,11 +4089,12 @@ bool FRDelsub (HWND hwnd)
 								return false;
 							}
 						}
-					else
+						else
 						{
 						ErrorExit (L"RemoveDirectoryW: Cannot remove Folder. ", 0);
 						errCode = 0;
 						return false;
+						}
 					}
 
 				}
@@ -4142,7 +4171,7 @@ void OldDeleteInit(HWND hwnd)
 	if (RecurseRemovePath())
 		{
 			errCode = 0;
-			DisplayError (hwnd, L"Remove failed", 0, 0);
+			DisplayError (hwnd, L"Remove failed: this has been verified to occur if the folder is openb in Explorer.", 0, 0);
 		}
 	else
 		{
