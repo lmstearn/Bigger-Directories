@@ -5,7 +5,6 @@
 #include <shlwapi.h>
 #include <sddl.h>
 #include <windows.h>
-//#include "VersionHelpers.h"
 #include <strsafe.h> //safe string copy & StringCchPrintf
 #include <tlhelp32.h> //Find process stuff
 #include <winternl.h> //NtCreateFile
@@ -23,7 +22,7 @@
 
 
 
-wchar_t hrtext[256]; //An array name is essentially a pointer to the first element in an array.
+wchar_t hrtext[256] = {'\0'}; //An array name is essentially a pointer to the first element in an array.
 wchar_t hrWarn[8] = L"Warning";
 WIN32_FIND_DATAW dw; // directory data this will use stack memory as opposed to LPWIN32_FIND_DATA
 WIN32_FIND_DATAA da;
@@ -332,7 +331,6 @@ void InitProc(HWND hwnd)
 	//if (foundNTDLL) we can use the better function
 
 	if (!DynamicLoader (true, tempDest)) DisplayError (hwnd, L"An error occurred. The long path function has been removed. Using 'short' path functions..", errCode, 0);
-
 
 
 	#ifdef _WIN32_WINNT //#if is a directive: see header file

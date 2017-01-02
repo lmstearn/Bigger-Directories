@@ -83,10 +83,14 @@
     <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">.\Debug\</IntDir>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</LinkIncremental>
     <LinkIncremental Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</LinkIncremental>
+    <EmbedManifest Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</EmbedManifest>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <CodeAnalysisRuleSet>C:\Program Files (x86)\Microsoft Visual Studio 14.0\Team Tools\Static Analysis Tools\Rule Sets\NativeRecommendedRules.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis>false</RunCodeAnalysis>
+    <EmbedManifest>true</EmbedManifest>
+    <LinkKeyFile>
+    </LinkKeyFile>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Midl>
@@ -99,8 +103,7 @@
       </HeaderFileName>
     </Midl>
     <ClCompile>
-      <Optimization>MinSpace</Optimization>
-      <InlineFunctionExpansion>OnlyExplicitInline</InlineFunctionExpansion>
+      <InlineFunctionExpansion>Default</InlineFunctionExpansion>
       <PreprocessorDefinitions>WIN32;NDEBUG;_UNICODE;UNICODE;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -113,6 +116,7 @@
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <CompileAs>CompileAsCpp</CompileAs>
       <ExceptionHandling>Async</ExceptionHandling>
+      <Optimization>Disabled</Optimization>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -129,11 +133,17 @@
       <TargetMachine>MachineX86</TargetMachine>
       <Version>1.20</Version>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
+      <StackReserveSize>8000000</StackReserveSize>
+      <LargeAddressAware>true</LargeAddressAware>
     </Link>
     <Bscmake>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <OutputFile>.\Release/BiggerDirectories.bsc</OutputFile>
     </Bscmake>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+      <AdditionalManifestFiles>BiggerDirectories.exe.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
@@ -188,7 +198,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <MinimalRebuild>true</MinimalRebuild>
+      <MinimalRebuild>false</MinimalRebuild>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <PrecompiledHeaderOutputFile>.\Debug/BiggerDirectories.pch</PrecompiledHeaderOutputFile>
@@ -204,6 +214,9 @@
       <PrecompiledHeaderFile>afxwin.h</PrecompiledHeaderFile>
       <EnablePREfast>false</EnablePREfast>
       <ExceptionHandling>Async</ExceptionHandling>
+      <StringPooling>true</StringPooling>
+      <FloatingPointExceptions>true</FloatingPointExceptions>
+      <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -230,6 +243,12 @@
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <OutputFile>.\Debug/BiggerDirectories.bsc</OutputFile>
     </Bscmake>
+    <Manifest>
+      <AdditionalManifestFiles>BiggerDirectories.exe.manifest %(AdditionalManifestFiles)</AdditionalManifestFiles>
+    </Manifest>
+    <Manifest>
+      <EnableDPIAwareness>true</EnableDPIAwareness>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
