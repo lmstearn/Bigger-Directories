@@ -641,7 +641,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 		case WM_INITDIALOG:
 			
             {	
-				
 			hMutex = CreateMutexW( nullptr, TRUE, L"BiggerDirectories.exe" );
 			if (hMutex)
 			{
@@ -651,7 +650,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				// Our thread got ownership of the mutex or the other thread closed without releasing its mutex.
 						if (pCmdLineActive) 
 							{
-
 								secondTryDelete = true;
 								currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 								currPath = (char*)calloc(pathLength, sizeof(char));
@@ -1654,9 +1652,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 														DisplayError (hwnd, hrtext, errCode, 0);
 														break;
 													}
-													filePrompt = true;
 													sendMessageErr = SendMessageW(hList, LB_DELETESTRING, (WPARAM)selItems[i], 0);
-
 
 
 												}
@@ -3659,6 +3655,8 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 
 		} while ((i < branchLimit) && (ch != WEOF));
 
+	if (branchTotalSaveFile < 0) branchTotalSaveFile = 0;
+
 	} 
 
 
@@ -3876,6 +3874,8 @@ else
 				{
 					OldDeleteInit (hwnd);
 					verifyFail = 0;
+					free(pathToDeleteW);
+					goto RemoveKleenup;
 				}
 			} while (FRDelete (hwnd));
 			//Write remaining FR
@@ -3927,15 +3927,15 @@ else
 
 		else 
 		{
-			if (errCode != 0) //"succeeded"
+			if (errCode == 0)
+			{
+			errCode = -100;
+			}
+			else  //"succeeded"
 			{
 			errCode = 0; //flag okay now
 			listTotal = SendMessageW(hList, LB_GETCOUNT, 0, 0);
 			InitProc(hwnd);
-			}
-			else 
-			{
-			errCode = -100;
 			}
 			if (currPathW) free(currPathW);
 			if (currPath) free(currPath);
@@ -4019,7 +4019,7 @@ bool FRDelsub (HWND hwnd)
 				{
 					if (trackFTA [i][1] < 0)
 					{
-					DisplayError (hwnd, L"Something went wrong with the deletion.", 0, 0);
+					DisplayError (hwnd, L"FR issue? Something went wrong with the deletion, returning", 0, 0);
 					return false;
 					}
 					//rebuild pathsToSave
@@ -4051,7 +4051,8 @@ bool FRDelsub (HWND hwnd)
 					wcscpy_s(pathToDeleteW, pathLength, L" "); //http://forums.codeguru.com/showthread.php?213443-How-to-pass-command-line-arguments-when-using-CreateProcess
 					wcscat_s(pathToDeleteW, pathLength, pathsToSave[j]);
 
-					((ProcessFolderRepository(hwnd, true, false))? errCode = 0: errCode = 1);
+					//errCode is 0 when returning from Old Delete
+					if (errCode) ((ProcessFolderRepository(hwnd, true, false))? errCode = 0: errCode = 1);
 					Kleenup (hwnd);
 					}
 					return false;
@@ -4076,7 +4077,7 @@ bool FRDelsub (HWND hwnd)
 					{
 						if (errCode == 145)
 						{
-							if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when an FR entry is modified ny another program or the folder contains new folders or files. Click Yes to try Alternate deletion: ", 0, 1))
+							if (DisplayError (hwnd, L"Delete error: folder is not empty. This can occur when an FR entry is modified by another program or the folder contains new folders or files. Click Yes to try Alternate deletion: ", 0, 1))
 							{
 								verifyFail = 145; //The messagebox call is actually overwriting the errCode variable so try verifyFail?
 								return true;
@@ -4169,7 +4170,7 @@ void OldDeleteInit(HWND hwnd)
 	if (RecurseRemovePath())
 		{
 			errCode = 0;
-			DisplayError (hwnd, L"Remove failed: this has been verified to occur if the folder is openb in Explorer.", 0, 0);
+			DisplayError (hwnd, L"Remove failed: Does the folder contain files? This has also been verified to occur if the folder is opened in Explorer.", 0, 0);
 		}
 	else
 		{
