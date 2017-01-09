@@ -115,7 +115,7 @@
       <WarningLevel>Level3</WarningLevel>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <CompileAs>CompileAsCpp</CompileAs>
-      <ExceptionHandling>Async</ExceptionHandling>
+      <ExceptionHandling>Sync</ExceptionHandling>
       <Optimization>Disabled</Optimization>
     </ClCompile>
     <ResourceCompile>
@@ -131,7 +131,7 @@
       <DataExecutionPrevention>
       </DataExecutionPrevention>
       <TargetMachine>MachineX86</TargetMachine>
-      <Version>1.20</Version>
+      <Version>1.21</Version>
       <UACExecutionLevel>AsInvoker</UACExecutionLevel>
       <StackReserveSize>8000000</StackReserveSize>
       <LargeAddressAware>true</LargeAddressAware>
