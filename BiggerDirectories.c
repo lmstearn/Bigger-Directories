@@ -3473,7 +3473,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 			}
 			}
 
-			trackFTA [i][0] = j; //track the nesting level for validation
+			if (verifyFail == 0) trackFTA [i][0] = j; //track the nesting level for validation
 			if (ch == eolFTA) break;
 			if (j == 0)
 				{
@@ -3542,8 +3542,6 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 				}//FoundNTdll
 
 
-			jLim = j; //for verify
-
  			}
 
 		if (verifyFail)
@@ -3574,13 +3572,26 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 			//GetFileAttributesW is good to go else it's FltCancellableWaitForSingleObject: The status_wait_one on Get_Last_Error is the error before this (dir creation?)- nothing to do with this- it's related to the mutex
 		if (GetFileAttributesW(tempDest) == INVALID_FILE_ATTRIBUTES)
 		{
-			_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Cannot verify a directory entry in the FR: If it exists, its attributes cannot be read by BD on this thread- else the FR entry is corrupt & continuing will ensure its removal: \n\n %s", tempDest);
+			_snwprintf_s(hrtext, _countof(hrtext), _TRUNCATE, L"Cannot verify a directory entry in the FR: If it exists, its attributes cannot be read by BD on this thread- else the FR entry is corrupt & continuing with the deletion (of the possibly unrelated folder) will ensure its removal: \n\n %s", tempDest);
 			if (DisplayError (hwnd, hrtext, errCode, 1))		
 			{
 
-				if (jLim > 0) //trackFTA [i][0] is the same as jLim
+				if (trackFTA [i][0] == 0) //first folder bad
 				{
-				folderTreeArray[i][jLim][0] = L'\0';
+				//reset current i
+				for (j = 0; (j <= treeLevelLimit); j++)
+				{
+				folderTreeArray[i][j][0] = L'\0';
+				pathsToSave[i][j] = L'\0';
+				}
+
+				i -= 1;
+
+
+				}
+				else
+				{
+				folderTreeArray[i][trackFTA [i][0]][0] = L'\0';
 				//Check if lower branches of the tree are valid, but NOT anything lower than trackFTA [i][1] + 1
 				for (j = 0; (j <= treeLevelLimit); j++) pathsToSave[i][j] = L'\0';
 
@@ -3588,7 +3599,7 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 				
 					if (CheckAttribs (0, *tempDestOld)) 
 					{
-						for (j = 1; (j < jLim); j++)
+						for (j = 1; (j = trackFTA [i][0]); j++)
 						{
 							if (!CheckAttribs (j, *tempDestOld)) break;
 						}
@@ -3605,22 +3616,9 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 						i -= 1;
 					}
 
-
-				}
-				else
-				{
-				//reset current i
-				for (j = 1; (j <= treeLevelLimit); j++)
-				{
-				folderTreeArray[i][j][0] = L'\0';
-				pathsToSave[i][j] = L'\0';
-				}
-
-				i -= 1;
 				}
 
 				verifyFail = 0;
-				
 
 			}
 			else
@@ -3632,6 +3630,9 @@ bool ProcessFolderRepository(HWND hwnd, bool falseReadtrueWrite, bool appendMode
 				}
 				break;
 			}
+
+
+
 		}
 		else
 		{
@@ -3811,7 +3812,7 @@ else
 		for (i = branchTotal; (i >= 0); i--) //place paths to delete at end of FR
 		{
 
-			if (!wcscmp (rootDir, folderTreeArray[i][0])) //0 if perfect match which applies multiple branches from the same rootDir
+			if (!wcscmp (rootDir, folderTreeArray[i][0])) //0 if perfect match which applies to multiple branches from the same rootDir
 			{
 				if (i < j)
 				{
@@ -3844,23 +3845,26 @@ else
 
 		}
 
+
+		if (branchTotal == j)
+		{
+			if (DisplayError (hwnd, L"The selected folder is not found in the File Repo. Click Yes for alternate delete", 0, 1))
+			{
+				free(pathToDeleteW);
+				goto OldDelete;
+			}
+			else
+			{
+				free(pathToDeleteW);
+				goto RemoveKleenup;
+
+			}
+		}
+
+
 		if (branchTotal)
 		{
-			if (branchTotal == j)
-			{
-				if (DisplayError (hwnd, L"The selected folder is not found in the File Repo. Click Yes for alternate delete", 0, 1))
-				{
-					free(pathToDeleteW);
-					goto OldDelete;
-				}
-				else
-				{
-					free(pathToDeleteW);
-					goto RemoveKleenup;
-
-				}
-			}
-			branchTotalCum = j + 1; //j is branchTotalSaveFile
+			branchTotalCum = j + 1; //j is branchTotalSaveFile minus the ones to save
 		}
 		else
 		{
@@ -3868,7 +3872,7 @@ else
 		}
 
 
-			do
+		do
 			{
 				if (verifyFail == 145) // When electing to continue on non-empty directory. This will leave an invalid entry in the FR.
 				{
@@ -4181,7 +4185,6 @@ int RecurseRemovePath()
 
 	 //first element of trackFTA is LAST_VISIT, second is number of folders found
 {
-	
 
 	if (trackFTA [treeLevel][1] > 0) //Have we done a search on this level yet? if yes then here
 	{
@@ -4279,15 +4282,14 @@ int RecurseRemovePath()
 
 
 
-
 			}
 
 			else
 			{
 				//folderTreeArray[treeLevel][j+1]
-				if (trackFTA[treeLevel][0] <= 999)
+				if (trackFTA[treeLevel][0] <= branchLimit)
 				{
-				trackFTA[treeLevel][0] +=1;
+				trackFTA[treeLevel][0] += 1;
 
 				// set inits for this branch
 				wcscpy_s(findPathW, maxPathFolder, folderTreeArray[trackFTA[treeLevel][0]-1][treeLevel]);
@@ -4325,13 +4327,11 @@ int RecurseRemovePath()
 	{
 
 
-
 	//Do find folders in new branch, findPathW already set
 			
 				
 		memset(&dw, 0, sizeof(WIN32_FIND_DATAW));
-		//Find first file
-		//Get fulqualpath
+		//Find first file & Get fulqualpath
 		if (!GetCurrentDirectoryW (maxPathFolder, findPathW))
 			{
 				ErrorExit (L"GetCurrentDirectoryW: Zero", 0);
@@ -4442,8 +4442,10 @@ int RecurseRemovePath()
 						}
 					}
 
+					k = trackFTA[treeLevel - 1][0] - 1;
+					if (k < 0) return 0; //should never happen
 					//GetCurrentDirectoryW(maxPathFolder, findPathW);
-					if (RemoveDirectoryW (folderTreeArray[trackFTA[treeLevel-1][0]-1][treeLevel-1]))
+					if (RemoveDirectoryW (folderTreeArray[k][treeLevel-1]))
 					{
 						trackFTA [treeLevel][1] = 0;  //important
 						treeLevel -=1;
