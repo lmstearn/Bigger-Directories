@@ -342,7 +342,7 @@ void InitProc(HWND hwnd)
 			ReleaseMutex(hMutex);
 			if (currPath) free(currPath);
 			if (currPathW) free(currPathW);
-			exit (1); //EndDialog will process the rest of the code in the fn.
+			exit (EXIT_FAILURE); //EndDialog will process the rest of the code in the fn.
 		}
 	}
 	#endif
@@ -355,7 +355,7 @@ void InitProc(HWND hwnd)
 			ReleaseMutex(hMutex);
 			if (currPath) free(currPath);
 			if (currPathW) free(currPathW);
-			exit (1);
+			exit (EXIT_FAILURE);
 		}
 	}
 	#endif
@@ -370,7 +370,7 @@ void InitProc(HWND hwnd)
 			ReleaseMutex(hMutex);
 			if (currPath) free(currPath);
 			if (currPathW) free(currPathW);
-			exit (1);
+			exit (EXIT_FAILURE);
     }
     am64Bit = true;
 	exe64Bit = true;
@@ -384,7 +384,7 @@ void InitProc(HWND hwnd)
 			ReleaseMutex (hMutex);
 			if (currPath) free(currPath);
 			if (currPathW) free(currPathW);
-			exit (1);
+			exit (EXIT_FAILURE);
 		}
     
 		if (FindProcessId (hwnd, L"BiggerDirectories.exe", exeHandle) != NULL)
@@ -417,7 +417,7 @@ void InitProc(HWND hwnd)
 			ReleaseMutex (hMutex);
 			if (currPath) free(currPath);
 			if (currPathW) free(currPathW);
-			exit (1); //EndDialog will process the rest of the code in the fn.
+			exit (EXIT_FAILURE); //EndDialog will process the rest of the code in the fn.
 		}
 	}	
 
@@ -429,7 +429,7 @@ void InitProc(HWND hwnd)
 			ReleaseMutex (hMutex);
 			if (currPath) free(currPath);
 			if (currPathW) free(currPathW);
-			exit (1);
+			exit (EXIT_FAILURE);
 	}
 	#endif
 
@@ -437,6 +437,7 @@ void InitProc(HWND hwnd)
 
 if (FindProcessId (hwnd, L"explorer.exe", exeHandle) == NULL)
 	{
+
 	weareatBoot=TRUE;
 	nologonEnabled = false;
 	logonEnabled = false;
@@ -1966,7 +1967,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 										}
 										//This function performs like:
 										//TCHAR buf[16];
-										//wnsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
+										//wsprintf(buf, 16, bSigned ? TEXT("%i") : TEXT("%u"), uValue);
 										//SetDlgItemText(hwnd, nIDDlgItem, buf);
 
 
@@ -3080,7 +3081,6 @@ bool Kleenup (HWND hwnd)
 				wcscat_s(thisexePath, pathLength, L"\\system32\\userinit.exe");
 				//Create process userinit.exe
 
-
 				SetLastError(ERROR_INVALID_PARAMETER); //https://msdn.microsoft.com/en-us/library/ms682425(VS.85).aspx
 				if (!CreateProcessW(thisexePath, nullptr, nullptr, nullptr, FALSE, NULL, nullptr, nullptr, &lpStartupInfo, &lpProcessInfo)) ErrorExit (L"userinit could not be started through this program. Please reboot after closing this program.", 0);
 				//The reg value is restored to userinit before this point
@@ -3147,7 +3147,7 @@ DWORD FindProcessId(HWND hwnd, const wchar_t *processName, HANDLE &hProcessName)
     if (INVALID_HANDLE_VALUE == hProcessSnap) return(FALSE);
 
     pe32.dwSize = sizeof(PROCESSENTRY32W); // <----- IMPORTANT
-
+	_sleep(1000);
     // Retrieve information about the first process,
     // and exit if unsuccessful
     if (!Process32FirstW(hProcessSnap, &pe32))
