@@ -679,7 +679,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 						_CrtDumpMemoryLeaks();
 						EndDialog(hwnd, 1);
 						}
-
 						InitProc (hwnd);
 						HWND TextValidate = GetDlgItem(hwnd, IDC_TEXT);
 						// Subclass the Edit control with ValidateProc
@@ -2310,6 +2309,7 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				wchar_t *dropBuf;
 				int pdest;
 				bool fileExisting;
+				DWORD attrBit = 0;
 				dropBuf = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 				currPathW = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
 				tempDest = (wchar_t *)calloc(pathLength, sizeof(wchar_t));
@@ -2327,7 +2327,6 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 				if (DisplayError (hwnd, hrtext, errCode, 1))
 					{
 
-
 					int n = 0;
 					int count = DragQueryFileW((HDROP) wParam, 0xFFFFFFFF, 0, 0 );
 					while ( n < count )
@@ -2335,7 +2334,8 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					if (!DragQueryFileW ((HDROP) wParam, n, dropBuf, pathLength)) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
 					fileExisting = false;
 					pdest = (int)(wcsrchr( dropBuf, separatorFTA ) - dropBuf + 1);
-					if (GetFileAttributesW(dropBuf) == FILE_ATTRIBUTE_DIRECTORY) break;
+					attrBit = GetFileAttributesW(dropBuf);
+					if (0 != (attrBit & FILE_ATTRIBUTE_DIRECTORY) ) break;
 					wcscpy_s(currPathW, pathLength, dblclkString);
 					wcscat_s(currPathW, pathLength, &dropBuf[pdest]);
 					// prepend "\\?\" to the path.
@@ -2370,49 +2370,68 @@ INT_PTR  APP_CLASS::DlgProc(HWND hwnd, UINT Msg, WPARAM wParam, LPARAM lParam)
 					{
 					if (!DragQueryFileW ((HDROP) wParam, 0, dropBuf, pathLength)) DisplayError (hwnd, L"DragQuery: Failed", 0, 0);
 					pdest = (int)(wcsrchr( dropBuf, separatorFTA ) - dropBuf + 1);
-					if (GetFileAttributesW(dropBuf) == FILE_ATTRIBUTE_DIRECTORY)
+					attrBit = GetFileAttributesW(dropBuf);
+					if (0 != (attrBit & FILE_ATTRIBUTE_DIRECTORY))
 					{
-					if (!SetCurrentDirectoryW (dropBuf)) //objects to L".."
+						if (!SetCurrentDirectoryW(dropBuf)) //objects to L".."
 						{
-							ErrorExit (L"SetCurrentDirectoryW: Non zero", 0);
+							ErrorExit(L"SetCurrentDirectoryW: Non zero. Problem with folder, shortcut or symlink", 0);
 						}
-					else
+						else
 						{
-							dblclkLevel = 1;
-							wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, lPref);
-							wchar_t *tokStr;
-							wchar_t *tokDest = wcstok_s( dropBuf, &separatorFTA, &tokStr);
-							//tokDest = wcstok_s(NULL, &separatorFTA, &tokStr);
-							wcscat_s(dblclkPath[dblclkLevel], maxPathFolder, tokDest);
-							for (dblclkLevel = 2; dblclkLevel <= treeLevelLimit; dblclkLevel++)
+							if (0 != (attrBit & FILE_ATTRIBUTE_HIDDEN))
 							{
-
-								if ((tokDest = wcstok_s(NULL, &separatorFTA, &tokStr))== nullptr) break;
-								wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, tokDest);
+								pdest = (DisplayError(hwnd, L"The folder is hidden. The '.' navigation may not appear in the list until the 'Clear' button is used! Click Yes to continue", 0, 1));
 							}
-							dblclkLevel -= 1; //Ouch
-						wcscat_s(dblclkPath[1], maxPathFolder, L"\\");
-						wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
-						wcscat_s(dblclkString, pathLength, L"\\");
-						for (i = 2; i <= dblclkLevel; i++)
-						{
-						wcscat_s(dblclkString, pathLength, dblclkPath[i]);
-						wcscat_s(dblclkString, pathLength, L"\\");
-						}
-						}
+							else
+							{
+								pdest = 1;
+							}
+							if (pdest > 0)
+							{
+								dblclkLevel = 1;
+								wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, lPref);
+								wchar_t *tokStr;
+								wchar_t *tokDest = wcstok_s(dropBuf, &separatorFTA, &tokStr);
+								//tokDest = wcstok_s(NULL, &separatorFTA, &tokStr);
+								wcscat_s(dblclkPath[dblclkLevel], maxPathFolder, tokDest);
+								for (dblclkLevel = 2; dblclkLevel <= treeLevelLimit; dblclkLevel++)
+								{
 
+									if ((tokDest = wcstok_s(NULL, &separatorFTA, &tokStr)) == nullptr) break;
+									wcscpy_s(dblclkPath[dblclkLevel], maxPathFolder, tokDest);
+								}
+								dblclkLevel -= 1; //Ouch
+								wcscat_s(dblclkPath[1], maxPathFolder, L"\\");
+								wcscpy_s(dblclkString, pathLength, dblclkPath[1]);
+								wcscat_s(dblclkString, pathLength, L"\\");
+								for (i = 2; i <= dblclkLevel; i++)
+								{
+									wcscat_s(dblclkString, pathLength, dblclkPath[i]);
+									wcscat_s(dblclkString, pathLength, L"\\");
+								}
+							if (!SetCurrentDirectoryW(dblclkString))
+							{
+								ErrorExit(L"SetCurrentDirectoryW: Non zero. Problem with folder, shortcut or symlink", 0);
+								dblclkLevel = 0;
+							}
+							else
+							{
+								doFilesFolders(hwnd);
+							}
+							EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
+							EnableWindow(GetDlgItem(hwnd, IDC_TEXT), true);
+							}
+						}
 					}
-					if (!SetCurrentDirectoryW (dblclkString))
+					else
 					{
-						ErrorExit (L"SetCurrentDirectoryW: Non zero. Must be a Folder, a shortcut or symlink", 0);
+						if (attrBit == INVALID_FILE_ATTRIBUTES) 
+						ErrorExit(L"GetFileAttributesW: Unable to retrieve attributes of Folder!", 0);
+						else
+						DisplayError(hwnd, L"Only folders can be dragged in at this level!", 0, 0);
 						dblclkLevel = 0;
 					}
-					else
-					{
-					doFilesFolders(hwnd);
-					}
-					EnableWindow(GetDlgItem(hwnd, IDC_NUMBER), true);
-					EnableWindow(GetDlgItem(hwnd, IDC_TEXT), true);
 					}
 
 				}
